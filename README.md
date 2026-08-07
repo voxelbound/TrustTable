@@ -6,7 +6,7 @@ It combines deterministic profiling and rule-based detection with evidence-groun
 
 ## Project status
 
-TrustTable has completed its repository foundation (**FND-01**) and is now building toward **v0.1 — the deterministic vertical slice**.
+TrustTable has completed its repository foundation (**FND-01**), typed configuration (**FND-02**), and continuous integration (**FND-03**), and is now continuing toward **v0.1 — the deterministic vertical slice**.
 
 The product, domain model, API boundaries, detector framework, frontend architecture, testing strategy, threat model, release plan, and implementation backlog have been defined before production implementation begins. A runnable backend and frontend skeleton, Docker/Nginx deployment, and baseline test tooling now exist; no product features are implemented yet.
 
