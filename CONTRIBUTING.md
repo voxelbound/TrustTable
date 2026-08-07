@@ -2,6 +2,13 @@
 
 TrustTable is initially developed through small, dependency-ordered backlog tasks.
 
+## Local development
+
+See [`docs/local-development.md`](docs/local-development.md) for running the
+backend and frontend natively, running the full stack with Docker Compose,
+and running the test suites (backend, frontend, Docker Compose integration
+smoke test, Playwright browser/accessibility smoke test).
+
 ## Working rules
 
 1. Read `docs/product-requirements.md`.
