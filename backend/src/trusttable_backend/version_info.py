@@ -1,8 +1,9 @@
 """Read-only accessors backing `GET /api/v1/version`.
 
-Deliberately minimal per WP-001 Non-goals: `environment_mode` is a single
-raw environment-variable read, explicitly not the typed configuration
-system that `FND-02` introduces later.
+`environment_mode` is sourced from the typed `Settings` system (FND-02),
+superseding WP-001's temporary single raw environment-variable read. An
+unrecognized `APP_ENV` value now fails application startup (see
+`main.create_app`) instead of silently falling back to a default.
 """
 
 from __future__ import annotations
@@ -10,14 +11,13 @@ from __future__ import annotations
 import os
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as read_installed_version
-from typing import Final, get_args
+from typing import Final
 
+from trusttable_backend.config import get_settings
 from trusttable_backend.schemas.version import EnvironmentMode
 
 _DISTRIBUTION_NAME: Final = "trusttable-backend"
 _API_VERSION: Final = "v1"
-_DEFAULT_ENVIRONMENT_MODE: Final[EnvironmentMode] = "development"
-_VALID_ENVIRONMENT_MODES: Final = frozenset(get_args(EnvironmentMode))
 
 
 def get_application_version() -> str:
@@ -48,8 +48,10 @@ def get_build_commit() -> str | None:
 
 
 def get_environment_mode() -> EnvironmentMode:
-    """Return the current environment mode from a single raw env-var read."""
-    raw_value = os.environ.get("APP_ENV", _DEFAULT_ENVIRONMENT_MODE)
-    if raw_value in _VALID_ENVIRONMENT_MODES:
-        return raw_value  # type: ignore[return-value]  # narrowed by membership check
-    return _DEFAULT_ENVIRONMENT_MODE
+    """Return the current environment mode from typed `Settings`.
+
+    `Settings.app_env` and `schemas.version.EnvironmentMode` are the same
+    three-value literal; an invalid value cannot reach here because
+    `Settings()` would already have raised at application startup.
+    """
+    return get_settings().app_env
