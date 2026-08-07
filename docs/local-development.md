@@ -98,3 +98,30 @@ reliably stop the `docker compose up` process it starts once the test run
 finishes, leaving the stack running. If `docker compose ps` (run from the
 repository root) still shows `trusttable-backend-1`/`trusttable-frontend-1`
 after `npm run test:e2e`, stop them manually with `docker compose down`.
+
+## Continuous integration (`FND-03`)
+
+`.github/workflows/ci.yml` runs on every pull request targeting `main` and
+every push to `main`. All three jobs are gating (the workflow fails on any
+violation); none are advisory-only.
+
+| Job (workflow file id) | Check name shown on GitHub | Runs |
+|---|---|---|
+| `backend` | `Backend (formatting, lint, types, tests, dependency scan)` | `ruff format --check src tests`, `ruff check src tests`, `mypy .` (strict), `pytest tests -v`, `pip-audit` (via `uvx`, against the exported `uv.lock` dependency set) |
+| `frontend` | `Frontend (formatting, lint, types, tests, dependency scan)` | `prettier --check` (`npm run format:check`), `oxlint` (`npm run lint`), `tsc -b --noEmit` (`npm run typecheck`), `vitest run` (`npm run test`), `npm audit --audit-level=high` |
+| `integration` | `Docker Compose integration smoke tests` | `pytest tests/integration -v` — builds both Docker images and exercises the full Compose stack (see "Running the tests" above); satisfies the backlog's "Docker build" check via real integration coverage rather than a bare build-only step |
+
+**Not yet in CI** (deliberately deferred, tracked separately):
+
+- The backlog's "OpenAPI type generation check" — no generation pipeline
+  exists yet (`FND-05`); tracked in
+  `project-ops/follow-ups/002-openapi-drift-ci-check.md` (private).
+- All browser/accessibility (Playwright/axe) tests — release-candidate
+  scope only, not a PR gate, per `docs/testing-strategy.md` §8.
+- SBOM generation, container scan, license check, performance benchmark
+  review — release-candidate scope only, per `docs/testing-strategy.md` §8.
+
+These exact job/check names are required to configure GitHub branch
+protection's required status checks — a separate, explicitly authorized
+repository-settings change, not performed by this workflow's addition
+alone.
