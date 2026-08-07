@@ -85,3 +85,9 @@ not an application or test defect. Installing them (for example via
 `playwright install-deps chromium`, or an equivalent explicit package list)
 requires OS package manager access (`apt`/`sudo` on Debian-based images) and
 is a deliberate, separately authorized step — it is not run automatically.
+
+**Known limitation:** in some environments, Playwright's `webServer` does not
+reliably stop the `docker compose up` process it starts once the test run
+finishes, leaving the stack running. If `docker compose ps` (run from the
+repository root) still shows `trusttable-backend-1`/`trusttable-frontend-1`
+after `npm run test:e2e`, stop them manually with `docker compose down`.
