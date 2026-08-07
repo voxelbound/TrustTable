@@ -1,4 +1,5 @@
-# TrustTable local Docker stack (FND-01, repository-foundation stage).
+# TrustTable local Docker stack (FND-01, repository-foundation stage;
+# configuration wiring updated by FND-02).
 #
 # Minimal, foundation-only Compose file: the backend runs Uvicorn directly
 # and is also mapped to its own host port for direct diagnostic
@@ -7,6 +8,14 @@
 # index.html for SPA routes. No database, no debug ports, no production
 # hardening (SBOM, dependency/container scanning) — that is `SEC-01`/
 # `REL-01` scope, not this file. See docs/local-development.md.
+#
+# Configuration (FND-02): the backend's typed Settings (see
+# backend/src/trusttable_backend/config.py) are the runtime source of
+# truth for every documented setting, and .env.example documents their
+# defaults for humans. This file does not duplicate those defaults and
+# does not require a .env file to exist. An optional repository-root
+# .env is picked up automatically if present (`required: false`); with
+# no .env, the container starts on Settings' own built-in defaults.
 
 services:
   backend:
@@ -14,8 +23,9 @@ services:
       context: ./backend
     ports:
       - "8000:8000"
-    environment:
-      APP_ENV: development
+    env_file:
+      - path: .env
+        required: false
     healthcheck:
       test:
         [
