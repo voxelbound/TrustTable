@@ -27,6 +27,13 @@ uv run uvicorn trusttable_backend.main:app --reload --port 8000
 - `GET http://127.0.0.1:8000/api/v1/health/ready`
 - `GET http://127.0.0.1:8000/api/v1/version`
 
+Configuration is validated at startup and works with no setup at all —
+see [`docs/configuration.md`](configuration.md) for every setting, its
+default, and effect. To override a default, copy `.env.example` to `.env`
+at the repository root (read automatically, native and Docker) or export
+environment variables directly; an invalid value stops startup with a
+clear error instead of running with bad configuration.
+
 ## Frontend — native
 
 ```sh
