@@ -11,6 +11,13 @@ verifies the six checks in WP-001's "Compose smoke-test requirements":
    log lines,
 6. only the intended ports (8000, 8080) are published.
 
+WP-002 (FND-02) adds two configuration-model checks: `Settings`' own
+defaults apply with no repository-root `.env` file present (not values
+duplicated into `docker-compose.yml`), and a supplied `.env` override
+that fails typed validation stops the backend container from becoming
+healthy, exercising the same `Settings` validation path as native
+startup.
+
 Requires a reachable Docker daemon (unsandboxed socket access) and
 buildable `backend`/`frontend` images. Not part of the default backend
 unit-test suite; invoke explicitly from the `backend` project, e.g.:
@@ -31,9 +38,12 @@ from pathlib import Path
 import httpx
 import pytest
 
-COMPOSE_FILE = Path(__file__).resolve().parents[2] / "docker-compose.yml"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+COMPOSE_FILE = REPO_ROOT / "docker-compose.yml"
+ENV_FILE_PATH = REPO_ROOT / ".env"
 BACKEND_URL = "http://127.0.0.1:8000"
 FRONTEND_URL = "http://127.0.0.1:8080"
+BUILD_TIMEOUT_SECONDS = 180
 UP_TIMEOUT_SECONDS = 90
 DOWN_TIMEOUT_SECONDS = 30
 INTENDED_HOST_PORTS = {8000, 8080}
@@ -62,6 +72,20 @@ class ComposeStack:
 
 @pytest.fixture(scope="module")
 def compose_stack() -> Iterator[ComposeStack]:
+    assert not ENV_FILE_PATH.exists(), (
+        f"{ENV_FILE_PATH} must not exist for this fixture: it proves the stack starts "
+        "on Settings' own defaults with no .env file present (WP-002 AC-06)"
+    )
+
+    # Compose does not rebuild an already-built image on `up` by default,
+    # which would silently validate stale source. Build explicitly, before
+    # the startup-time measurement below, so this fixture always exercises
+    # current source (discovered as a real gap while implementing WP-002).
+    build_result = _run_compose("build", timeout=BUILD_TIMEOUT_SECONDS)
+    assert build_result.returncode == 0, (
+        f"docker compose build failed:\nstdout={build_result.stdout}\nstderr={build_result.stderr}"
+    )
+
     start = time.monotonic()
     up_result = _run_compose(
         "up",
@@ -141,6 +165,23 @@ def test_spa_fallback_serves_index_html_for_unknown_route(
     assert response.status_code == 200
     assert '<div id="root">' in response.text
     assert "<!doctype html>" in response.text.lower()
+
+
+def test_backend_starts_on_settings_defaults_with_no_env_file(
+    compose_stack: ComposeStack,
+) -> None:
+    """WP-002 AC-06: no .env, no docker-compose.yml duplication, still healthy.
+
+    `compose_stack`'s fixture precondition already asserts no repository-
+    root `.env` exists; `docker-compose.yml` no longer sets `APP_ENV`
+    itself either (see its `env_file: required: false` change). Getting
+    `"development"` back here proves it came from `Settings`' own
+    built-in default, not a value duplicated into the compose file.
+    """
+    response = httpx.get(f"{BACKEND_URL}/api/v1/version", timeout=5)
+
+    assert response.status_code == 200
+    assert response.json()["environment_mode"] == "development"
 
 
 def test_only_intended_ports_are_published(compose_stack: ComposeStack) -> None:
