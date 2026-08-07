@@ -16,14 +16,20 @@ describe('PlaceholderRoute', () => {
   it('renders the placeholder heading and form', async () => {
     renderWithProviders()
 
-    expect(await screen.findByRole('heading', { name: 'TrustTable' })).toBeInTheDocument()
-    expect(screen.getByRole('form', { name: 'placeholder form' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'TrustTable' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('form', { name: 'placeholder form' }),
+    ).toBeInTheDocument()
     expect(screen.getByLabelText('Placeholder field')).toBeInTheDocument()
   })
 
   it('resolves the TanStack Query placeholder status', async () => {
     renderWithProviders()
 
-    expect(await screen.findByText('Repository foundation is running.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Repository foundation is running.'),
+    ).toBeInTheDocument()
   })
 })

@@ -10,7 +10,9 @@ import { expect, test } from '@playwright/test'
  * so the proxy and rendering path are proven before real screens land.
  */
 
-test('renders the placeholder route with no browser console errors', async ({ page }) => {
+test('renders the placeholder route with no browser console errors', async ({
+  page,
+}) => {
   const consoleErrors: string[] = []
   page.on('console', (message) => {
     if (message.type() === 'error') {
@@ -25,11 +27,15 @@ test('renders the placeholder route with no browser console errors', async ({ pa
 
   expect(response?.status()).toBe(200)
   await expect(page.getByRole('heading', { name: 'TrustTable' })).toBeVisible()
-  await expect(page.getByRole('form', { name: 'placeholder form' })).toBeVisible()
+  await expect(
+    page.getByRole('form', { name: 'placeholder form' }),
+  ).toBeVisible()
   expect(consoleErrors).toEqual([])
 })
 
-test('proxies /api/v1/version through Nginx to the backend', async ({ request }) => {
+test('proxies /api/v1/version through Nginx to the backend', async ({
+  request,
+}) => {
   const response = await request.get('/api/v1/version')
 
   expect(response.status()).toBe(200)
@@ -46,7 +52,8 @@ test('has no serious or critical accessibility violations on the placeholder rou
 
   const results = await new AxeBuilder({ page }).analyze()
   const seriousOrCritical = results.violations.filter(
-    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+    (violation) =>
+      violation.impact === 'serious' || violation.impact === 'critical',
   )
 
   expect(seriousOrCritical).toEqual([])
