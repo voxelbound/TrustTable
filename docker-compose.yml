@@ -1,3 +1,45 @@
-# Placeholder committed during the planning phase.
-# Backlog task FND-01 replaces this file with a runnable local stack.
-services: {}
+# TrustTable local Docker stack (FND-01, repository-foundation stage).
+#
+# Minimal, foundation-only Compose file: the backend runs Uvicorn directly
+# and is also mapped to its own host port for direct diagnostic
+# reachability; the frontend is built with `vite build` and served by
+# Nginx, which proxies /api/v1/* to the backend and falls back to
+# index.html for SPA routes. No database, no debug ports, no production
+# hardening (SBOM, dependency/container scanning) — that is `SEC-01`/
+# `REL-01` scope, not this file. See docs/local-development.md.
+
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: development
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s

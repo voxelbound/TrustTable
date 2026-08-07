@@ -32,7 +32,12 @@
 
 ## FND-01 — Repository foundation
 
-Create runnable backend and frontend foundations.
+Create runnable backend and frontend foundations, including a minimal
+working `docker-compose.yml` (backend and frontend start, are reachable
+directly and through the Nginx proxy, and the frontend serves an SPA
+fallback). Production hardening — SBOM, dependency/container scanning, and
+the full v0.1 feature set — is out of scope here and belongs to `REL-01`/
+`SEC-01`.
 
 Backend:
 
@@ -242,7 +247,10 @@ In-memory workflow:
 
 ## REL-01 — v0.1 package
 
-Dockerized deterministic application.
+Dockerized deterministic application. Builds on `FND-01`'s minimal working
+Compose stack with production hardening: SBOM, dependency/container
+scanning, and any remaining v0.1 feature and configuration work not already
+covered by `FND-01`'s foundation-only scope.
 
 # Local AI beta
 
