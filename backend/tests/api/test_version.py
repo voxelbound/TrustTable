@@ -1,9 +1,15 @@
-"""Exact-shape tests for `GET /api/v1/version` (WP-001 AC-01/AC-04)."""
+"""Exact-shape tests for `GET /api/v1/version` (WP-001 AC-01/AC-04).
+
+`environment_mode` sourcing from typed `Settings` (WP-002 AC-08) is
+covered here for `version_info.get_environment_mode()` itself; full
+per-field configuration validation lives in `tests/config/test_settings.py`.
+"""
 
 from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 import trusttable_backend.version_info as version_info_module
 
@@ -49,8 +55,14 @@ def test_version_reads_environment_mode_from_app_env(
     assert version_info_module.get_environment_mode() == "production"
 
 
-def test_version_falls_back_to_development_for_unknown_app_env(
+def test_version_rejects_unknown_app_env_instead_of_falling_back(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Superseded by WP-002: an unrecognized APP_ENV now fails fast
+
+    (`Settings` validation) rather than silently falling back to
+    "development", as WP-001's temporary raw env-var read used to do.
+    """
     monkeypatch.setenv("APP_ENV", "not-a-real-mode")
-    assert version_info_module.get_environment_mode() == "development"
+    with pytest.raises(ValidationError):
+        version_info_module.get_environment_mode()
