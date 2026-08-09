@@ -110,7 +110,7 @@ def test_valid_query_param_is_not_treated_as_an_error(error_client: TestClient) 
 def test_unhandled_exception_returns_generic_500_without_leaking_exception_text(
     error_client: TestClient,
 ) -> None:
-    response = error_client.get("/boom/unhandled")
+    response = error_client.get("/boom/unhandled", headers={REQUEST_ID_HEADER: "corr-500-test"})
 
     assert response.status_code == 500
     body = response.json()
@@ -120,6 +120,11 @@ def test_unhandled_exception_returns_generic_500_without_leaking_exception_text(
     assert _SECRET_EXCEPTION_TEXT not in raw_body
     assert "ValueError" not in raw_body
     assert "Traceback" not in raw_body
+    # AC-06 applies to the 500/unhandled-exception path too: this exercises
+    # a different Starlette middleware layer (`ServerErrorMiddleware`, not
+    # `ExceptionMiddleware`) than the 404/validation/AppError cases above.
+    assert response.headers.get(REQUEST_ID_HEADER) == "corr-500-test"
+    assert body["error"]["request_id"] == "corr-500-test"
 
 
 # --- AC-05: default StarletteHTTPException (undefined route) --------------
