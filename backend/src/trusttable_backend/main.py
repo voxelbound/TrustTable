@@ -19,7 +19,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from trusttable_backend.api.v1.router import router as api_v1_router
 from trusttable_backend.config import get_settings
 from trusttable_backend.errors import AppError
-from trusttable_backend.request_context import RequestIdMiddleware, get_request_id
+from trusttable_backend.request_context import (
+    REQUEST_ID_HEADER,
+    RequestIdMiddleware,
+    get_request_id,
+)
 from trusttable_backend.schemas.errors import ErrorDetail, ErrorResponse
 from trusttable_backend.version_info import get_application_version
 
@@ -41,15 +45,23 @@ def _error_response(
     message: str,
     details: dict[str, Any] | None = None,
 ) -> JSONResponse:
+    request_id = get_request_id(request)
     body = ErrorResponse(
         error=ErrorDetail(
             code=code,
             message=message,
             details=details or {},
-            request_id=get_request_id(request),
+            request_id=request_id,
         )
     )
-    return JSONResponse(status_code=status_code, content=body.model_dump())
+    response = JSONResponse(status_code=status_code, content=body.model_dump())
+    # Set directly here, not only relying on `RequestIdMiddleware`: a
+    # response built by the `Exception`/500 handler is sent by Starlette's
+    # `ServerErrorMiddleware`, which sits *outside* our middleware in the
+    # stack, so `RequestIdMiddleware`'s post-`call_next` header assignment
+    # never runs for that path. Every error response is self-sufficient.
+    response.headers[REQUEST_ID_HEADER] = request_id
+    return response
 
 
 def register_exception_handlers(app: FastAPI) -> None:
