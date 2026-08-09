@@ -110,6 +110,20 @@ openapi-fetch
 
 CI fails when generated types differ from the backend schema.
 
+### Structured errors and request IDs
+
+Every `/api/v1` response — success and error — carries an `X-Request-Id`
+header, generated per request or passed through from an inbound
+`X-Request-Id` header (`request_context.py`). Every error response uses the
+structured envelope fixed by `docs/api-specification.md` ("Error format"):
+`{"error": {"code", "message", "details", "request_id"}}` (`schemas/errors.py`).
+Application code raises `errors.AppError` for deliberate business errors;
+`main.register_exception_handlers` also normalizes request-validation
+errors, default HTTP errors (e.g. an undefined route), and any unhandled
+exception into the same shape — an unhandled exception never returns raw
+exception text or a stack trace in the response body (`docs/api-specification.md`
+§15).
+
 ## 6. Analysis pipeline
 
 ```text
