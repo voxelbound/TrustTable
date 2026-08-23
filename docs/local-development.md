@@ -42,6 +42,23 @@ npm install
 npm run dev
 ```
 
+### Generating the typed API client (`FND-05`)
+
+```sh
+cd frontend
+npm run generate:api-types
+```
+
+Regenerates `frontend/src/api/` (TypeScript types, typed SDK functions, and
+a single configured `@hey-api/client-fetch` client instance, relative
+`baseUrl: "/api/v1"`) directly from the backend's OpenAPI schema
+(`backend/src/trusttable_backend/export_openapi.py` — no live server or
+database required; requires a synced backend `uv` environment, since the
+generator shells out to it). The output is generated-only — never hand-edit
+files under `frontend/src/api/`; re-run this command instead. The CI
+`contract` job fails if the committed output differs from a fresh
+regeneration.
+
 Opens the Vite dev server (default `http://127.0.0.1:5173`). The placeholder
 route renders without a running backend — its query resolves a local value
 only, so no proxy is configured in dev mode.
@@ -102,20 +119,18 @@ after `npm run test:e2e`, stop them manually with `docker compose down`.
 ## Continuous integration (`FND-03`)
 
 `.github/workflows/ci.yml` runs on every pull request targeting `main` and
-every push to `main`. All three jobs are gating (the workflow fails on any
+every push to `main`. All four jobs are gating (the workflow fails on any
 violation); none are advisory-only.
 
 | Job (workflow file id) | Check name shown on GitHub | Runs |
 |---|---|---|
 | `backend` | `Backend (formatting, lint, types, tests, dependency scan)` | `ruff format --check src tests`, `ruff check src tests`, `mypy .` (strict), `pytest tests -v`, `pip-audit` (via `uvx`, against the exported `uv.lock` dependency set) |
 | `frontend` | `Frontend (formatting, lint, types, tests, dependency scan)` | `prettier --check` (`npm run format:check`), `oxlint` (`npm run lint`), `tsc -b --noEmit` (`npm run typecheck`), `vitest run` (`npm run test`), `npm audit --audit-level=high` |
+| `contract` | `OpenAPI contract drift check` | Regenerates `frontend/src/api/` from the backend's OpenAPI schema (`npm run generate:api-types`) and fails if the committed output differs (`git diff --exit-code`) — see "Generating the typed API client" above |
 | `integration` | `Docker Compose integration smoke tests` | `pytest tests/integration -v` — builds both Docker images and exercises the full Compose stack (see "Running the tests" above); satisfies the backlog's "Docker build" check via real integration coverage rather than a bare build-only step |
 
 **Not yet in CI** (deliberately deferred, tracked separately):
 
-- The backlog's "OpenAPI type generation check" — no generation pipeline
-  exists yet (`FND-05`); tracked in
-  `project-ops/follow-ups/002-openapi-drift-ci-check.md` (private).
 - All browser/accessibility (Playwright/axe) tests — release-candidate
   scope only, not a PR gate, per `docs/testing-strategy.md` §8.
 - SBOM generation, container scan, license check, performance benchmark
