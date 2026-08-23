@@ -42,6 +42,10 @@ npm install
 npm run dev
 ```
 
+Opens the Vite dev server (default `http://127.0.0.1:5173`). The placeholder
+route renders without a running backend — its query resolves a local value
+only, so no proxy is configured in dev mode.
+
 ### Generating the typed API client (`FND-05`)
 
 ```sh
@@ -58,10 +62,6 @@ generator shells out to it). The output is generated-only — never hand-edit
 files under `frontend/src/api/`; re-run this command instead. The CI
 `contract` job fails if the committed output differs from a fresh
 regeneration.
-
-Opens the Vite dev server (default `http://127.0.0.1:5173`). The placeholder
-route renders without a running backend — its query resolves a local value
-only, so no proxy is configured in dev mode.
 
 ## Full stack — Docker Compose
 
