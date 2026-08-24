@@ -1,0 +1,208 @@
+{
+  "schema_version": "1",
+  "seed": 20260824,
+  "row_count": 300,
+  "column_names": [
+    "order_id",
+    "order_date",
+    "customer_name",
+    "product",
+    "category",
+    "region",
+    "quantity",
+    "unit_price",
+    "discount_pct",
+    "tax_pct",
+    "line_total",
+    "status",
+    "notes",
+    "empty_col",
+    "constant_col"
+  ],
+  "issue_type_catalogue": [
+    "duplicate_rows",
+    "empty_column",
+    "missing_values",
+    "missing_identifier",
+    "inconsistent_capitalization",
+    "whitespace",
+    "future_dates",
+    "negative_measures",
+    "invalid_percentages",
+    "line_total_mismatch",
+    "constant_column",
+    "numeric_outliers",
+    "possible_prompt_injection"
+  ],
+  "issues": [
+    {
+      "issue_type": "duplicate_rows",
+      "detector_id_hint": "structural.exact_duplicate_rows",
+      "description": "Two rows are exact duplicates across every column.",
+      "row_references": [
+        5,
+        6
+      ],
+      "columns": [
+        "order_id",
+        "order_date",
+        "customer_name",
+        "product",
+        "category",
+        "region",
+        "quantity",
+        "unit_price",
+        "discount_pct",
+        "tax_pct",
+        "line_total",
+        "status",
+        "notes",
+        "empty_col",
+        "constant_col"
+      ]
+    },
+    {
+      "issue_type": "empty_column",
+      "detector_id_hint": "structural.empty_column",
+      "description": "The 'empty_col' column is empty in every row.",
+      "row_references": [],
+      "columns": [
+        "empty_col"
+      ]
+    },
+    {
+      "issue_type": "missing_values",
+      "detector_id_hint": "completeness.excessive_missing_values",
+      "description": "'quantity' is blank in several rows (line_total left blank in the same rows to stay internally consistent).",
+      "row_references": [
+        15,
+        16,
+        17
+      ],
+      "columns": [
+        "quantity"
+      ]
+    },
+    {
+      "issue_type": "missing_identifier",
+      "detector_id_hint": "completeness.missing_likely_identifier",
+      "description": "'order_id' is blank for a row that otherwise looks like a normal order.",
+      "row_references": [
+        10
+      ],
+      "columns": [
+        "order_id"
+      ]
+    },
+    {
+      "issue_type": "inconsistent_capitalization",
+      "detector_id_hint": "consistency.inconsistent_capitalization",
+      "description": "'category' values use inconsistent casing of the same category names.",
+      "row_references": [
+        20,
+        21
+      ],
+      "columns": [
+        "category"
+      ]
+    },
+    {
+      "issue_type": "whitespace",
+      "detector_id_hint": "consistency.leading_trailing_whitespace",
+      "description": "'customer_name' has leading or trailing whitespace.",
+      "row_references": [
+        25,
+        26
+      ],
+      "columns": [
+        "customer_name"
+      ]
+    },
+    {
+      "issue_type": "future_dates",
+      "detector_id_hint": "validity.future_dates",
+      "description": "'order_date' is after the fixed generation reference date.",
+      "row_references": [
+        30,
+        31
+      ],
+      "columns": [
+        "order_date"
+      ]
+    },
+    {
+      "issue_type": "negative_measures",
+      "detector_id_hint": "validity.negative_likely_non_negative_values",
+      "description": "'quantity' is negative, which is not physically meaningful for a sales line item.",
+      "row_references": [
+        35,
+        36
+      ],
+      "columns": [
+        "quantity"
+      ]
+    },
+    {
+      "issue_type": "invalid_percentages",
+      "detector_id_hint": "validity.invalid_percentages",
+      "description": "'discount_pct'/'tax_pct' fall outside the valid 0-100 percentage range.",
+      "row_references": [
+        40,
+        41
+      ],
+      "columns": [
+        "discount_pct",
+        "tax_pct"
+      ]
+    },
+    {
+      "issue_type": "line_total_mismatch",
+      "detector_id_hint": "cross_field.line_total_mismatch",
+      "description": "'line_total' does not equal quantity * unit_price adjusted for discount/tax.",
+      "row_references": [
+        45,
+        46
+      ],
+      "columns": [
+        "quantity",
+        "unit_price",
+        "discount_pct",
+        "tax_pct",
+        "line_total"
+      ]
+    },
+    {
+      "issue_type": "constant_column",
+      "detector_id_hint": "statistical.suspiciously_constant_column",
+      "description": "The 'constant_col' column holds the same value in every row.",
+      "row_references": [],
+      "columns": [
+        "constant_col"
+      ]
+    },
+    {
+      "issue_type": "numeric_outliers",
+      "detector_id_hint": "statistical.extreme_outliers",
+      "description": "'quantity'/'unit_price' contain extreme numeric outliers far outside the normal range.",
+      "row_references": [
+        50,
+        51
+      ],
+      "columns": [
+        "quantity",
+        "unit_price"
+      ]
+    },
+    {
+      "issue_type": "possible_prompt_injection",
+      "detector_id_hint": "security.possible_llm_prompt_injection",
+      "description": "'notes' contains instruction-like text attempting to influence downstream LLM processing.",
+      "row_references": [
+        55
+      ],
+      "columns": [
+        "notes"
+      ]
+    }
+  ]
+}

@@ -69,6 +69,19 @@ Rules:
 - AI output never bypasses validation
 - deterministic results are stored independently from AI interpretations
 
+### Demo data module
+
+`trusttable_backend.demo_data` (`DEMO-01`) is a framework-independent,
+stdlib-only module — no FastAPI/SQLAlchemy import — that deterministically
+generates the bundled synthetic sales dataset
+(`demo-data/sales_demo.csv`) and its hidden ground-truth manifest. The
+manifest is committed under `backend/tests/fixtures/demo_data/`, not
+`demo-data/` or `backend/src/`, so no runtime analysis code path can reach
+it — the concrete implementation of `docs/testing-strategy.md` §2.5's
+"the engine cannot access the manifest during normal analysis," and the
+answer key a later deterministic-evaluation package (`EVAL-01`) scores
+detector output against.
+
 ## 4. Frontend architecture
 
 TrustTable is a client-rendered SPA.
