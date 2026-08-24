@@ -101,14 +101,22 @@ Pydantic API schemas
    ↓
 OpenAPI JSON
    ↓
-openapi-typescript
+@hey-api/openapi-ts
    ↓
-Committed generated TypeScript types
+Committed generated TypeScript types, SDK functions, and client
    ↓
-openapi-fetch
+@hey-api/client-fetch
 ```
 
-CI fails when generated types differ from the backend schema.
+The OpenAPI JSON is produced directly by
+`backend/src/trusttable_backend/export_openapi.py` (no live server or
+database required). `@hey-api/openapi-ts` generates the committed output
+under `frontend/src/api/` — types, typed SDK functions, and a single
+configured `@hey-api/client-fetch` client instance (relative `baseUrl:
+"/api/v1"`) — via `npm run generate:api-types`
+(`frontend/openapi-ts.config.ts`). CI fails when the committed generated
+output differs from a fresh regeneration (`contract` job,
+`.github/workflows/ci.yml`).
 
 ### Structured errors and request IDs
 
