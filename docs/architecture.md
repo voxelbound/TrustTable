@@ -82,6 +82,20 @@ it — the concrete implementation of `docs/testing-strategy.md` §2.5's
 answer key a later deterministic-evaluation package (`EVAL-01`) scores
 detector output against.
 
+### Domain package
+
+`trusttable_backend.domain` (`ING-01`) is a framework-independent,
+stdlib-only package — no FastAPI/SQLAlchemy/pydantic import — that defines
+the typed contracts profiling and detectors consume:
+`ColumnReference`/`RowReference` (shared value objects), `Dataset`
+(uploaded/generated data source metadata), and `ParsedDataset` plus its
+supporting `WorksheetMetadata`/`ParsingWarning`/`SampleMetadata` types
+(the in-memory parsed representation). All types are immutable
+(`@dataclass(frozen=True)`) and enforce their invariants at construction
+time. `ING-02` (secure CSV parser) and `ING-03` (secure XLSX parser) are
+the packages that actually read bytes and construct these shapes; this
+package contains no parsing logic and no resource-limit enforcement.
+
 ## 4. Frontend architecture
 
 TrustTable is a client-rendered SPA.
