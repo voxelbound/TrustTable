@@ -131,7 +131,14 @@ computation exists in this package — `dataset_metrics` and
 and `PROF-03` (core profiling) populate; this package only defines the
 shapes, with `DatasetProfile` enforcing cross-field aggregate invariants
 (unique column references; null/distinct counts bounded by the sampled
-row count) at construction time.
+row count) at construction time. `profiling.type_inference` (`PROF-02`)
+additively extends this package with `infer_column_types(columns, rows)`,
+classifying each column (`ING-02`'s raw rows) into an `InferredColumnType`
+using a fixed, disclosed precedence — boolean tokens, ISO dates, numeric
+values, a "mixed" outcome for partial shape matches, near-unique
+"identifier" columns, low-cardinality "categorical" columns, and
+free-form "text" — computing `null_count`/`distinct_count` along the way
+while leaving `metrics` empty for `PROF-03` (core profiling) to populate.
 
 ## 4. Frontend architecture
 
