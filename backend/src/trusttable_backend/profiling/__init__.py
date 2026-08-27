@@ -14,6 +14,7 @@ from .schemas import (
     ProfilingTiming,
     ProfilingWarning,
 )
+from .type_inference import infer_column_types
 
 __all__ = [
     "ColumnProfile",
@@ -21,4 +22,5 @@ __all__ = [
     "InferredColumnType",
     "ProfilingTiming",
     "ProfilingWarning",
+    "infer_column_types",
 ]
