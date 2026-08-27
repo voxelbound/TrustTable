@@ -13,6 +13,17 @@ authoritative document fixes a type-inference algorithm; the backlog
 names the categories to handle ("identifiers, dates, mixed types, and
 ambiguous columns"), not the method.
 
+`IDENTIFIER`/`CATEGORICAL` are deliberately cheap, coarse, disclosed
+signals, not confident semantic verdicts (`docs/domain-model.md` §8
+`DatasetContext.candidate_keys` is the later, confidence-scored,
+confirmable/correctable layer that makes the real "is this the dataset's
+key column" judgment). A large, fully-unique free-form text column will
+also classify `IDENTIFIER` here — an accepted, tested limitation, not a
+defect: `docs/product-requirements.md` §10 names `likely identifier`/
+`high cardinality` as `PROF-03` `Text:` metrics, which must be computed
+for `IDENTIFIER`/`CATEGORICAL` columns too (not gated to `TEXT` alone) so
+this layer's coarse label remains correctable downstream.
+
 Framework-independent: no FastAPI/SQLAlchemy/pydantic import. Stdlib only
 (`datetime`, `re`).
 """
@@ -29,23 +40,17 @@ from .schemas import ColumnProfile, InferredColumnType, ProfilingWarning
 _BOOLEAN_TOKENS: Final[frozenset[str]] = frozenset({"true", "false", "yes", "no"})
 _ISO_DATE_PATTERN: Final[re.Pattern[str]] = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-_CATEGORICAL_DISTINCT_LIMIT: Final[int] = 20
-"""At most this many distinct non-blank values (and not every value
-distinct) classifies a column as `CATEGORICAL`. A new, disclosed
-constant — comfortably below the demo dataset's largest deliberately
-low-cardinality column (15 customer names) and far above 1."""
+_CATEGORICAL_DISTINCT_RATIO: Final[float] = 0.5
+"""A column classifies as `CATEGORICAL` when at most this fraction of its
+non-blank values are distinct — i.e. each distinct value recurs, on
+average, at least once more. A scale-invariant ratio (not an absolute
+count), chosen as the natural majority/repeat-dominance point rather than
+fit to any particular dataset: it behaves identically at 10 rows or
+10,000,000 rows, unlike an absolute cap."""
 
 _IDENTIFIER_MIN_VALUES: Final[int] = 2
 """A column needs at least this many non-blank values to be classified as
 `IDENTIFIER` — a single value proves nothing about uniqueness."""
-
-_IDENTIFIER_UNIQUENESS_RATIO: Final[float] = 0.95
-"""A column classifies as `IDENTIFIER` when at least this fraction of its
-non-blank values are distinct, not only when every value is distinct.
-Real identifier columns can carry a handful of duplicate-row data-quality
-issues (e.g. `DEMO-01`'s injected duplicate rows) without stopping being
-conceptually an identifier column — a new, disclosed threshold, not a
-literal 100% requirement."""
 
 
 def infer_column_types(
@@ -134,10 +139,10 @@ def _classify(
         )
         return InferredColumnType.MIXED, (warning,)
 
-    if total >= _IDENTIFIER_MIN_VALUES and (distinct_count / total) >= _IDENTIFIER_UNIQUENESS_RATIO:
+    if total >= _IDENTIFIER_MIN_VALUES and distinct_count == total:
         return InferredColumnType.IDENTIFIER, ()
 
-    if distinct_count <= _CATEGORICAL_DISTINCT_LIMIT and distinct_count < total:
+    if (distinct_count / total) <= _CATEGORICAL_DISTINCT_RATIO:
         return InferredColumnType.CATEGORICAL, ()
 
     return InferredColumnType.TEXT, ()
