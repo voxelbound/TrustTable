@@ -95,6 +95,10 @@ supporting `WorksheetMetadata`/`ParsingWarning`/`SampleMetadata` types
 time. `ING-02` (secure CSV parser) and `ING-03` (secure XLSX parser) are
 the packages that actually read bytes and construct these shapes; this
 package contains no parsing logic and no resource-limit enforcement.
+`domain.evidence` (`PROF-01`) additively extends this package with
+`EvidenceType`/`Evidence` — placed under `domain/` rather than
+`profiling/` because both profiling and the future detector packages
+(`DET-*`) consume it.
 
 ### Parsers package
 
@@ -112,6 +116,22 @@ values) degrades gracefully via `ParsingWarning`; only unrecoverable
 input (empty/undecodable content, a zero-column header, or a limit being
 exceeded) is rejected outright. `ING-03` (secure XLSX support) is the
 future package that extends this layer to the XLSX format.
+
+### Profiling package
+
+`trusttable_backend.profiling` (`PROF-01`) is a framework-independent,
+stdlib-only package — no FastAPI/SQLAlchemy/pydantic import — implementing
+the "Profiling" backend layer's schemas: `DatasetProfile`
+(`docs/domain-model.md` §7's exact field list, reusing
+`domain.parsing.SampleMetadata`/`SamplingScope` for its calculation-scope
+and sampling-method fields) and its supporting `ColumnProfile`/
+`InferredColumnType`/`ProfilingWarning`/`ProfilingTiming` types. No
+computation exists in this package — `dataset_metrics` and
+`ColumnProfile.metrics` are open containers `PROF-02` (type inference)
+and `PROF-03` (core profiling) populate; this package only defines the
+shapes, with `DatasetProfile` enforcing cross-field aggregate invariants
+(unique column references; null/distinct counts bounded by the sampled
+row count) at construction time.
 
 ## 4. Frontend architecture
 

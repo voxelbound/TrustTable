@@ -7,6 +7,7 @@ SQLAlchemy models."
 
 from __future__ import annotations
 
+from .evidence import Evidence, EvidenceType
 from .parsing import (
     Dataset,
     DatasetFormat,
@@ -25,6 +26,8 @@ __all__ = [
     "Dataset",
     "DatasetFormat",
     "DatasetSourceType",
+    "Evidence",
+    "EvidenceType",
     "ParsedDataset",
     "ParsingWarning",
     "SampleMetadata",
