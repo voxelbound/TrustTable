@@ -96,6 +96,23 @@ time. `ING-02` (secure CSV parser) and `ING-03` (secure XLSX parser) are
 the packages that actually read bytes and construct these shapes; this
 package contains no parsing logic and no resource-limit enforcement.
 
+### Parsers package
+
+`trusttable_backend.parsers` (`ING-02`) is a framework-independent,
+stdlib-only package — no FastAPI/SQLAlchemy/pydantic import — implementing
+the "Parsing" backend layer. Its `csv_parser.parse_csv` function turns raw
+CSV bytes into a `domain.parsing.ParsedDataset` plus the actual row
+values, enforcing the resource limits named in
+`docs/product-requirements.md` §7 (row/column/byte/field-length caps,
+mirroring `Settings`' existing limit fields) and the content-execution
+guarantee in `docs/security-threat-model.md` §3.2 — every cell value is
+read as literal text, never executed or evaluated. Malformed-but-
+recoverable input (ragged rows, duplicate/empty column names, over-long
+values) degrades gracefully via `ParsingWarning`; only unrecoverable
+input (empty/undecodable content, a zero-column header, or a limit being
+exceeded) is rejected outright. `ING-03` (secure XLSX support) is the
+future package that extends this layer to the XLSX format.
+
 ## 4. Frontend architecture
 
 TrustTable is a client-rendered SPA.
