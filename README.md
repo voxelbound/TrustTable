@@ -6,7 +6,7 @@ It combines deterministic profiling and rule-based detection with evidence-groun
 
 ## Project status
 
-TrustTable has completed its repository foundation (**FND-01**), typed configuration (**FND-02**), continuous integration (**FND-03**), common API errors (**FND-04**), the OpenAPI frontend contract pipeline (**FND-05**), the synthetic sales generator (**DEMO-01**), the parsing contracts (**ING-01**), the secure CSV parser (**ING-02**), and the profiling schemas (**PROF-01**), and is now continuing toward **v0.1 — the deterministic vertical slice**.
+TrustTable has completed its repository foundation (**FND-01**), typed configuration (**FND-02**), continuous integration (**FND-03**), common API errors (**FND-04**), the OpenAPI frontend contract pipeline (**FND-05**), the synthetic sales generator (**DEMO-01**), the parsing contracts (**ING-01**), the secure CSV parser (**ING-02**), the profiling schemas (**PROF-01**), and type inference (**PROF-02**), and is now continuing toward **v0.1 — the deterministic vertical slice**.
 
 The product, domain model, API boundaries, detector framework, frontend architecture, testing strategy, threat model, release plan, and implementation backlog have been defined before production implementation begins. A runnable backend and frontend skeleton, Docker/Nginx deployment, and baseline test tooling now exist; no product features are implemented yet.
 
