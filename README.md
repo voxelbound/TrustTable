@@ -23,6 +23,19 @@ The first production target is a local, single-instance application that:
 
 A public hosted demonstration is deliberately deferred until the local application is complete and proven.
 
+## Running it today
+
+The backend and frontend skeleton can be started right now, native or
+through Docker Compose — see [Local development](docs/local-development.md)
+for exact commands. The bundled deterministic demo dataset is
+[`demo-data/sales_demo.csv`](demo-data/sales_demo.csv).
+
+CSV parsing, type inference, and core profiling (`ING-02`/`PROF-02`/
+`PROF-03`) are implemented as backend library code, but **not yet exposed
+through the running API or UI** — that wiring is future backlog scope
+(`API-01`, `UI-01`). [Local development](docs/local-development.md#exercising-the-deterministic-profiling-pipeline-directly)
+has a reproducible way to exercise them directly today.
+
 ## Planned user workflow
 
 ```text
@@ -62,6 +75,7 @@ Upload → Understand → Analyze → Review → Export
 
 ### Delivery and quality
 
+- [Local development](docs/local-development.md)
 - [Implementation backlog](docs/implementation-backlog.md)
 - [Testing strategy](docs/testing-strategy.md)
 - [Release plan](docs/release-plan.md)
