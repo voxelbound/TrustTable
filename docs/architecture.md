@@ -201,7 +201,20 @@ on `PROF-02`'s `UNKNOWN` classification — which already exactly means
 `catalogue.py`'s `DETECTORS`, the first real, explicit registration list
 (`docs/detector-framework.md` §9's own example pattern). Both detectors
 use a fixed `MEDIUM` severity and `1.0` confidence in this package
-(exact, unambiguous computed facts); ten more `DET-02` detectors and
+(exact, unambiguous computed facts). The second `DET-02` sub-package adds
+`completeness.py` (`ExcessiveMissingValuesDetector`, flagging columns
+whose missing-value ratio reaches a fixed 1% threshold, excluding
+columns already covered by `structural.empty_column`;
+`MissingLikelyIdentifierDetector`, flagging columns that `PROF-03`'s
+`likely_identifier` text-family metric already marks as identifier-like
+but that still contain missing values), extending `catalogue.DETECTORS`
+to four detectors. Both new detectors declare `requires_raw_rows=True` —
+unlike `structural.empty_column`, identifying *which* rows are missing a
+value needs the raw row values, not just the already-computed
+`null_count`/`likely_identifier` facts — and use `confidence=1.0` (exact,
+deterministic computed facts); severity is fixed `MEDIUM` for
+`excessive_missing_values` and fixed `HIGH` for
+`missing_likely_identifier`. Eight more `DET-02` detectors and
 `DET-SEC-01` remain to be added additively.
 
 ## 4. Frontend architecture
