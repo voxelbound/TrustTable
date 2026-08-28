@@ -1,15 +1,18 @@
-"""Detector interface (`DET-01`): the framework-independent detector
-contract, registration, and execution engine matching
-`docs/detector-framework.md` §2/§3/§4/§5/§6/§9/§10/§13.
+"""Detector interface (`DET-01`) and the growing real detector catalogue
+(`DET-02`, partial): the framework-independent detector contract,
+registration, execution engine, and (so far) two real structural
+detectors, matching `docs/detector-framework.md`
+§2/§3/§4/§5/§6/§9/§10/§13/§16.
 
-No real detector exists in this package. `DET-02` (initial detector set)
-and `DET-SEC-01` (prompt-injection detector) implement `Detector` and
-call `register_detectors()`; a future analysis-orchestration package
-(`API-01`) calls `run_detectors()`.
+`DET-02`'s remaining 10 detectors and `DET-SEC-01` (prompt-injection
+detector) are later packages that extend `catalogue.DETECTORS`
+additively; a future analysis-orchestration package (`API-01`) calls
+`run_detectors()`.
 """
 
 from __future__ import annotations
 
+from .catalogue import DETECTORS
 from .contract import (
     Detector,
     DetectorCategory,
@@ -27,8 +30,10 @@ from .contract import (
 )
 from .engine import run_detectors
 from .registry import register_detectors
+from .structural import EmptyColumnDetector, ExactDuplicateRowsDetector
 
 __all__ = [
+    "DETECTORS",
     "Detector",
     "DetectorCategory",
     "DetectorMetadata",
@@ -37,6 +42,8 @@ __all__ = [
     "DetectorRunStatus",
     "DetectorSupportRequest",
     "DetectorWarning",
+    "EmptyColumnDetector",
+    "ExactDuplicateRowsDetector",
     "ExecutionMetrics",
     "FindingCandidate",
     "PerformanceClass",
