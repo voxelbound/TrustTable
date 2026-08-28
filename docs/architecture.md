@@ -189,10 +189,20 @@ not preemptive — a detector that never returns cannot currently be
 interrupted; true cancellation needs a future worker/thread execution
 boundary. `Severity` (`docs/domain-model.md` §3, 5 values) was added
 additively to `domain.value_objects` as part of this package, since it
-is consumed by `FindingCandidate` and the future `Finding` type. No real
-detector exists in this package — `DET-02` (initial detector set) and
-`DET-SEC-01` (prompt-injection detector) are the packages that implement
-`Detector` and call `register_detectors()`.
+is consumed by `FindingCandidate` and the future `Finding` type. `DET-01`
+itself contains no real detector; `DET-02` (initial detector set,
+delivered incrementally across several sub-packages) and `DET-SEC-01`
+(prompt-injection detector) implement `Detector` and call
+`register_detectors()`. The first `DET-02` sub-package adds
+`structural.py` (`ExactDuplicateRowsDetector`, reusing raw rows to
+identify duplicate-row evidence; `EmptyColumnDetector`, relying entirely
+on `PROF-02`'s `UNKNOWN` classification — which already exactly means
+"zero non-blank values" — with no raw-row access needed) and
+`catalogue.py`'s `DETECTORS`, the first real, explicit registration list
+(`docs/detector-framework.md` §9's own example pattern). Both detectors
+use a fixed `MEDIUM` severity and `1.0` confidence in this package
+(exact, unambiguous computed facts); ten more `DET-02` detectors and
+`DET-SEC-01` remain to be added additively.
 
 ## 4. Frontend architecture
 
