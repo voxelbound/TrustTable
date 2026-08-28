@@ -63,6 +63,48 @@ files under `frontend/src/api/`; re-run this command instead. The CI
 `contract` job fails if the committed output differs from a fresh
 regeneration.
 
+## Exercising the deterministic profiling pipeline directly
+
+As of `PROF-03`, secure CSV parsing (`ING-02`), type inference (`PROF-02`),
+and core profiling metrics (`PROF-03`) exist as backend library code, but
+**no API endpoint or UI route exposes them yet** (`API-01`/`UI-01`, both
+future backlog items). Until that wiring exists, the shortest way to
+exercise the pipeline is to call it directly against the bundled
+deterministic demo dataset (`demo-data/sales_demo.csv`, `DEMO-01`):
+
+```sh
+cd backend
+uv run python -c "
+from pathlib import Path
+from datetime import date
+from trusttable_backend.parsers.csv_parser import parse_csv
+from trusttable_backend.profiling.metrics import compute_dataset_profile
+
+content = Path('../demo-data/sales_demo.csv').read_bytes()
+result = parse_csv(content)
+profile = compute_dataset_profile(
+    result.parsed_dataset.columns, result.rows, result.parsed_dataset.sampling,
+    as_of=date(2026, 8, 24),
+)
+print(profile.dataset_metrics)
+for cp in profile.column_profiles:
+    print(cp.column.original_name, cp.inferred_type)
+"
+```
+
+`as_of` is fixed to `2026-08-24` — `DEMO-01`'s own dataset-generation
+`REFERENCE_DATE` — rather than `date.today()`, so the output is
+reproducible and does not depend on when the command is run. Against the
+committed dataset, this deterministically prints
+`{'row_count': 300, 'column_count': 15, 'memory_estimate_bytes': 31875,
+'duplicate_row_count': 1, 'empty_row_count': 0, 'empty_column_count': 1}`
+for `dataset_metrics`, and each column's inferred type (`order_date` ->
+`date`, with `future_date_count: 2` for the two rows `DEMO-01`
+deliberately dates after the reference date; five numeric measure
+columns -> `numeric`; `customer_name`/`product`/`category`/`region`/
+`status`/`constant_col` -> `categorical`; `order_id`/`notes` -> `text`;
+`empty_col` -> `unknown`).
+
 ## Full stack — Docker Compose
 
 ```sh
