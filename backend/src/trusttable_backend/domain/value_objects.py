@@ -2,17 +2,25 @@
 
 Implements the two `docs/domain-model.md` §3 "Shared value objects" needed
 by this package's parsing contracts: `ColumnReference` and `RowReference`.
-The remaining §3 value objects (`AnalysisId`, `EvidenceId`, `DetectorId`,
-`Provenance`, `Severity`, `Confidence`) are deferred to the packages that
-actually consume them (Analysis, Evidence/Finding, Context) — a disclosed
-scoping decision, not a gap.
+`Severity` (`DET-01`) additively fills in one of the value objects this
+docstring originally deferred: it is consumed by
+`detectors.contract.FindingCandidate` and the future `Finding` type
+(`docs/domain-model.md` §12). The remaining §3 value objects (`AnalysisId`,
+`EvidenceId`, `DetectorId`, `Provenance`, `Confidence`) stay deferred to
+the packages that actually consume them (Analysis, Evidence/Finding,
+Context) — a disclosed scoping decision, not a gap. `Confidence` in
+particular remains an inline-validated `float` rather than a wrapper
+type, consistent with this file's own `RowReference.row_number`/
+`ColumnReference.ordinal` precedent for validated-inline scalars.
 
-Stdlib only (`dataclasses`) — no FastAPI/SQLAlchemy/pydantic import.
+Stdlib only (`dataclasses`, `enum`) — no FastAPI/SQLAlchemy/pydantic
+import.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,3 +71,19 @@ class RowReference:
     def __post_init__(self) -> None:
         if self.row_number < 0:
             raise ValueError("RowReference.row_number must not be negative")
+
+
+class Severity(StrEnum):
+    """Closed set of finding severities (`docs/domain-model.md` §3).
+
+    Reflects likely business or processing impact
+    (`docs/detector-framework.md` §11) — not the probability that a
+    pattern is genuine (that is `Confidence`, §3, kept as an
+    inline-validated `float` rather than a wrapper type).
+    """
+
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFORMATIONAL = "informational"

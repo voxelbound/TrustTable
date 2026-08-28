@@ -18,11 +18,12 @@ from .parsing import (
     SamplingScope,
     WorksheetMetadata,
 )
-from .value_objects import ColumnReference, RowReference
+from .value_objects import ColumnReference, RowReference, Severity
 
 __all__ = [
     "ColumnReference",
     "RowReference",
+    "Severity",
     "Dataset",
     "DatasetFormat",
     "DatasetSourceType",
