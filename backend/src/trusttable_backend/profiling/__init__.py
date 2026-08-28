@@ -1,12 +1,12 @@
-"""Profiling schemas (`PROF-01`).
+"""Profiling schemas (`PROF-01`), type inference (`PROF-02`), and core
+profiling metrics (`PROF-03`).
 
-Framework-independent: no FastAPI/SQLAlchemy/pydantic import, no
-computation. `PROF-02` (type inference) and `PROF-03` (core profiling)
-are the future packages that populate real inferred types and metrics.
+Framework-independent: no FastAPI/SQLAlchemy/pydantic import.
 """
 
 from __future__ import annotations
 
+from .metrics import compute_dataset_profile
 from .schemas import (
     ColumnProfile,
     DatasetProfile,
@@ -22,5 +22,6 @@ __all__ = [
     "InferredColumnType",
     "ProfilingTiming",
     "ProfilingWarning",
+    "compute_dataset_profile",
     "infer_column_types",
 ]
