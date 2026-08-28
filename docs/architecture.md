@@ -161,6 +161,39 @@ not the `security.possible_llm_prompt_injection` detector) for `text`,
 forward-compatibility requirement that these metrics not be gated to
 `text` alone.
 
+### Detectors package
+
+`trusttable_backend.detectors` (`DET-01`) implements the "Detectors"
+backend layer's contract, registration, and execution engine, matching
+`docs/detector-framework.md` §2/§3/§4/§5/§6/§9/§10/§13 — the layer's own
+rule is narrower than `domain`/`parsers`/`profiling`'s "no FastAPI/
+SQLAlchemy/pydantic": "detector modules do not import FastAPI", since
+`detector-framework.md` §2's own conceptual interface already requires
+`pydantic`'s `BaseModel` for `config_schema`. `contract.py` defines
+`DetectorCategory`/`PerformanceClass` (closed enums), `DetectorMetadata`,
+`SecurityExposureState` (a minimal projection of `docs/domain-model.md`
+§5 Analysis's exposure-relevant fields), `DetectorSupportRequest`/
+`DetectorRunRequest`, `DetectorRunStatus`, `FindingCandidate`,
+`DetectorWarning`, `ExecutionMetrics`, `SafeFailure`, `DetectorRunResult`,
+and the `Detector` Protocol itself. `registry.py`'s `register_detectors()`
+validates unique detector IDs and each detector's `default_configuration`
+against its own `config_schema` before returning detectors in stable,
+deterministic order. `engine.py`'s `run_detectors()` calls `supports()`,
+scopes `run()`'s inputs to exactly what each detector declares needing
+(`requires_raw_rows`/`requires_confirmed_context`), isolates
+`supports()`/`run()` exceptions into a `FAILED` result rather than
+propagating them, owns and records real measured timing (overriding
+whatever a detector itself returns), and preserves deterministic
+input order. Time/resource-boundary enforcement is measurement-only,
+not preemptive — a detector that never returns cannot currently be
+interrupted; true cancellation needs a future worker/thread execution
+boundary. `Severity` (`docs/domain-model.md` §3, 5 values) was added
+additively to `domain.value_objects` as part of this package, since it
+is consumed by `FindingCandidate` and the future `Finding` type. No real
+detector exists in this package — `DET-02` (initial detector set) and
+`DET-SEC-01` (prompt-injection detector) are the packages that implement
+`Detector` and call `register_detectors()`.
+
 ## 4. Frontend architecture
 
 TrustTable is a client-rendered SPA.
