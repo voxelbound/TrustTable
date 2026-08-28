@@ -141,9 +141,25 @@ most half of non-blank values are distinct, and free-form "text" —
 computing `null_count`/`distinct_count` along the way while leaving
 `metrics` empty for `PROF-03` (core profiling) to populate. `identifier`/
 `categorical` are deliberately coarse, correctable signals, not confident
-semantic verdicts; `PROF-03` is expected to compute its text-family
-metrics (including cardinality/likely-identifier evidence) for these
-types as well as `text`, not only `text` alone.
+semantic verdicts. `profiling.metrics` (`PROF-03`) additively extends this
+package with `compute_dataset_profile(columns, rows, sampling, *,
+as_of=None)`, calling `infer_column_types` unchanged for classification
+and populating `DatasetProfile.dataset_metrics` (row/column count, a
+coarse content-byte memory-estimate proxy, duplicate/empty-row counts,
+empty-column count) and every `ColumnProfile.metrics` per
+`docs/product-requirements.md` §10: common metrics on every column
+(`source_type`, `uniqueness_ratio`, bounded `representative_values`);
+numeric metrics (mean/median/stdev, quartiles, IQR, median absolute
+deviation, zero/negative/Tukey-fence-extreme counts) for `numeric`
+columns; date metrics (min/max, future-date count against an explicit
+`as_of`, largest inter-date gap) for `date` columns; and text-family
+metrics (length bounds, whitespace/empty-string counts, normalized
+distinct count, `high_cardinality`/`likely_identifier` ratio flags, and a
+bounded, disclosed `instruction_like_value_count` heuristic — explicitly
+not the `security.possible_llm_prompt_injection` detector) for `text`,
+`categorical`, **and** `identifier` columns, per `PROF-02`'s own
+forward-compatibility requirement that these metrics not be gated to
+`text` alone.
 
 ## 4. Frontend architecture
 
