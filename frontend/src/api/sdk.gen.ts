@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetLivenessApiV1HealthLiveGetData, GetLivenessApiV1HealthLiveGetResponses, GetReadinessApiV1HealthReadyGetData, GetReadinessApiV1HealthReadyGetResponses, GetVersionApiV1VersionGetData, GetVersionApiV1VersionGetResponses } from './types.gen';
+import type { GetAnalysisApiV1AnalysesAnalysisIdGetData, GetAnalysisApiV1AnalysesAnalysisIdGetErrors, GetAnalysisApiV1AnalysesAnalysisIdGetResponses, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetData, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetErrors, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetErrors, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetData, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetErrors, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses, GetLivenessApiV1HealthLiveGetData, GetLivenessApiV1HealthLiveGetResponses, GetReadinessApiV1HealthReadyGetData, GetReadinessApiV1HealthReadyGetResponses, GetVersionApiV1VersionGetData, GetVersionApiV1VersionGetResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostData, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostDemoSalesApiV1DemoSalesPostData, PostDemoSalesApiV1DemoSalesPostResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -17,6 +17,62 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
      */
     meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
+
+/**
+ * Get Analysis
+ *
+ * Return the full analysis resource (`docs/api-specification.md` §6).
+ */
+export const getAnalysisApiV1AnalysesAnalysisIdGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisApiV1AnalysesAnalysisIdGetData, ThrowOnError>): RequestResult<GetAnalysisApiV1AnalysesAnalysisIdGetResponses, GetAnalysisApiV1AnalysesAnalysisIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisApiV1AnalysesAnalysisIdGetResponses, GetAnalysisApiV1AnalysesAnalysisIdGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}', ...options });
+
+/**
+ * Post Analysis Cancel
+ *
+ * Cancel a queued analysis (`docs/api-specification.md` §6).
+ *
+ * Only effective while `queued` — `analysis.service.cancel_analysis`'s
+ * own documented behavior (no true mid-pipeline cancellation yet,
+ * `JOB-01`); any other known state is returned unchanged, not an error.
+ */
+export const postAnalysisCancelApiV1AnalysesAnalysisIdCancelPost = <ThrowOnError extends boolean = false>(options: Options<PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostData, ThrowOnError>): RequestResult<PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, ThrowOnError> => (options.client ?? client).post<PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/cancel', ...options });
+
+/**
+ * Get Analysis Findings
+ *
+ * Return the findings list (`docs/api-specification.md` §10).
+ *
+ * Returns an empty `items` list (not an error) for a known,
+ * not-yet-`completed` analysis — matching
+ * `analysis.service.get_findings`'s own documented behavior exactly.
+ */
+export const getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetData, ThrowOnError>): RequestResult<GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/findings', ...options });
+
+/**
+ * Get Analysis Profile
+ *
+ * Return the dataset profile (`docs/api-specification.md` §8).
+ *
+ * Raises `INVALID_ANALYSIS_STATE` (`409`) when the analysis has not
+ * reached `completed` — matching `analysis.service.get_profile`'s own
+ * documented `None`-for-not-completed behavior, translated into an
+ * explicit HTTP error rather than a silently empty/null body.
+ */
+export const getAnalysisProfileApiV1AnalysesAnalysisIdProfileGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData, ThrowOnError>): RequestResult<GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/profile', ...options });
+
+/**
+ * Get Analysis Status
+ *
+ * Lightweight polling endpoint (`docs/api-specification.md` §6).
+ */
+export const getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetData, ThrowOnError>): RequestResult<GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/status', ...options });
+
+/**
+ * Post Demo Sales
+ *
+ * Create an analysis over the bundled demo dataset and run it to
+ * completion (`docs/api-specification.md` §5).
+ */
+export const postDemoSalesApiV1DemoSalesPost = <ThrowOnError extends boolean = false>(options?: Options<PostDemoSalesApiV1DemoSalesPostData, ThrowOnError>): RequestResult<PostDemoSalesApiV1DemoSalesPostResponses, unknown, ThrowOnError> => (options?.client ?? client).post<PostDemoSalesApiV1DemoSalesPostResponses, unknown, ThrowOnError>({ url: '/api/v1/demo/sales', ...options });
 
 /**
  * Get Liveness

@@ -1,9 +1,11 @@
 """FastAPI application factory.
 
-Repository-foundation stage (FND-01): only operational endpoints are
-registered. No product routes, persistence, or AI boundary exist yet.
+Registers operational endpoints (`FND-01`) and the `API-01` analysis
+routes (`api.v1.analyses`), backed by an in-memory `AnalysisStore`
+created fresh per application instance. No persistence or AI boundary is
+wired into the HTTP surface yet (`DB-01`/`AI-01`, not yet built).
 `FND-04` adds the cross-cutting structured-error/request-ID layer that
-every future route inherits automatically.
+every route inherits automatically.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from trusttable_backend.analysis import AnalysisStore
 from trusttable_backend.api.v1.router import router as api_v1_router
 from trusttable_backend.config import get_settings
 from trusttable_backend.errors import AppError
@@ -141,6 +144,11 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
     app.include_router(api_v1_router)
+    # `API-01`: one in-memory `AnalysisStore` per application instance —
+    # lost on process restart, no concurrency safety (`DB-01`/`JOB-01`,
+    # not yet built; disclosed non-goal, matching `WP-023`'s own
+    # `AnalysisStore` precedent).
+    app.state.analysis_store = AnalysisStore()
     return app
 
 

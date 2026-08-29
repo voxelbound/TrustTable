@@ -6,7 +6,7 @@ It combines deterministic profiling and rule-based detection with evidence-groun
 
 ## Project status
 
-TrustTable has completed its repository foundation (**FND-01**), typed configuration (**FND-02**), continuous integration (**FND-03**), common API errors (**FND-04**), the OpenAPI frontend contract pipeline (**FND-05**), the synthetic sales generator (**DEMO-01**), the parsing contracts (**ING-01**), the secure CSV parser (**ING-02**), the profiling schemas (**PROF-01**), type inference (**PROF-02**), core profiling (**PROF-03**), the detector interface (**DET-01**), the initial detector set (**DET-02** — all 12 detectors: duplicate rows, empty columns, excessive missing values, missing likely identifiers, inconsistent capitalization, leading/trailing whitespace, future dates, negative measures, invalid percentages, line-total mismatch, suspiciously constant columns, and extreme outliers), the LLM input/output trust boundaries (**SEC-02** — the untrusted-data envelope, safe prompt builder, and model-output validator; no real LLM provider is wired in yet), the prompt-injection risk detector (**DET-SEC-01** — `security.possible_llm_prompt_injection`, the required AI-processing-security detector, completing the detector catalogue at 13/13), deterministic risk scoring (**RISK-01** — per-finding priority scores and a four-label dataset trust assessment, computed with no AI/LLM input path at all), and the in-memory analysis-orchestration engine (**API-01**, enabling slice — a pure Python service composing parsing/profiling/detection/scoring into one create-then-run pipeline over the bundled demo dataset; no FastAPI route or HTTP surface exists yet). TrustTable is now continuing toward **v0.1 — the deterministic vertical slice**.
+TrustTable has completed its repository foundation (**FND-01**), typed configuration (**FND-02**), continuous integration (**FND-03**), common API errors (**FND-04**), the OpenAPI frontend contract pipeline (**FND-05**), the synthetic sales generator (**DEMO-01**), the parsing contracts (**ING-01**), the secure CSV parser (**ING-02**), the profiling schemas (**PROF-01**), type inference (**PROF-02**), core profiling (**PROF-03**), the detector interface (**DET-01**), the initial detector set (**DET-02** — all 12 detectors: duplicate rows, empty columns, excessive missing values, missing likely identifiers, inconsistent capitalization, leading/trailing whitespace, future dates, negative measures, invalid percentages, line-total mismatch, suspiciously constant columns, and extreme outliers), the LLM input/output trust boundaries (**SEC-02** — the untrusted-data envelope, safe prompt builder, and model-output validator; no real LLM provider is wired in yet), the prompt-injection risk detector (**DET-SEC-01** — `security.possible_llm_prompt_injection`, the required AI-processing-security detector, completing the detector catalogue at 13/13), deterministic risk scoring (**RISK-01** — per-finding priority scores and a four-label dataset trust assessment, computed with no AI/LLM input path at all), and the initial analysis API (**API-01** — the in-memory analysis-orchestration engine composing parsing/profiling/detection/scoring into one create-then-run pipeline over the bundled demo dataset, now exposed over real `/api/v1` HTTP routes: `POST /demo/sales`, `GET /analyses/{id}`, `GET /analyses/{id}/status`, `GET /analyses/{id}/profile`, `GET /analyses/{id}/findings`, `POST /analyses/{id}/cancel`; no UI consumes it yet). TrustTable is now continuing toward **v0.1 — the deterministic vertical slice**.
 
 The product, domain model, API boundaries, detector framework, frontend architecture, testing strategy, threat model, release plan, and implementation backlog have been defined before production implementation begins. A runnable backend and frontend skeleton, Docker/Nginx deployment, and baseline test tooling now exist; no product features are implemented yet.
 
@@ -30,11 +30,17 @@ through Docker Compose — see [Local development](docs/local-development.md)
 for exact commands. The bundled deterministic demo dataset is
 [`demo-data/sales_demo.csv`](demo-data/sales_demo.csv).
 
-CSV parsing, type inference, and core profiling (`ING-02`/`PROF-02`/
-`PROF-03`) are implemented as backend library code, but **not yet exposed
-through the running API or UI** — that wiring is future backlog scope
-(`API-01`, `UI-01`). [Local development](docs/local-development.md#exercising-the-deterministic-profiling-pipeline-directly)
-has a reproducible way to exercise them directly today.
+The full deterministic pipeline (CSV parsing, type inference, profiling,
+detection, and risk scoring) is now reachable through the running
+backend API — start it with a demo analysis via `POST /api/v1/demo/sales`
+and follow up with `GET /api/v1/analyses/{id}`, `.../status`,
+`.../profile`, `.../findings`, or `POST .../cancel`. There is **no UI
+yet** — that is `UI-01`, the next backlog item. Generic file upload
+(arbitrary CSV/Excel analysis creation, as opposed to the bundled demo
+dataset) is also not yet exposed.
+[Local development](docs/local-development.md#exercising-the-deterministic-profiling-pipeline-directly)
+still has a reproducible way to exercise the pipeline directly in
+Python, without the API, if preferred.
 
 ## Planned user workflow
 
