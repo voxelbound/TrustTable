@@ -262,8 +262,29 @@ supports()` always returns `True`, since `DetectorSupportRequest` carries
 no configuration to resolve possibly-overridden column names before
 `run()`; when the five role columns cannot be resolved, `run()` returns
 `SUCCESS` with zero findings and a `DetectorWarning`
-(`cross_field.required_columns_not_found`) rather than `FAILED`. Two more
-`DET-02` detectors and `DET-SEC-01` remain to be added additively.
+(`cross_field.required_columns_not_found`) rather than `FAILED`. The
+sixth and final `DET-02` sub-package adds `statistical.py` — the first
+`STATISTICAL`-category detectors — `SuspiciouslyConstantColumnDetector`
+(flags any non-`UNKNOWN`-typed column where every non-blank sampled
+value is identical, requiring at least two non-blank values to fire;
+`requires_raw_rows=False`, relying entirely on `PROF-02`'s
+`distinct_count`/`null_count`, matching `structural.empty_column`'s
+metadata-only precedent) and `ExtremeOutliersDetector` (flags `NUMERIC`-
+typed columns with values outside a Tukey `1.5x`-IQR fence, reusing
+`PROF-03`'s already-computed `q1`/`q3`/`iqr`/`extreme_count` metrics to
+recompute the identical fence and scan raw rows for affected indices),
+extending `catalogue.DETECTORS` to all twelve `DET-02` detectors.
+`SuspiciouslyConstantColumnDetector` uses `confidence=1.0` and fixed
+`severity=MEDIUM`; `ExtremeOutliersDetector` uses `confidence=0.7` (an
+extreme value may be a legitimate rare business event, the same
+reasoning already grounding `negative_likely_non_negative_values`'s
+non-`1.0` confidence) and fixed `severity=MEDIUM`. A disclosed,
+real-file-verified limitation: a fixed `1.5x`-IQR Tukey fence assumes a
+roughly symmetric distribution, so a right-skewed multiplicative measure
+(`line_total`) legitimately produces more findings than a symmetric
+column would for the same underlying anomaly rate — a property of the
+method, not a defect. `DET-02` is now complete (12 of 12 detectors);
+`DET-SEC-01` remains to be added additively.
 
 ## 4. Frontend architecture
 

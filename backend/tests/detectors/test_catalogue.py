@@ -1,10 +1,10 @@
-"""Tests for the detector catalogue (DET-02 partial).
+"""Tests for the detector catalogue (DET-02, now complete).
 
 Covers WP-014's acceptance criteria AC-13..AC-15, WP-015's AC-14/AC-15,
-WP-016's AC-14/AC-15, WP-017's AC-14/AC-15, and WP-018's AC-16/AC-17:
-`DETECTORS` registers successfully, contains exactly the expected ten
-detector IDs, and interoperates correctly with `DET-01`'s
-`run_detectors()`.
+WP-016's AC-14/AC-15, WP-017's AC-14/AC-15, WP-018's AC-16/AC-17, and
+WP-019's AC-15/AC-16: `DETECTORS` registers successfully, contains
+exactly the expected twelve detector IDs, and interoperates correctly
+with `DET-01`'s `run_detectors()`.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from trusttable_backend.detectors.catalogue import DETECTORS
 
 
 def test_detectors_catalogue_registers_without_exception() -> None:
-    assert len(DETECTORS) == 10
+    assert len(DETECTORS) == 12
 
 
 def test_detectors_catalogue_has_exactly_expected_ids() -> None:
@@ -28,4 +28,6 @@ def test_detectors_catalogue_has_exactly_expected_ids() -> None:
         "validity.negative_likely_non_negative_values",
         "validity.invalid_percentages",
         "cross_field.line_total_mismatch",
+        "statistical.suspiciously_constant_column",
+        "statistical.extreme_outliers",
     }
