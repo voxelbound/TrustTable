@@ -376,6 +376,31 @@ clamped result to one of `docs/product-requirements.md` §9's four fixed
 aggregate, persistence, confirmed column role (`CTX-01`), or report/UI
 rendering exists yet; those remain later packages.
 
+### Analysis orchestration module
+
+`trusttable_backend.analysis` (`API-01`, enabling slice) implements the
+"Application services" backend layer named in this section's own layer
+list: a pure, framework-independent orchestration engine composing every
+layer below it (`ING-02` CSV parsing, `PROF-03` profiling, `DET-01`/
+`DET-02`/`DET-SEC-01` detectors via `run_detectors()`, `RISK-01` scoring)
+into one deterministic create-then-run pipeline over the bundled demo
+dataset (`DEMO-01`). `create_analysis()` generates the demo CSV bytes
+in-memory (byte-identical to the committed `demo-data/sales_demo.csv`)
+and stores a new `QUEUED` `Analysis`; `run_analysis()` transitions it
+through `VALIDATING`/`PARSING`/`PROFILING`/`DETECTING` to `COMPLETED`
+synchronously within one call, isolating any exception into a fixed,
+safe `FAILED` transition rather than raising (matching `DET-01`
+`engine.py`'s own exception-isolation precedent), and is idempotent.
+`AnalysisState` is a documented 8-value subset of `docs/domain-model.md`
+§5's 11-value `States` list — no context inference (`CTX-01`), no
+deletion (`DEL-01`). `cancel_analysis()` is effective only while
+`QUEUED`; true mid-pipeline cancellation needs real bounded background
+execution (`JOB-01`, not yet built). Every `Analysis.security_exposure`
+is fixed to the disabled/no-transmission state — no AI/LLM provider
+exists yet. No FastAPI route, request/response schema, OpenAPI change,
+or persistence (`DB-01`) exists yet; the actual `API-01` HTTP surface and
+generic file-upload analysis creation remain later, separate packages.
+
 ## 4. Frontend architecture
 
 TrustTable is a client-rendered SPA.
