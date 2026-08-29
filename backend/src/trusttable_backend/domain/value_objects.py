@@ -5,13 +5,16 @@ by this package's parsing contracts: `ColumnReference` and `RowReference`.
 `Severity` (`DET-01`) additively fills in one of the value objects this
 docstring originally deferred: it is consumed by
 `detectors.contract.FindingCandidate` and the future `Finding` type
-(`docs/domain-model.md` §12). The remaining §3 value objects (`AnalysisId`,
-`EvidenceId`, `DetectorId`, `Provenance`, `Confidence`) stay deferred to
-the packages that actually consume them (Analysis, Evidence/Finding,
-Context) — a disclosed scoping decision, not a gap. `Confidence` in
-particular remains an inline-validated `float` rather than a wrapper
-type, consistent with this file's own `RowReference.row_number`/
-`ColumnReference.ordinal` precedent for validated-inline scalars.
+(`docs/domain-model.md` §12). `Provenance` (`SEC-02`) additively fills in
+another: it is consumed by `ai_boundary.validation` to validate a model
+output's declared provenance against `docs/domain-model.md` §3's exact
+five-value closed set. The remaining §3 value objects (`AnalysisId`,
+`EvidenceId`, `DetectorId`, `Confidence`) stay deferred to the packages
+that actually consume them (Analysis, Evidence/Finding) — a disclosed
+scoping decision, not a gap. `Confidence` in particular remains an
+inline-validated `float` rather than a wrapper type, consistent with this
+file's own `RowReference.row_number`/`ColumnReference.ordinal` precedent
+for validated-inline scalars.
 
 Stdlib only (`dataclasses`, `enum`) — no FastAPI/SQLAlchemy/pydantic
 import.
@@ -87,3 +90,18 @@ class Severity(StrEnum):
     MEDIUM = "medium"
     LOW = "low"
     INFORMATIONAL = "informational"
+
+
+class Provenance(StrEnum):
+    """Closed set of value/finding provenance labels (`docs/domain-model.md`
+    §3), first consumed by `ai_boundary.validation` (`SEC-02`) to validate
+    a model output's declared provenance — a required defense named in
+    `docs/architecture.md` §7 ("allowed severity and provenance") and
+    `docs/security-threat-model.md` §3.4 ("provenance labels").
+    """
+
+    CALCULATED = "calculated"
+    AI_INTERPRETATION = "ai_interpretation"
+    USER_CONFIRMED = "user_confirmed"
+    USER_CORRECTED = "user_corrected"
+    DETERMINISTIC_FALLBACK = "deterministic_fallback"

@@ -1,16 +1,22 @@
 """Tests for the shared value objects (ING-01, plus `Severity` added by
-DET-01).
+DET-01 and `Provenance` added by SEC-02).
 
 Covers this package's acceptance criteria AC-01 (`ColumnReference`) and
 AC-02 (`RowReference`): positive, negative (invariant-violation), and
-boundary cases. Also covers DET-01's AC-03 (`Severity`).
+boundary cases. Also covers DET-01's AC-03 (`Severity`) and SEC-02's
+AC-01 (`Provenance`).
 """
 
 from __future__ import annotations
 
 import pytest
 
-from trusttable_backend.domain.value_objects import ColumnReference, RowReference, Severity
+from trusttable_backend.domain.value_objects import (
+    ColumnReference,
+    Provenance,
+    RowReference,
+    Severity,
+)
 
 # ---------------------------------------------------------------------------
 # AC-01: ColumnReference
@@ -102,4 +108,19 @@ def test_severity_is_a_closed_enumeration() -> None:
         "medium",
         "low",
         "informational",
+    }
+
+
+# ---------------------------------------------------------------------------
+# SEC-02 AC-01: Provenance
+# ---------------------------------------------------------------------------
+
+
+def test_provenance_is_a_closed_enumeration() -> None:
+    assert {member.value for member in Provenance} == {
+        "calculated",
+        "ai_interpretation",
+        "user_confirmed",
+        "user_corrected",
+        "deterministic_fallback",
     }
