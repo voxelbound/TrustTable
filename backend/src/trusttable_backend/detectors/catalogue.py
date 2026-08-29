@@ -10,10 +10,11 @@ DETECTORS = [
 ]
 ```
 
-Six detectors exist so far — the two structural detectors (`WP-014`),
-the two completeness detectors (`WP-015`), and the two consistency
-detectors (`WP-016`). The remaining `DET-02` detectors and `DET-SEC-01`
-are later packages that will extend this list additively.
+Eight detectors exist so far — the two structural detectors (`WP-014`),
+the two completeness detectors (`WP-015`), the two consistency detectors
+(`WP-016`), and the two validity detectors (`WP-017`). The remaining
+`DET-02` detectors and `DET-SEC-01` are later packages that will extend
+this list additively.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from .completeness import ExcessiveMissingValuesDetector, MissingLikelyIdentifie
 from .consistency import InconsistentCapitalizationDetector, LeadingTrailingWhitespaceDetector
 from .registry import register_detectors
 from .structural import EmptyColumnDetector, ExactDuplicateRowsDetector
+from .validity import FutureDatesDetector, NegativeLikelyNonNegativeValuesDetector
 
 DETECTORS = register_detectors(
     [
@@ -31,5 +33,7 @@ DETECTORS = register_detectors(
         MissingLikelyIdentifierDetector(),
         InconsistentCapitalizationDetector(),
         LeadingTrailingWhitespaceDetector(),
+        FutureDatesDetector(),
+        NegativeLikelyNonNegativeValuesDetector(),
     ]
 )
