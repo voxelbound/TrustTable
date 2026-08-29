@@ -214,8 +214,20 @@ value needs the raw row values, not just the already-computed
 `null_count`/`likely_identifier` facts — and use `confidence=1.0` (exact,
 deterministic computed facts); severity is fixed `MEDIUM` for
 `excessive_missing_values` and fixed `HIGH` for
-`missing_likely_identifier`. Eight more `DET-02` detectors and
-`DET-SEC-01` remain to be added additively.
+`missing_likely_identifier`. The third `DET-02` sub-package adds
+`consistency.py` (`InconsistentCapitalizationDetector`, grouping each
+text-family column's non-blank, whitespace-stripped values by a
+lowercase key and flagging any group with more than one distinct raw
+casing; `LeadingTrailingWhitespaceDetector`, reusing `PROF-03`'s
+already-computed `whitespace_issue_count` metric to decide whether a
+column qualifies, then re-scanning raw rows to identify which rows are
+affected), extending `catalogue.DETECTORS` to six detectors. Both are
+restricted to the text-family types (`TEXT`/`CATEGORICAL`/`IDENTIFIER`),
+declare `requires_raw_rows=True`, use `confidence=1.0`, and use a fixed
+`LOW` severity — casing/whitespace inconsistencies are data-hygiene
+issues, materially lower than the structural/completeness detectors'
+`MEDIUM`/`HIGH` severities. Six more `DET-02` detectors and `DET-SEC-01`
+remain to be added additively.
 
 ## 4. Frontend architecture
 
