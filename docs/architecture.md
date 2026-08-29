@@ -286,6 +286,39 @@ column would for the same underlying anomaly rate — a property of the
 method, not a defect. `DET-02` is now complete (12 of 12 detectors);
 `DET-SEC-01` remains to be added additively.
 
+### AI boundary package
+
+`trusttable_backend.ai_boundary` (`SEC-02`) implements the "AI boundary"
+backend layer named in this section's own layer list, matching §7's
+exact envelope/output-validation contract: framework-independent,
+stdlib-only (no FastAPI/SQLAlchemy/pydantic import). `envelope.py`
+defines `PromptEnvelope` (matching §7's exact `task`/`computed_evidence`/
+`confirmed_context`/`untrusted_dataset_samples` shape, with
+`sample_sending_enabled=False` structurally enforced by construction, not
+merely a default) and `build_untrusted_samples()` (redaction-hook
+application, then truncation to a fixed `DEFAULT_MAX_SAMPLE_VALUE_LENGTH`,
+then count-limiting to `DEFAULT_MAX_SAMPLE_COUNT` — matching
+`Settings.llm_max_sample_values`'s existing default). `prompt.py`'s
+`build_safe_prompt()` produces two genuinely separate artifacts: a fixed
+`system_instructions` string depending only on trusted, application-
+authored content, and a separate untrusted-data JSON payload — proven,
+not merely asserted, never to concatenate raw dataset/user content into
+instructions. `validation.py`'s `validate_model_output()` grounds every
+check in the exact `PromptEnvelope` that was sent (evidence-ID and
+column allow-lists derived from it directly, not a separately-passed
+list) plus caller-supplied `known_numeric_facts`, and never raises on
+malformed input — a rejected `ValidationOutcome` instead, enabling a
+future provider package's safe fallback. Deterministic authority
+(§5.3) is enforced structurally: the validated output schema has no
+field capable of removing a finding or changing a score, so any
+attempted override is rejected as an unsupported control field rather
+than requiring a runtime override check. `Provenance` (`docs/domain-model.md`
+§3, 5 values) was added additively to `domain.value_objects` as part of
+this package, the same pattern `DET-01` used for `Severity`. No real LLM
+provider, API endpoint, or UI exists yet (`AI-01`/`AI-02`/`API-01`/
+`UI-01`, later packages); `DET-SEC-01` (the prompt-injection detector
+itself) also remains a separate, later package.
+
 ## 4. Frontend architecture
 
 TrustTable is a client-rendered SPA.
