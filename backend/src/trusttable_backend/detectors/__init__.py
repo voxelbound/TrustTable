@@ -2,10 +2,11 @@
 (`DET-02`, partial): the framework-independent detector contract,
 registration, execution engine, and (so far) two real structural
 detectors, two real completeness detectors, two real consistency
-detectors, plus two real validity detectors, matching
+detectors, two real validity detectors, plus the invalid-percentages/
+line-total-mismatch pair, matching
 `docs/detector-framework.md` §2/§3/§4/§5/§6/§9/§10/§13/§16.
 
-`DET-02`'s remaining 4 detectors and `DET-SEC-01` (prompt-injection
+`DET-02`'s remaining 2 detectors and `DET-SEC-01` (prompt-injection
 detector) are later packages that extend `catalogue.DETECTORS`
 additively; a future analysis-orchestration package (`API-01`) calls
 `run_detectors()`.
@@ -31,10 +32,15 @@ from .contract import (
     SafeFailure,
     SecurityExposureState,
 )
+from .cross_field import LineTotalMismatchDetector
 from .engine import run_detectors
 from .registry import register_detectors
 from .structural import EmptyColumnDetector, ExactDuplicateRowsDetector
-from .validity import FutureDatesDetector, NegativeLikelyNonNegativeValuesDetector
+from .validity import (
+    FutureDatesDetector,
+    InvalidPercentagesDetector,
+    NegativeLikelyNonNegativeValuesDetector,
+)
 
 __all__ = [
     "DETECTORS",
@@ -53,7 +59,9 @@ __all__ = [
     "FindingCandidate",
     "FutureDatesDetector",
     "InconsistentCapitalizationDetector",
+    "InvalidPercentagesDetector",
     "LeadingTrailingWhitespaceDetector",
+    "LineTotalMismatchDetector",
     "MissingLikelyIdentifierDetector",
     "NegativeLikelyNonNegativeValuesDetector",
     "PerformanceClass",
