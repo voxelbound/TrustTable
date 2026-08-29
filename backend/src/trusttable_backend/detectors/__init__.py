@@ -1,15 +1,13 @@
-"""Detector interface (`DET-01`) and the growing real detector catalogue
-(`DET-02`, partial): the framework-independent detector contract,
-registration, execution engine, and (so far) two real structural
-detectors, two real completeness detectors, two real consistency
-detectors, two real validity detectors, plus the invalid-percentages/
-line-total-mismatch pair, matching
-`docs/detector-framework.md` §2/§3/§4/§5/§6/§9/§10/§13/§16.
+"""Detector interface (`DET-01`) and the complete `DET-02` detector
+catalogue: the framework-independent detector contract, registration,
+execution engine, and all twelve real detectors across the structural,
+completeness, consistency, validity, cross-field, and statistical
+categories, matching `docs/detector-framework.md`
+§2/§3/§4/§5/§6/§9/§10/§13/§16.
 
-`DET-02`'s remaining 2 detectors and `DET-SEC-01` (prompt-injection
-detector) are later packages that extend `catalogue.DETECTORS`
-additively; a future analysis-orchestration package (`API-01`) calls
-`run_detectors()`.
+`DET-SEC-01` (prompt-injection detector) is a later package that extends
+`catalogue.DETECTORS` additively; a future analysis-orchestration
+package (`API-01`) calls `run_detectors()`.
 """
 
 from __future__ import annotations
@@ -35,6 +33,7 @@ from .contract import (
 from .cross_field import LineTotalMismatchDetector
 from .engine import run_detectors
 from .registry import register_detectors
+from .statistical import ExtremeOutliersDetector, SuspiciouslyConstantColumnDetector
 from .structural import EmptyColumnDetector, ExactDuplicateRowsDetector
 from .validity import (
     FutureDatesDetector,
@@ -56,6 +55,7 @@ __all__ = [
     "ExactDuplicateRowsDetector",
     "ExcessiveMissingValuesDetector",
     "ExecutionMetrics",
+    "ExtremeOutliersDetector",
     "FindingCandidate",
     "FutureDatesDetector",
     "InconsistentCapitalizationDetector",
@@ -67,6 +67,7 @@ __all__ = [
     "PerformanceClass",
     "SafeFailure",
     "SecurityExposureState",
+    "SuspiciouslyConstantColumnDetector",
     "register_detectors",
     "run_detectors",
 ]
