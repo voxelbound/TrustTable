@@ -241,8 +241,29 @@ date comparison), while `NegativeLikelyNonNegativeValuesDetector` uses
 `confidence=0.7` — the first non-`1.0` confidence in `DET-02`, directly
 grounded in `docs/detector-framework.md` §12's own worked example for a
 context-dependent negative value without confirmed return semantics.
-Four more `DET-02` detectors and `DET-SEC-01` remain to be added
-additively.
+The fifth `DET-02` sub-package adds `InvalidPercentagesDetector` to
+`validity.py` (flagging `NUMERIC`-typed columns whose name matches a
+percentage-name heuristic — `'pct'`/`'percent'`/`'%'` — and that contain
+one or more values outside the valid 0-100 range, scanning raw rows
+directly rather than reusing a `PROF-03` metric) and a new
+`cross_field.py` module — the first `CROSS_FIELD`-category detector,
+`LineTotalMismatchDetector`, recomputing `quantity × unit_price × (1 −
+discount_pct/100) × (1 + tax_pct/100)` per row from five configurable,
+defaulted column names (`config_schema`, the first non-empty detector
+configuration in this catalogue) and flagging rows whose `line_total`
+differs by more than a one-cent tolerance — extending
+`catalogue.DETECTORS` to ten detectors. `InvalidPercentagesDetector` uses
+`confidence=1.0` and fixed `severity=MEDIUM` (an out-of-range value, same
+severity tier as `future_dates`/`negative_likely_non_negative_values`);
+`LineTotalMismatchDetector` uses `confidence=1.0` and fixed
+`severity=HIGH` (a proven financial-calculation error, matching
+`missing_likely_identifier`'s HIGH precedent). `LineTotalMismatchDetector.
+supports()` always returns `True`, since `DetectorSupportRequest` carries
+no configuration to resolve possibly-overridden column names before
+`run()`; when the five role columns cannot be resolved, `run()` returns
+`SUCCESS` with zero findings and a `DetectorWarning`
+(`cross_field.required_columns_not_found`) rather than `FAILED`. Two more
+`DET-02` detectors and `DET-SEC-01` remain to be added additively.
 
 ## 4. Frontend architecture
 
