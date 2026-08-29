@@ -226,8 +226,23 @@ restricted to the text-family types (`TEXT`/`CATEGORICAL`/`IDENTIFIER`),
 declare `requires_raw_rows=True`, use `confidence=1.0`, and use a fixed
 `LOW` severity — casing/whitespace inconsistencies are data-hygiene
 issues, materially lower than the structural/completeness detectors'
-`MEDIUM`/`HIGH` severities. Six more `DET-02` detectors and `DET-SEC-01`
-remain to be added additively.
+`MEDIUM`/`HIGH` severities. The fourth `DET-02` sub-package adds
+`validity.py` (`FutureDatesDetector`, flagging `DATE`-typed columns
+containing values later than the detector's own `analysis_timestamp` —
+recomputed fresh each run rather than trusting `PROF-03`'s
+`future_date_count` metric, whose `as_of` is fixed at profiling time and
+could be stale; `NegativeLikelyNonNegativeValuesDetector`, flagging
+`NUMERIC`-typed columns where `PROF-03`'s `negative_count` metric is
+nonzero and negative values are a small minority — below a fixed 10%
+ratio — of non-blank values), extending `catalogue.DETECTORS` to eight
+detectors. Both declare `requires_raw_rows=True` and use a fixed
+`MEDIUM` severity; `FutureDatesDetector` uses `confidence=1.0` (an exact
+date comparison), while `NegativeLikelyNonNegativeValuesDetector` uses
+`confidence=0.7` — the first non-`1.0` confidence in `DET-02`, directly
+grounded in `docs/detector-framework.md` §12's own worked example for a
+context-dependent negative value without confirmed return semantics.
+Four more `DET-02` detectors and `DET-SEC-01` remain to be added
+additively.
 
 ## 4. Frontend architecture
 

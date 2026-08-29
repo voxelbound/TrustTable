@@ -1,11 +1,11 @@
 """Detector interface (`DET-01`) and the growing real detector catalogue
 (`DET-02`, partial): the framework-independent detector contract,
 registration, execution engine, and (so far) two real structural
-detectors, two real completeness detectors, plus two real consistency
-detectors, matching `docs/detector-framework.md`
-§2/§3/§4/§5/§6/§9/§10/§13/§16.
+detectors, two real completeness detectors, two real consistency
+detectors, plus two real validity detectors, matching
+`docs/detector-framework.md` §2/§3/§4/§5/§6/§9/§10/§13/§16.
 
-`DET-02`'s remaining 6 detectors and `DET-SEC-01` (prompt-injection
+`DET-02`'s remaining 4 detectors and `DET-SEC-01` (prompt-injection
 detector) are later packages that extend `catalogue.DETECTORS`
 additively; a future analysis-orchestration package (`API-01`) calls
 `run_detectors()`.
@@ -34,6 +34,7 @@ from .contract import (
 from .engine import run_detectors
 from .registry import register_detectors
 from .structural import EmptyColumnDetector, ExactDuplicateRowsDetector
+from .validity import FutureDatesDetector, NegativeLikelyNonNegativeValuesDetector
 
 __all__ = [
     "DETECTORS",
@@ -50,9 +51,11 @@ __all__ = [
     "ExcessiveMissingValuesDetector",
     "ExecutionMetrics",
     "FindingCandidate",
+    "FutureDatesDetector",
     "InconsistentCapitalizationDetector",
     "LeadingTrailingWhitespaceDetector",
     "MissingLikelyIdentifierDetector",
+    "NegativeLikelyNonNegativeValuesDetector",
     "PerformanceClass",
     "SafeFailure",
     "SecurityExposureState",
