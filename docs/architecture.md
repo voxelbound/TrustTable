@@ -283,8 +283,38 @@ real-file-verified limitation: a fixed `1.5x`-IQR Tukey fence assumes a
 roughly symmetric distribution, so a right-skewed multiplicative measure
 (`line_total`) legitimately produces more findings than a symmetric
 column would for the same underlying anomaly rate — a property of the
-method, not a defect. `DET-02` is now complete (12 of 12 detectors);
-`DET-SEC-01` remains to be added additively.
+method, not a defect. `DET-02` is complete (12 of 12 detectors).
+`security.py` (`DET-SEC-01`) adds the required
+`AI_PROCESSING_SECURITY`-category security detector,
+`PossiblePromptInjectionDetector`, extending `catalogue.DETECTORS` to
+all 13 detectors (`docs/detector-framework.md` §14). It scans
+text-family columns (`TEXT`/`CATEGORICAL`/`IDENTIFIER`) for eight fixed,
+bounded pattern families (ignore-previous-instructions, reveal-system-
+prompt, act-as-another-system, suppress-reporting, claim-data-valid,
+forced-output-only, disclose-secrets, exfiltrate-data), each a simple
+regex alternation with only small, fixed quantifiers — no unbounded
+nested quantifiers — with every scanned value normalized (whitespace
+collapsed, case-insensitive matching) and truncated to a fixed bound
+before matching, so no single value's length can make matching
+expensive. One finding is produced per affected column, aggregating
+every matched row: `confidence` reflects how many distinct pattern
+families matched (`0.6` for one, `0.75` for two or more — "confidence
+based on matched patterns, not intent", `docs/detector-framework.md`
+§12), and `severity` is exposure-aware, reusing `DET-01`'s existing
+`SecurityExposureState` unchanged (`docs/security-threat-model.md` §4):
+`LOW`/`MEDIUM` ordinarily, `HIGH`/`CRITICAL` when a heightened family
+(secret disclosure or data exfiltration) matched, scaled by
+`sample_transmission_enabled`. Evidence uses `EvidenceType.
+SECURITY_PATTERN` (first user) with a bounded, truncated sample excerpt
+only — never the full raw matched value. The detector only reads and
+pattern-matches text; it never executes or interprets matched content as
+an instruction (`docs/product-requirements.md` §11), and is a separate,
+evidence-producing implementation from `profiling.metrics`'s existing
+coarse, non-evidence-producing `_INSTRUCTION_LIKE_PATTERN` heuristic. No
+real LLM provider, API endpoint, or UI exists yet; the full
+`docs/domain-model.md` §15 `PromptInjectionRisk` specialization (sent-
+to-model state, model location, protections applied, model-output
+rejection state) remains a later package's responsibility.
 
 ### AI boundary package
 
