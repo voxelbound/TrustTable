@@ -1,10 +1,13 @@
-"""Tests for the validity detectors (DET-02 partial, WP-017).
+"""Tests for the validity detectors (DET-02 partial, WP-017/WP-018).
 
-Covers this package's acceptance criteria AC-01..AC-13, AC-16, AC-17:
+Covers WP-017's acceptance criteria AC-01..AC-13, AC-16, AC-17:
 `FutureDatesDetector`/`NegativeLikelyNonNegativeValuesDetector`
 metadata, `supports()`, and `run()` positive/negative/boundary/null
 cases, `run_detectors()` interoperation, and a real-file end-to-end check
-against the committed `demo-data/sales_demo.csv`.
+against the committed `demo-data/sales_demo.csv`. Also covers WP-018's
+`InvalidPercentagesDetector` acceptance criteria AC-01 (partial), AC-03
+(partial), AC-04 (partial), AC-05..AC-09, and extends the real-file check
+toward AC-19.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from trusttable_backend.detectors.contract import (
 from trusttable_backend.detectors.engine import run_detectors
 from trusttable_backend.detectors.validity import (
     FutureDatesDetector,
+    InvalidPercentagesDetector,
     NegativeLikelyNonNegativeValuesDetector,
 )
 from trusttable_backend.domain.evidence import EvidenceType
@@ -373,6 +377,141 @@ def test_negative_likely_non_negative_values_run_ignores_non_numeric_column() ->
 
 
 # ---------------------------------------------------------------------------
+# WP-018 AC-01/AC-03/AC-04: InvalidPercentagesDetector metadata/supports
+# ---------------------------------------------------------------------------
+
+
+def test_invalid_percentages_metadata() -> None:
+    detector = InvalidPercentagesDetector()
+    assert detector.metadata.detector_id == "validity.invalid_percentages"
+    assert detector.metadata.category is DetectorCategory.VALIDITY
+    assert detector.metadata.requires_raw_rows is True
+    assert detector.metadata.requires_confirmed_context is False
+    assert detector.metadata.applicable_inferred_types == (InferredColumnType.NUMERIC,)
+
+
+def test_invalid_percentages_config_schema_accepts_empty_configuration() -> None:
+    detector = InvalidPercentagesDetector()
+    detector.config_schema.model_validate({})
+
+
+def test_invalid_percentages_supports_returns_true() -> None:
+    detector = InvalidPercentagesDetector()
+    dataset_profile = make_dataset_profile((), row_count=0)
+    request = DetectorSupportRequest(
+        dataset_profile=dataset_profile, confirmed_context=None, security_exposure=NO_EXPOSURE
+    )
+    assert detector.supports(request) is True
+
+
+# ---------------------------------------------------------------------------
+# WP-018 AC-05..AC-09: InvalidPercentagesDetector.run()
+# ---------------------------------------------------------------------------
+
+
+def test_invalid_percentages_run_no_out_of_range_values() -> None:
+    detector = InvalidPercentagesDetector()
+    column = make_column("discount_pct", 0)
+    dataset_profile = make_dataset_profile(
+        (make_column_profile(column, InferredColumnType.NUMERIC, distinct_count=3),),
+        row_count=3,
+    )
+    rows = ({"discount_pct": "0"}, {"discount_pct": "50"}, {"discount_pct": "100"})
+    result = detector.run(make_run_request(dataset_profile, rows))
+
+    assert result.status is DetectorRunStatus.SUCCESS
+    assert result.findings == ()
+    assert result.evidence == ()
+
+
+def test_invalid_percentages_run_one_column_two_out_of_range_rows() -> None:
+    detector = InvalidPercentagesDetector()
+    column = make_column("discount_pct", 0)
+    dataset_profile = make_dataset_profile(
+        (make_column_profile(column, InferredColumnType.NUMERIC, distinct_count=3),),
+        row_count=3,
+    )
+    rows = ({"discount_pct": "50"}, {"discount_pct": "150"}, {"discount_pct": "-5"})
+    result = detector.run(make_run_request(dataset_profile, rows))
+
+    assert result.status is DetectorRunStatus.SUCCESS
+    assert len(result.findings) == 1
+    finding = result.findings[0]
+    assert finding.affected_columns == (column,)
+    assert {ref.row_number for ref in finding.affected_row_references} == {1, 2}
+    assert finding.confidence == 1.0
+    assert finding.severity is Severity.MEDIUM
+    assert len(result.evidence) == 1
+    assert result.evidence[0].evidence_type is EvidenceType.ROW_SET
+    assert finding.evidence_ids == (result.evidence[0].evidence_id,)
+
+
+def test_invalid_percentages_run_boundary_values() -> None:
+    detector = InvalidPercentagesDetector()
+    column = make_column("tax_pct", 0)
+    dataset_profile = make_dataset_profile(
+        (make_column_profile(column, InferredColumnType.NUMERIC, distinct_count=4),),
+        row_count=4,
+    )
+    rows = (
+        {"tax_pct": "0"},
+        {"tax_pct": "100"},
+        {"tax_pct": "100.01"},
+        {"tax_pct": "-0.01"},
+    )
+    result = detector.run(make_run_request(dataset_profile, rows))
+
+    assert len(result.findings) == 1
+    assert {ref.row_number for ref in result.findings[0].affected_row_references} == {2, 3}
+
+
+def test_invalid_percentages_run_ignores_non_matching_column_name() -> None:
+    detector = InvalidPercentagesDetector()
+    column = make_column("quantity", 0)
+    dataset_profile = make_dataset_profile(
+        (make_column_profile(column, InferredColumnType.NUMERIC, distinct_count=1),),
+        row_count=1,
+    )
+    rows = ({"quantity": "500"},)
+    result = detector.run(make_run_request(dataset_profile, rows))
+
+    assert result.findings == ()
+    assert result.evidence == ()
+
+
+def test_invalid_percentages_run_ignores_non_numeric_column() -> None:
+    detector = InvalidPercentagesDetector()
+    column = make_column("discount_pct", 0)
+    dataset_profile = make_dataset_profile(
+        (make_column_profile(column, InferredColumnType.TEXT, distinct_count=1),),
+        row_count=1,
+    )
+    rows = ({"discount_pct": "150"},)
+    result = detector.run(make_run_request(dataset_profile, rows))
+
+    assert result.findings == ()
+    assert result.evidence == ()
+
+
+def test_invalid_percentages_run_two_columns_two_findings() -> None:
+    detector = InvalidPercentagesDetector()
+    column_a = make_column("discount_pct", 0)
+    column_b = make_column("tax_pct", 1)
+    dataset_profile = make_dataset_profile(
+        (
+            make_column_profile(column_a, InferredColumnType.NUMERIC, distinct_count=1),
+            make_column_profile(column_b, InferredColumnType.NUMERIC, distinct_count=1),
+        ),
+        row_count=1,
+    )
+    rows = ({"discount_pct": "150", "tax_pct": "-5"},)
+    result = detector.run(make_run_request(dataset_profile, rows))
+
+    assert len(result.findings) == 2
+    assert {finding.affected_columns[0] for finding in result.findings} == {column_a, column_b}
+
+
+# ---------------------------------------------------------------------------
 # AC-16/AC-17: run_detectors() interoperation and real-file check
 # ---------------------------------------------------------------------------
 
@@ -456,3 +595,13 @@ def test_real_demo_csv_validity_detectors() -> None:
     assert len(by_column["quantity"].affected_row_references) == 2
     assert len(by_column["line_total"].affected_row_references) == 3
     assert len(by_column["tax_pct"].affected_row_references) == 1
+
+    invalid_percentages_result = by_id["validity.invalid_percentages"]
+    assert len(invalid_percentages_result.findings) == 2
+    by_pct_column = {
+        finding.affected_columns[0].original_name: finding
+        for finding in invalid_percentages_result.findings
+    }
+    assert set(by_pct_column) == {"discount_pct", "tax_pct"}
+    assert len(by_pct_column["discount_pct"].affected_row_references) == 1
+    assert len(by_pct_column["tax_pct"].affected_row_references) == 1
