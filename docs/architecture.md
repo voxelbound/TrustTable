@@ -349,6 +349,33 @@ provider, API endpoint, or UI exists yet (`AI-01`/`AI-02`/`API-01`/
 `UI-01`, later packages); `DET-SEC-01` (the prompt-injection detector
 itself) also remains a separate, later package.
 
+### Risk scoring package
+
+`trusttable_backend.risk` (`RISK-01`) implements the "Risk scoring"
+backend layer named in this section's own layer list: two pure,
+framework-independent functions computing a per-finding deterministic
+priority score and a dataset-level trust assessment directly from
+`DET-01`'s `FindingCandidate` output and `PROF-03`'s `DatasetProfile`
+context — no persistence, no AI/LLM input path at all.
+`calculate_finding_priority_score(s)` scores each finding on a fixed
+`[0, 100]` scale: a severity base weight (`CRITICAL=100` down to
+`INFORMATIONAL=10`) scaled by confidence, plus a capped
+affected-row-percentage bonus and a capped column-role bonus (`PROF-02`
+`IDENTIFIER`/`DATE` types, plus a new disclosed monetary-column-name
+heuristic following `detectors.validity`'s existing percentage-name-
+heuristic precedent). `calculate_trust_assessment` starts a dataset at a
+perfect `100.0`, deducts a fraction of each finding's priority score
+(amplified when findings share an affected column — "reinforcing
+findings"), deducts a fixed penalty once when an
+`AI_PROCESSING_SECURITY`-category finding coincides with
+`SecurityExposureState.sample_transmission_enabled=True`, and maps the
+clamped result to one of `docs/product-requirements.md` §9's four fixed
+`TrustLabel` values via fixed thresholds. "AI cannot alter the score"
+(§5.3) is enforced structurally — neither function accepts any
+`ai_boundary`-shaped input, grep-verified. No `Finding`/`Analysis`
+aggregate, persistence, confirmed column role (`CTX-01`), or report/UI
+rendering exists yet; those remain later packages.
+
 ## 4. Frontend architecture
 
 TrustTable is a client-rendered SPA.
