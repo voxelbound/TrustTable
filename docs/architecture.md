@@ -397,9 +397,34 @@ deletion (`DEL-01`). `cancel_analysis()` is effective only while
 `QUEUED`; true mid-pipeline cancellation needs real bounded background
 execution (`JOB-01`, not yet built). Every `Analysis.security_exposure`
 is fixed to the disabled/no-transmission state — no AI/LLM provider
-exists yet. No FastAPI route, request/response schema, OpenAPI change,
-or persistence (`DB-01`) exists yet; the actual `API-01` HTTP surface and
-generic file-upload analysis creation remain later, separate packages.
+exists yet. No persistence (`DB-01`) exists yet; generic file-upload
+analysis creation remains a later, separate package.
+
+### Analysis API routes
+
+`trusttable_backend.api.v1.analyses` (`API-01`) implements the "API
+routes" backend layer directly above the "Application services" layer
+above: `POST /demo/sales` (create + run the demo analysis
+synchronously), `GET /analyses/{id}`, `GET /analyses/{id}/status`,
+`GET /analyses/{id}/profile`, `GET /analyses/{id}/findings`, and
+`POST /analyses/{id}/cancel` — the exact six behaviors
+`docs/implementation-backlog.md#API-01` names. Every handler calls only
+`analysis.service`'s existing public functions; no detector/profiling/
+scoring logic lives in the route layer. The `AnalysisStore` is held on
+`app.state.analysis_store`, created once per `FastAPI` application
+instance (`main.create_app`) — in-memory, lost on restart, no
+concurrency safety, same disclosed non-goal as the store itself.
+Unknown analysis IDs return `404 ANALYSIS_NOT_FOUND`; a not-yet-
+`completed` profile request returns `409 INVALID_ANALYSIS_STATE`; a
+not-yet-`completed` findings request returns an empty list, matching
+`analysis.service.get_findings`'s own documented behavior. New
+`schemas.analysis` Pydantic response models are an intentional,
+disclosed subset of `docs/api-specification.md`'s full documented
+surface — matching exactly `API-01`'s six listed behaviors, not the
+larger context/rules/reports/generic-upload surface those later,
+separate backlog items own. Generic file-upload analysis creation,
+persistence (`DB-01`), and true background execution (`JOB-01`) remain
+later, separate packages.
 
 ## 4. Frontend architecture
 
