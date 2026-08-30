@@ -1,13 +1,17 @@
 # TrustTable local Docker stack (FND-01, repository-foundation stage;
-# configuration wiring updated by FND-02).
+# configuration wiring updated by FND-02; restart policy added by
+# REL-01).
 #
-# Minimal, foundation-only Compose file: the backend runs Uvicorn directly
-# and is also mapped to its own host port for direct diagnostic
-# reachability; the frontend is built with `vite build` and served by
-# Nginx, which proxies /api/v1/* to the backend and falls back to
-# index.html for SPA routes. No database, no debug ports, no production
-# hardening (SBOM, dependency/container scanning) — that is `SEC-01`/
-# `REL-01` scope, not this file. See docs/local-development.md.
+# Minimal Compose file: the backend runs Uvicorn directly and is also
+# mapped to its own host port for direct diagnostic reachability; the
+# frontend is built with `vite build` and served by Nginx, which proxies
+# /api/v1/* to the backend and falls back to index.html for SPA routes.
+# Both services restart automatically after an unexpected exit
+# (`restart: unless-stopped`) — REL-01 production-configuration
+# hardening appropriate for a local-first, single-instance deployment
+# with no external container orchestrator supervising the stack. No
+# database, no debug ports. SBOM generation and container image scanning
+# are SEC-01 scope, not REL-01. See docs/local-development.md.
 #
 # Configuration (FND-02): the backend's typed Settings (see
 # backend/src/trusttable_backend/config.py) are the runtime source of
@@ -21,6 +25,7 @@ services:
   backend:
     build:
       context: ./backend
+    restart: unless-stopped
     ports:
       - "8000:8000"
     env_file:
@@ -42,6 +47,7 @@ services:
   frontend:
     build:
       context: ./frontend
+    restart: unless-stopped
     ports:
       - "8080:8080"
     depends_on:

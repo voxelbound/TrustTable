@@ -18,6 +18,11 @@ that fails typed validation stops the backend container from becoming
 healthy, exercising the same `Settings` validation path as native
 startup.
 
+WP-026 (REL-01) adds one production-configuration check: both services
+declare `restart: unless-stopped`, so an unexpected container exit is
+recovered from automatically with no external orchestrator supervising
+the stack.
+
 Requires a reachable Docker daemon (unsandboxed socket access) and
 buildable `backend`/`frontend` images. Not part of the default backend
 unit-test suite; invoke explicitly from the `backend` project, e.g.:
@@ -196,3 +201,19 @@ def test_only_intended_ports_are_published(compose_stack: ComposeStack) -> None:
     }
 
     assert published_ports == INTENDED_HOST_PORTS
+
+
+def test_restart_policies_configured_for_both_services(compose_stack: ComposeStack) -> None:
+    """REL-01: both services restart automatically after an unexpected exit,
+    appropriate for a local-first, single-instance deployment (no external
+    container orchestrator supervising the stack).
+    """
+    config_result = _run_compose("config", "--format", "json", timeout=15)
+    assert config_result.returncode == 0
+
+    config = json.loads(config_result.stdout)
+    restart_policies = {
+        name: service.get("restart") for name, service in config["services"].items()
+    }
+
+    assert restart_policies == {"backend": "unless-stopped", "frontend": "unless-stopped"}
