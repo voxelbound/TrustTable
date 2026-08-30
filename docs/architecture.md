@@ -449,6 +449,25 @@ State categories:
 
 No global state library is planned for v1.
 
+### Investigation shell (UI-01, partial)
+
+The real route tree (`frontend/src/router.tsx`, replacing `FND-01`'s
+placeholder route): `/` redirects to `/analyses/new` (the Start screen,
+no analysis list/dashboard exists yet); `/analyses/:analysisId` is the
+layout route (`AnalysisLayoutRoute`) that polls status and renders
+`AnalysisStageProgress` while in progress, a terminal-state view when
+`failed`/`cancelled`, or its children once `completed`:
+`.../overview` (`OverviewRoute`) and `.../findings` (`FindingsRoute`).
+`frontend/src/features/analysis/api.ts` holds the TanStack Query hooks
+wrapping the generated `API-01` SDK functions; `frontend/src/domain/
+finding.ts` holds pure finding sort/filter/count logic with no React or
+API-client import; `frontend/src/components/{ui,provenance,layout}/`
+hold the UI-primitive and domain-component subset this slice needs.
+Finding detail, evidence display, and the dedicated prompt-injection-
+warning screen remain open — the current `API-01` surface has no
+per-finding-detail or evidence-retrieval endpoint and no persistent
+`finding_id` to address one.
+
 ## 5. API contracts
 
 FastAPI OpenAPI is the source of truth.

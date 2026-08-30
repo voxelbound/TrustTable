@@ -2,15 +2,19 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
 /**
- * Playwright browser/accessibility smoke test (FND-01, AC-08).
+ * Playwright browser/accessibility smoke test (FND-01, AC-08; updated
+ * `UI-01`/`WP-025` — `/` now redirects to the real Start screen instead
+ * of the repository-foundation placeholder route).
  *
  * Runs against the Compose/Nginx origin (see playwright.config.ts).
- * No real product screens exist yet — this exercises the placeholder
- * route, the Nginx `/api/v1` proxy, and a baseline accessibility scan
- * so the proxy and rendering path are proven before real screens land.
+ * **Authored and typechecked, not live-executed by `WP-025`** — see
+ * that work package's disclosed EDS tooling-gap note (no broker-safe
+ * operation class currently runs Playwright); this repository's own
+ * `test-location-map.md` already classifies browser/e2e tests as a
+ * release-candidate gate, not a PR gate.
  */
 
-test('renders the placeholder route with no browser console errors', async ({
+test('redirects "/" to the Start screen with no browser console errors', async ({
   page,
 }) => {
   const consoleErrors: string[] = []
@@ -26,9 +30,10 @@ test('renders the placeholder route with no browser console errors', async ({
   const response = await page.goto('/')
 
   expect(response?.status()).toBe(200)
+  await expect(page).toHaveURL(/\/analyses\/new$/)
   await expect(page.getByRole('heading', { name: 'TrustTable' })).toBeVisible()
   await expect(
-    page.getByRole('form', { name: 'placeholder form' }),
+    page.getByRole('button', { name: 'Try the sales demo' }),
   ).toBeVisible()
   expect(consoleErrors).toEqual([])
 })
@@ -45,7 +50,7 @@ test('proxies /api/v1/version through Nginx to the backend', async ({
   expect(['development', 'test', 'production']).toContain(body.environment_mode)
 })
 
-test('has no serious or critical accessibility violations on the placeholder route', async ({
+test('has no serious or critical accessibility violations on the Start screen', async ({
   page,
 }) => {
   await page.goto('/')

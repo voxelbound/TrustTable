@@ -6,7 +6,7 @@ It combines deterministic profiling and rule-based detection with evidence-groun
 
 ## Project status
 
-TrustTable has completed its repository foundation (**FND-01**), typed configuration (**FND-02**), continuous integration (**FND-03**), common API errors (**FND-04**), the OpenAPI frontend contract pipeline (**FND-05**), the synthetic sales generator (**DEMO-01**), the parsing contracts (**ING-01**), the secure CSV parser (**ING-02**), the profiling schemas (**PROF-01**), type inference (**PROF-02**), core profiling (**PROF-03**), the detector interface (**DET-01**), the initial detector set (**DET-02** — all 12 detectors: duplicate rows, empty columns, excessive missing values, missing likely identifiers, inconsistent capitalization, leading/trailing whitespace, future dates, negative measures, invalid percentages, line-total mismatch, suspiciously constant columns, and extreme outliers), the LLM input/output trust boundaries (**SEC-02** — the untrusted-data envelope, safe prompt builder, and model-output validator; no real LLM provider is wired in yet), the prompt-injection risk detector (**DET-SEC-01** — `security.possible_llm_prompt_injection`, the required AI-processing-security detector, completing the detector catalogue at 13/13), deterministic risk scoring (**RISK-01** — per-finding priority scores and a four-label dataset trust assessment, computed with no AI/LLM input path at all), and the initial analysis API (**API-01** — the in-memory analysis-orchestration engine composing parsing/profiling/detection/scoring into one create-then-run pipeline over the bundled demo dataset, now exposed over real `/api/v1` HTTP routes: `POST /demo/sales`, `GET /analyses/{id}`, `GET /analyses/{id}/status`, `GET /analyses/{id}/profile`, `GET /analyses/{id}/findings`, `POST /analyses/{id}/cancel`; no UI consumes it yet). TrustTable is now continuing toward **v0.1 — the deterministic vertical slice**.
+TrustTable has completed its repository foundation (**FND-01**), typed configuration (**FND-02**), continuous integration (**FND-03**), common API errors (**FND-04**), the OpenAPI frontend contract pipeline (**FND-05**), the synthetic sales generator (**DEMO-01**), the parsing contracts (**ING-01**), the secure CSV parser (**ING-02**), the profiling schemas (**PROF-01**), type inference (**PROF-02**), core profiling (**PROF-03**), the detector interface (**DET-01**), the initial detector set (**DET-02** — all 12 detectors: duplicate rows, empty columns, excessive missing values, missing likely identifiers, inconsistent capitalization, leading/trailing whitespace, future dates, negative measures, invalid percentages, line-total mismatch, suspiciously constant columns, and extreme outliers), the LLM input/output trust boundaries (**SEC-02** — the untrusted-data envelope, safe prompt builder, and model-output validator; no real LLM provider is wired in yet), the prompt-injection risk detector (**DET-SEC-01** — `security.possible_llm_prompt_injection`, the required AI-processing-security detector, completing the detector catalogue at 13/13), deterministic risk scoring (**RISK-01** — per-finding priority scores and a four-label dataset trust assessment, computed with no AI/LLM input path at all), the initial analysis API (**API-01** — the in-memory analysis-orchestration engine composing parsing/profiling/detection/scoring into one create-then-run pipeline over the bundled demo dataset, exposed over real `/api/v1` HTTP routes: `POST /demo/sales`, `GET /analyses/{id}`, `GET /analyses/{id}/status`, `GET /analyses/{id}/profile`, `GET /analyses/{id}/findings`, `POST /analyses/{id}/cancel`), and a first slice of the basic investigation UI (**UI-01**, partial — a real Start screen with a working sales-demo action, a named-stage progress view, an Overview screen (trust assessment, top findings, dataset summary), and a Findings list with severity/category/search filtering, all reading the running backend API; finding detail, evidence display, and the dedicated prompt-injection-warning screen remain open, since the current API has no per-finding-detail or evidence-retrieval endpoint yet). TrustTable is now continuing toward **v0.1 — the deterministic vertical slice**.
 
 The product, domain model, API boundaries, detector framework, frontend architecture, testing strategy, threat model, release plan, and implementation backlog have been defined before production implementation begins. A runnable backend and frontend skeleton, Docker/Nginx deployment, and baseline test tooling now exist; no product features are implemented yet.
 
@@ -31,13 +31,18 @@ for exact commands. The bundled deterministic demo dataset is
 [`demo-data/sales_demo.csv`](demo-data/sales_demo.csv).
 
 The full deterministic pipeline (CSV parsing, type inference, profiling,
-detection, and risk scoring) is now reachable through the running
-backend API — start it with a demo analysis via `POST /api/v1/demo/sales`
-and follow up with `GET /api/v1/analyses/{id}`, `.../status`,
-`.../profile`, `.../findings`, or `POST .../cancel`. There is **no UI
-yet** — that is `UI-01`, the next backlog item. Generic file upload
-(arbitrary CSV/Excel analysis creation, as opposed to the bundled demo
-dataset) is also not yet exposed.
+detection, and risk scoring) is reachable both through the running
+backend API directly (`POST /api/v1/demo/sales`, `GET
+/api/v1/analyses/{id}`, `.../status`, `.../profile`, `.../findings`,
+`POST .../cancel`) and through a first slice of the real frontend: open
+the running app and choose "Try the sales demo" on the Start screen to
+see a progress view, a trust-assessment Overview, and a filterable
+Findings list. Finding detail, evidence display, and the dedicated
+prompt-injection-warning screen are not built yet (`UI-01` remains
+partial — the current API has no per-finding-detail or evidence-
+retrieval endpoint). Generic file upload (arbitrary CSV/Excel analysis
+creation, as opposed to the bundled demo dataset) is also not yet
+exposed — the Start screen's upload control is present but disabled.
 [Local development](docs/local-development.md#exercising-the-deterministic-profiling-pipeline-directly)
 still has a reproducible way to exercise the pipeline directly in
 Python, without the API, if preferred.
