@@ -122,9 +122,10 @@ Stop and remove the stack:
 docker compose down
 ```
 
-Only ports `8000` and `8080` are published. No database, debug ports, or
-production hardening (SBOM/dependency/container scanning) exist at this
-stage — that is `SEC-01`/`REL-01` scope.
+Only ports `8000` and `8080` are published. No database or debug ports.
+Both services restart automatically after an unexpected exit
+(`restart: unless-stopped`, `REL-01`). SBOM generation and container
+image scanning are `SEC-01` scope, not `REL-01`.
 
 ## Running the tests
 
