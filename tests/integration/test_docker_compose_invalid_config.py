@@ -11,6 +11,18 @@ module-scoped `compose_stack` fixture, so the two never run the same
 Docker Compose project concurrently. Requires a reachable Docker daemon
 (unsandboxed socket access); not part of the default backend unit-test
 suite — see `docs/local-development.md`.
+
+WP-026 (REL-01) note: `docker-compose.yml` now sets `restart:
+unless-stopped` on both services. A container crashing on invalid
+configuration is therefore restarted by Docker rather than left
+permanently `exited`, so at the moment this test polls container state
+it may observe either `"exited"` (between restart attempts) or
+`"restarting"` (mid-attempt) — both are legitimate, timing-dependent
+snapshots of the same underlying failure, not a behavior change in the
+invariant itself. The real invariant this test proves — an invalid
+environment override must never allow the backend to become healthy —
+is asserted directly and timing-independently via the container's
+`Health` field, in addition to the (now State-tolerant) exit-code check.
 """
 
 from __future__ import annotations
@@ -95,9 +107,25 @@ def test_invalid_env_override_prevents_backend_from_becoming_healthy(
     assert ps_result.returncode == 0
     backend_state = json.loads(ps_result.stdout.splitlines()[0])
 
-    assert backend_state["State"] == "exited", (
-        f"expected the backend container to have exited, got: {backend_state}"
+    # With `restart: unless-stopped` (REL-01), Docker restarts a crashing
+    # container rather than leaving it permanently exited, so either state
+    # is a legitimate snapshot of the same underlying failure depending on
+    # exactly when the restart loop is polled.
+    assert backend_state["State"] in {"exited", "restarting"}, (
+        f"expected the backend container to have exited or be restarting "
+        f"after a crash, got: {backend_state}"
     )
-    assert backend_state["ExitCode"] != 0, (
-        f"expected a non-zero exit code from invalid configuration, got: {backend_state}"
+    # `ExitCode` only reflects the *last completed* attempt. While
+    # `restarting`, Docker has already reset it to 0 for the new attempt
+    # (which hasn't crashed yet), so this check is only meaningful when
+    # `State` is `exited` (polled between restart attempts).
+    if backend_state["State"] == "exited":
+        assert backend_state["ExitCode"] != 0, (
+            f"expected a non-zero exit code from invalid configuration, got: {backend_state}"
+        )
+    # Direct, timing-independent proof of the real invariant: an invalid
+    # environment override must never allow the backend to become healthy,
+    # regardless of which point in the restart loop this happened to catch.
+    assert backend_state.get("Health") != "healthy", (
+        f"backend must never report healthy with an invalid configuration, got: {backend_state}"
     )
