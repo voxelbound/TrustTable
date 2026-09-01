@@ -115,9 +115,14 @@ def test_invalid_env_override_prevents_backend_from_becoming_healthy(
         f"expected the backend container to have exited or be restarting "
         f"after a crash, got: {backend_state}"
     )
-    assert backend_state["ExitCode"] != 0, (
-        f"expected a non-zero exit code from invalid configuration, got: {backend_state}"
-    )
+    # `ExitCode` only reflects the *last completed* attempt. While
+    # `restarting`, Docker has already reset it to 0 for the new attempt
+    # (which hasn't crashed yet), so this check is only meaningful when
+    # `State` is `exited` (polled between restart attempts).
+    if backend_state["State"] == "exited":
+        assert backend_state["ExitCode"] != 0, (
+            f"expected a non-zero exit code from invalid configuration, got: {backend_state}"
+        )
     # Direct, timing-independent proof of the real invariant: an invalid
     # environment override must never allow the backend to become healthy,
     # regardless of which point in the restart loop this happened to catch.
