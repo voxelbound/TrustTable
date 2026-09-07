@@ -9,12 +9,16 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   getAnalysisApiV1AnalysesAnalysisIdGet,
+  getAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGet,
+  getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGet,
   getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet,
   getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet,
   postDemoSalesApiV1DemoSalesPost,
   type AnalysisResource,
   type AnalysisStatusResponse,
   type DemoAnalysisResponse,
+  type FindingDetailResponse,
+  type FindingEvidenceListResponse,
   type FindingsListResponse,
 } from '../../api'
 import { client } from '../../api/client.gen'
@@ -158,5 +162,56 @@ export function useAnalysisFindings(
       return result.data
     },
     enabled: Boolean(analysisId) && (options?.enabled ?? true),
+  })
+}
+
+/** `GET .../findings/{finding_id}` (`API-01`, extending — `WP-027`). */
+export function useFindingDetail(
+  analysisId: string | undefined,
+  findingId: string | undefined,
+) {
+  return useQuery<FindingDetailResponse, ApiCallError>({
+    queryKey: ['analysis-finding-detail', analysisId, findingId],
+    queryFn: async () => {
+      const result =
+        await getAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGet({
+          path: {
+            analysis_id: analysisId as string,
+            finding_id: findingId as string,
+          },
+        })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled: Boolean(analysisId) && Boolean(findingId),
+  })
+}
+
+/** `GET .../findings/{finding_id}/evidence` (`API-01`, extending —
+ * `WP-027`). */
+export function useFindingEvidence(
+  analysisId: string | undefined,
+  findingId: string | undefined,
+) {
+  return useQuery<FindingEvidenceListResponse, ApiCallError>({
+    queryKey: ['analysis-finding-evidence', analysisId, findingId],
+    queryFn: async () => {
+      const result =
+        await getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGet(
+          {
+            path: {
+              analysis_id: analysisId as string,
+              finding_id: findingId as string,
+            },
+          },
+        )
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled: Boolean(analysisId) && Boolean(findingId),
   })
 }

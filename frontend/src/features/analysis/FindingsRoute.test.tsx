@@ -144,6 +144,24 @@ describe('FindingsRoute', () => {
     expect(await screen.findByText('1 of 2 findings')).toBeInTheDocument()
   })
 
+  it('AC-07 (WP-028): links each row observation to its finding-detail URL by finding_id', async () => {
+    useFixtureFindings()
+
+    renderFindings()
+
+    const link = await screen.findByRole('link', {
+      name: 'order_date has future dates.',
+    })
+    expect(link).toHaveAttribute('href', `/analyses/${ANALYSIS_ID}/findings/0`)
+    const otherLink = screen.getByRole('link', {
+      name: 'category has inconsistent capitalization.',
+    })
+    expect(otherLink).toHaveAttribute(
+      'href',
+      `/analyses/${ANALYSIS_ID}/findings/1`,
+    )
+  })
+
   it('renders a "no findings match" message when filters exclude everything', async () => {
     useFixtureFindings()
 

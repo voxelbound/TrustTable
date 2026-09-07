@@ -3,6 +3,8 @@ import type {
   AnalysisResource,
   AnalysisStatusResponse,
   DemoAnalysisResponse,
+  FindingDetailResponse,
+  FindingEvidenceListResponse,
   FindingsListResponse,
 } from '../../api'
 
@@ -88,6 +90,53 @@ export function makeFindingsListResponse(
   return { total_items: items.length, ...overrides, items }
 }
 
+export function makeFindingDetailResponse(
+  overrides: Partial<FindingDetailResponse> = {},
+): FindingDetailResponse {
+  return {
+    finding_id: '0',
+    detector_id: 'validity.future_dates',
+    detector_version: '1.0.0',
+    category: 'validity',
+    severity: 'high',
+    confidence: 0.9,
+    priority_score: 80,
+    calculated_observation: 'order_date has 2 future dates.',
+    affected_columns: [
+      { original_name: 'order_date', internal_key: 'order_date', ordinal: 3 },
+    ],
+    affected_row_count: 2,
+    evidence_count: 2,
+    security_exposure: {
+      model_provider_enabled: false,
+      sample_transmission_enabled: false,
+    },
+    ...overrides,
+  }
+}
+
+export function makeFindingEvidenceListResponse(
+  overrides: Partial<FindingEvidenceListResponse> = {},
+): FindingEvidenceListResponse {
+  const items = overrides.items ?? [
+    {
+      evidence_id: 'validity.future_dates.evidence.order_date',
+      evidence_type: 'row_set',
+      display_safe_summary: "Column 'order_date' has 2 future date value(s).",
+      affected_columns: [
+        {
+          original_name: 'order_date',
+          internal_key: 'order_date',
+          ordinal: 3,
+        },
+      ],
+      affected_row_count: 2,
+      scope: 'full',
+    },
+  ]
+  return { total_items: items.length, ...overrides, items }
+}
+
 export function makeStatusResponse(
   overrides: Partial<AnalysisStatusResponse> = {},
 ): AnalysisStatusResponse {
@@ -134,5 +183,11 @@ export const handlers = [
   }),
   http.get(`${BASE}/analyses/:analysisId/findings`, () => {
     return HttpResponse.json(makeFindingsListResponse())
+  }),
+  http.get(`${BASE}/analyses/:analysisId/findings/:findingId`, () => {
+    return HttpResponse.json(makeFindingDetailResponse())
+  }),
+  http.get(`${BASE}/analyses/:analysisId/findings/:findingId/evidence`, () => {
+    return HttpResponse.json(makeFindingEvidenceListResponse())
   }),
 ]
