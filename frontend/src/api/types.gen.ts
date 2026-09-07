@@ -256,16 +256,144 @@ export type DemoAnalysisResponse = {
 };
 
 /**
+ * FindingDetailResponse
+ *
+ * Body for `GET /analyses/{analysis_id}/findings/{finding_id}`
+ * (`WP-027`, a disclosed bounded subset of `docs/api-specification.md`
+ * §10's full documented finding-detail shape and
+ * `docs/ui-specification.md` §4.7's "Finding detail" screen sections).
+ *
+ * Exposes exactly what is genuinely computable today: observation,
+ * affected columns/rows, evidence count, technical metadata, and
+ * security exposure. Deliberately omits possible business impact,
+ * remediation, proposed validation rules, and review state — no
+ * package computes any of those yet (`REM-01`, `RULE-01`, `REV-01` are
+ * all later, unimplemented backlog items); a placeholder field would
+ * misrepresent "not built yet" as "computed but empty".
+ */
+export type FindingDetailResponse = {
+    /**
+     * Affected Columns
+     */
+    affected_columns: Array<ColumnReferenceResponse>;
+    /**
+     * Affected Row Count
+     */
+    affected_row_count: number;
+    /**
+     * Calculated Observation
+     */
+    calculated_observation: string;
+    /**
+     * Category
+     */
+    category: string;
+    /**
+     * Confidence
+     */
+    confidence: number;
+    /**
+     * Detector Id
+     */
+    detector_id: string;
+    /**
+     * Detector Version
+     */
+    detector_version: string;
+    /**
+     * Evidence Count
+     */
+    evidence_count: number;
+    /**
+     * Finding Id
+     */
+    finding_id: string;
+    /**
+     * Priority Score
+     */
+    priority_score: number;
+    security_exposure: SecurityExposureResponse;
+    /**
+     * Severity
+     */
+    severity: string;
+};
+
+/**
+ * FindingEvidenceItem
+ *
+ * One entry in `GET .../findings/{finding_id}/evidence`'s response
+ * (`WP-027`). Mirrors `domain.evidence.Evidence`, deliberately
+ * excluding `structured_payload`: `docs/domain-model.md` §13's own
+ * invariants ("report references use display-safe summaries"; raw
+ * sensitive values are not embedded unless explicitly allowed, a
+ * redaction guarantee not yet mechanically enforced pending `PRIV-01`)
+ * both argue against exposing the open-ended raw payload through any
+ * API response before that redaction package exists.
+ * `affected_row_count` is a bounded count, matching `FindingItem`'s
+ * established convention and `docs/domain-model.md` §13's "row
+ * evidence is bounded for display" invariant — not the raw row
+ * reference list.
+ */
+export type FindingEvidenceItem = {
+    /**
+     * Affected Columns
+     */
+    affected_columns: Array<ColumnReferenceResponse>;
+    /**
+     * Affected Row Count
+     */
+    affected_row_count: number;
+    /**
+     * Display Safe Summary
+     */
+    display_safe_summary: string;
+    /**
+     * Evidence Id
+     */
+    evidence_id: string;
+    /**
+     * Evidence Type
+     */
+    evidence_type: string;
+    /**
+     * Scope
+     */
+    scope: string;
+};
+
+/**
+ * FindingEvidenceListResponse
+ *
+ * Body for `GET /analyses/{analysis_id}/findings/{finding_id}/evidence`.
+ * Returns an empty `items` list (not an error) if a valid finding
+ * happens to have no resolvable evidence entries — defensive, matching
+ * `FindingsListResponse`'s existing empty-list-not-an-error convention.
+ */
+export type FindingEvidenceListResponse = {
+    /**
+     * Items
+     */
+    items: Array<FindingEvidenceItem>;
+    /**
+     * Total Items
+     */
+    total_items: number;
+};
+
+/**
  * FindingItem
  *
  * One entry in `GET /analyses/{analysis_id}/findings`'s response
  * (`docs/api-specification.md` §10's documented list-item shape,
  * narrowed to what `API-01`'s `FindingCandidate` actually carries).
  *
- * No persistent `finding_id`/review-state field: the full `Finding`
- * aggregate (ID assignment, review state — `docs/domain-model.md` §12)
- * does not exist yet (`REV-01`, a later package); `API-01`'s engine
- * only produces `FindingCandidate` values. `affected_row_count` and
+ * `finding_id` (`WP-027`) is a stringified zero-based index into the
+ * analysis's own findings tuple — a disclosed, reversible interim
+ * scheme (see `analysis.service.get_finding`); no full persisted
+ * identifier exists yet. No review-state field: the full `Finding`
+ * aggregate's review state (`docs/domain-model.md` §12) does not exist
+ * yet (`REV-01`, a later package). `affected_row_count` and
  * `evidence_count` are bounded counts, not the raw row-reference/
  * evidence-ID lists — matching this repository's established
  * "bounded, not raw" list-response convention (`PROF-03`'s profile
@@ -304,6 +432,10 @@ export type FindingItem = {
      * Evidence Count
      */
     evidence_count: number;
+    /**
+     * Finding Id
+     */
+    finding_id: string;
     /**
      * Priority Score
      */
@@ -647,6 +779,74 @@ export type GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses = {
 };
 
 export type GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponse = GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses[keyof GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses];
+
+export type GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Finding Id
+         */
+        finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/findings/{finding_id}';
+};
+
+export type GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetError = GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetErrors[keyof GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetErrors];
+
+export type GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: FindingDetailResponse;
+};
+
+export type GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponse = GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses[keyof GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses];
+
+export type GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Finding Id
+         */
+        finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/findings/{finding_id}/evidence';
+};
+
+export type GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetError = GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetErrors[keyof GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetErrors];
+
+export type GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: FindingEvidenceListResponse;
+};
+
+export type GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponse = GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses[keyof GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses];
 
 export type GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData = {
     body?: never;

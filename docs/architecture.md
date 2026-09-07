@@ -426,6 +426,25 @@ separate backlog items own. Generic file-upload analysis creation,
 persistence (`DB-01`), and true background execution (`JOB-01`) remain
 later, separate packages.
 
+`API-01` was extended (`WP-027`) with `GET /analyses/{id}/findings
+/{finding_id}` and `GET /analyses/{id}/findings/{finding_id}/evidence`,
+closing the concrete backend gap `UI-01` (`WP-025`) disclosed. `Analysis`
+gained an `evidence: tuple[Evidence, ...]` field — `run_analysis` now
+captures every `DetectorRunResult.evidence` it already receives instead
+of discarding it. `finding_id` (also now present on the existing
+findings-list item) is a stringified zero-based index into the
+analysis's own `findings` tuple — a disclosed, reversible interim
+addressing scheme pending real persistence (`DB-01`/`REV-01`).
+`FindingDetailResponse` exposes only what is genuinely computable today
+(observation, affected columns/rows, evidence count, technical metadata,
+security exposure); `FindingEvidenceItem` exposes only each `Evidence`
+object's `display_safe_summary`, never its raw `structured_payload`, per
+`docs/domain-model.md` §13's "report references use display-safe
+summaries" invariant. Business impact, remediation, proposed validation
+rules, and review state remain unbuilt (`REM-01`/`RULE-01`/`REV-01`);
+findings-list filter/sort/pagination query parameters remain a later,
+separate extension.
+
 ## 4. Frontend architecture
 
 TrustTable is a client-rendered SPA.
@@ -464,9 +483,10 @@ finding.ts` holds pure finding sort/filter/count logic with no React or
 API-client import; `frontend/src/components/{ui,provenance,layout}/`
 hold the UI-primitive and domain-component subset this slice needs.
 Finding detail, evidence display, and the dedicated prompt-injection-
-warning screen remain open — the current `API-01` surface has no
-per-finding-detail or evidence-retrieval endpoint and no persistent
-`finding_id` to address one.
+warning screen remain open — a separate, later UI-01 follow-on package.
+The backend gap that blocked them (no per-finding-detail or
+evidence-retrieval endpoint, no `finding_id`) is closed as of `WP-027`;
+see "Analysis API routes" above.
 
 ## 5. API contracts
 
