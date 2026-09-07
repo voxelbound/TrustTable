@@ -55,6 +55,7 @@ export function makeFindingsListResponse(
 ): FindingsListResponse {
   const items = overrides.items ?? [
     {
+      finding_id: '0',
       detector_id: 'validity.future_dates',
       detector_version: '1.0.0',
       category: 'validity',
@@ -69,6 +70,7 @@ export function makeFindingsListResponse(
       evidence_count: 2,
     },
     {
+      finding_id: '1',
       detector_id: 'consistency.inconsistent_capitalization',
       detector_version: '1.0.0',
       category: 'consistency',
