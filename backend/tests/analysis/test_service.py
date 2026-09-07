@@ -34,6 +34,7 @@ from trusttable_backend.analysis.service import (
     FindingNotFoundError,
     cancel_analysis,
     create_analysis,
+    create_analysis_from_upload,
     get_finding,
     get_finding_evidence,
     get_findings,
@@ -105,6 +106,7 @@ def _make_analysis(**overrides: object) -> Analysis:
     fields: dict[str, object] = {
         "analysis_id": "analysis-1",
         "dataset": _make_dataset(),
+        "content": b"col\nvalue\n",
         "state": AnalysisState.QUEUED,
         "security_exposure": NO_EXPOSURE,
         "dataset_profile": None,
@@ -367,6 +369,57 @@ def test_create_analysis_produces_distinct_ids() -> None:
 
 
 # ---------------------------------------------------------------------------
+# WP-029: create_analysis_from_upload
+# ---------------------------------------------------------------------------
+
+_UPLOAD_CSV = b"name,amount\nAlice,10\nBob,20\n"
+
+
+def test_create_analysis_from_upload_produces_queued_analysis() -> None:
+    store = AnalysisStore()
+    analysis = create_analysis_from_upload(
+        store, content=_UPLOAD_CSV, original_filename="sample.csv"
+    )
+
+    assert analysis.state is AnalysisState.QUEUED
+    assert analysis.analysis_id
+    assert analysis.content == _UPLOAD_CSV
+    assert analysis.dataset.source_type is DatasetSourceType.UPLOAD
+    assert analysis.dataset.format is DatasetFormat.CSV
+    assert analysis.dataset.original_filename == "sample.csv"
+    assert analysis.dataset.content_hash == hashlib.sha256(_UPLOAD_CSV).hexdigest()
+    assert analysis.dataset.byte_size == len(_UPLOAD_CSV)
+    assert analysis.dataset_profile is None
+    assert analysis.findings == ()
+    assert analysis.trust_assessment is None
+
+
+def test_create_analysis_from_upload_generates_storage_name_not_derived_from_original() -> None:
+    """`docs/security-threat-model.md` §3.6: "generated storage names" —
+    `stored_filename`/`storage_location` must never echo the client-
+    supplied `original_filename`.
+    """
+    store = AnalysisStore()
+    analysis = create_analysis_from_upload(
+        store, content=_UPLOAD_CSV, original_filename="../../etc/passwd.csv"
+    )
+
+    assert "passwd" not in analysis.dataset.stored_filename
+    assert "passwd" not in analysis.dataset.storage_location
+    assert analysis.dataset.stored_filename.endswith(".csv")
+    assert analysis.dataset.dataset_id in analysis.dataset.stored_filename
+
+
+def test_create_analysis_from_upload_produces_distinct_ids() -> None:
+    store = AnalysisStore()
+    first = create_analysis_from_upload(store, content=_UPLOAD_CSV, original_filename="a.csv")
+    second = create_analysis_from_upload(store, content=_UPLOAD_CSV, original_filename="a.csv")
+
+    assert first.analysis_id != second.analysis_id
+    assert first.dataset.dataset_id != second.dataset.dataset_id
+
+
+# ---------------------------------------------------------------------------
 # AC-06/AC-07/AC-08: run_analysis pipeline wiring and equivalence proofs
 # ---------------------------------------------------------------------------
 
@@ -438,6 +491,24 @@ def test_run_analysis_matches_direct_trust_assessment() -> None:
     assert completed.trust_assessment is not None
     assert completed.trust_assessment.finding_count > 0
     assert completed.trust_assessment.label is not TrustLabel.HIGH_CONFIDENCE
+
+
+def test_run_analysis_runs_full_pipeline_on_uploaded_content() -> None:
+    """`WP-029`: `run_analysis` is source-agnostic — it must run the real
+    pipeline against `Analysis.content` regardless of how the analysis
+    was created, not only the bundled demo dataset.
+    """
+    store = AnalysisStore()
+    created = create_analysis_from_upload(
+        store, content=_UPLOAD_CSV, original_filename="sample.csv"
+    )
+
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+    assert completed.state is AnalysisState.COMPLETED
+    assert completed.dataset_profile is not None
+    assert completed.dataset_profile.dataset_metrics["row_count"] == 2
+    assert completed.trust_assessment is not None
 
 
 # ---------------------------------------------------------------------------

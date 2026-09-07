@@ -1,13 +1,21 @@
-"""In-memory analysis orchestration (`API-01`, enabling slice, `WP-023`).
+"""In-memory analysis orchestration (`API-01`, enabling slice, `WP-023`;
+generalized to generic uploads, `WP-029`).
 
 A pure-Python, framework-independent orchestration engine wiring together
 every already-delivered package (`ING-02` CSV parsing, `PROF-03`
 profiling, `DET-01`/`DET-02`/`DET-SEC-01` detectors via `run_detectors()`,
 `RISK-01` scoring) into one deterministic create-then-run pipeline over
-the bundled demo dataset (`DEMO-01`). No FastAPI route, no persistence, no
-AI provider, and no context inference exist yet — this module is the
-"Application services"-layer engine a later, separate package will expose
-over HTTP (`docs/architecture.md` §3).
+either the bundled demo dataset (`DEMO-01`, `create_analysis`) or an
+uploaded CSV file (`create_analysis_from_upload`, `WP-029`). No
+persistence, no AI provider, and no context inference exist yet — this
+module is the "Application services"-layer engine `API-01`'s HTTP routes
+(`api/v1/analyses.py`) expose (`docs/architecture.md` §3).
+
+`run_analysis` is source-agnostic: it reads the bytes an analysis was
+created with from `Analysis.content` rather than regenerating anything
+itself (a `WP-029` refactor — previously it always regenerated the
+bundled demo dataset internally, which happened to be correct only
+because no other content source existed yet).
 
 `AnalysisState` is a documented 8-value subset of `docs/domain-model.md`
 §5's 11-value `States` list (`inferring_context`/`awaiting_confirmation`/
@@ -37,7 +45,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 
@@ -131,10 +139,18 @@ class Analysis:
     each `DetectorRunResult.evidence` (previously computed and then
     discarded before this package). `get_finding_evidence` resolves a
     finding's own `evidence_ids` against this collection.
+
+    `content` (`WP-029`) is the immutable raw bytes this analysis was
+    created from (either the generated demo CSV or an uploaded file) —
+    an in-memory-only retention, not persistence (`DB-01` is not built
+    yet, the same disclosed non-goal `AnalysisStore` itself already
+    carries one layer up). Declared `repr=False` so it can never appear
+    in an accidental log/repr of an `Analysis` instance.
     """
 
     analysis_id: str
     dataset: Dataset
+    content: bytes = field(repr=False)
     state: AnalysisState
     security_exposure: SecurityExposureState
     dataset_profile: DatasetProfile | None
@@ -152,6 +168,8 @@ class Analysis:
     def __post_init__(self) -> None:
         if not self.analysis_id:
             raise ValueError("Analysis.analysis_id must not be empty")
+        if not self.content:
+            raise ValueError("Analysis.content must not be empty")
         if len(self.priority_scores) != len(self.findings):
             raise ValueError("Analysis.priority_scores must be 1:1 with findings")
 
@@ -263,6 +281,71 @@ def create_analysis(store: AnalysisStore) -> Analysis:
     analysis = Analysis(
         analysis_id=str(uuid.uuid4()),
         dataset=dataset,
+        content=content,
+        state=AnalysisState.QUEUED,
+        security_exposure=_NO_EXPOSURE,
+        dataset_profile=None,
+        findings=(),
+        priority_scores=(),
+        evidence=(),
+        trust_assessment=None,
+        failure=None,
+        created_at=now,
+        started_at=None,
+        completed_at=None,
+        failed_at=None,
+        cancelled_at=None,
+    )
+    store.add(analysis)
+    return analysis
+
+
+def create_analysis_from_upload(
+    store: AnalysisStore, *, content: bytes, original_filename: str
+) -> Analysis:
+    """Create a new `QUEUED` analysis over an uploaded CSV file's raw
+    bytes and store it (`UI-01`/`API-01`, extending, `WP-029`). Does not
+    run the pipeline — see `run_analysis`.
+
+    `content` must already have passed the caller's own extension/
+    content-type/size validation (`api/v1/analyses.py`'s `POST
+    /analyses` handler) — this function performs no validation of its
+    own beyond `Analysis.__post_init__`'s non-empty-content check.
+    `original_filename` must already be sanitized
+    (`uploads.filename.sanitize_filename`) — this function does not
+    sanitize it again.
+
+    `stored_filename`/`storage_location` are generated from a fresh
+    `dataset_id`, never derived from `original_filename`
+    (`docs/security-threat-model.md` §3.6: "generated storage names").
+    No filesystem write occurs — no real storage layer exists yet
+    (`DB-01`), the same disclosed precedent `create_analysis` already
+    established for the bundled demo dataset's own nominal, never-read
+    `storage_location`.
+    """
+    content_hash = hashlib.sha256(content).hexdigest()
+    byte_size = len(content)
+    now = datetime.now(UTC)
+    dataset_id = str(uuid.uuid4())
+    stored_filename = f"{dataset_id}.csv"
+
+    dataset = Dataset(
+        dataset_id=dataset_id,
+        original_filename=original_filename,
+        stored_filename=stored_filename,
+        format=DatasetFormat.CSV,
+        byte_size=byte_size,
+        content_hash=content_hash,
+        selected_worksheet=None,
+        created_at=now,
+        deleted_at=None,
+        storage_location=f"uploads/{dataset_id}/{stored_filename}",
+        source_type=DatasetSourceType.UPLOAD,
+    )
+    analysis = Analysis(
+        analysis_id=str(uuid.uuid4()),
+        dataset=dataset,
+        content=content,
         state=AnalysisState.QUEUED,
         security_exposure=_NO_EXPOSURE,
         dataset_profile=None,
@@ -313,8 +396,7 @@ def run_analysis(
     started_at = datetime.now(UTC)
 
     try:
-        content = _generate_demo_content()
-        parsed = parse_csv(content)
+        parsed = parse_csv(analysis.content)
         columns = parsed.parsed_dataset.columns
 
         dataset_profile = compute_dataset_profile(

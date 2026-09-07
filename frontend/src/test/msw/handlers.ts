@@ -6,6 +6,7 @@ import type {
   FindingDetailResponse,
   FindingEvidenceListResponse,
   FindingsListResponse,
+  UploadAnalysisResponse,
 } from '../../api'
 
 // Absolute, matching the test-only client origin `test/setup.ts` configures
@@ -160,6 +161,26 @@ export function makeDemoAnalysisResponse(
   }
 }
 
+export function makeUploadAnalysisResponse(
+  overrides: Partial<UploadAnalysisResponse> = {},
+): UploadAnalysisResponse {
+  return {
+    analysis: makeAnalysisResource({
+      dataset: {
+        dataset_id: 'dataset-upload-1',
+        original_filename: 'my-data.csv',
+        format: 'csv',
+        byte_size: 456,
+        content_hash: 'def456',
+        source_type: 'upload',
+        created_at: '2026-09-07T00:00:00Z',
+      },
+    }),
+    status_url: `${BASE}/analyses/upload-analysis-id/status`,
+    ...overrides,
+  }
+}
+
 export function apiErrorBody(code: string, message: string) {
   return {
     error: { code, message, details: {}, request_id: 'req-test' },
@@ -174,6 +195,9 @@ export function apiErrorBody(code: string, message: string) {
 export const handlers = [
   http.post(`${BASE}/demo/sales`, () => {
     return HttpResponse.json(makeDemoAnalysisResponse(), { status: 202 })
+  }),
+  http.post(`${BASE}/analyses`, () => {
+    return HttpResponse.json(makeUploadAnalysisResponse(), { status: 202 })
   }),
   http.get(`${BASE}/analyses/:analysisId`, () => {
     return HttpResponse.json(makeAnalysisResource())

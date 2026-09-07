@@ -1,21 +1,44 @@
+import { useRef, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { AIPrivacyStatus } from '../../components/provenance/AIPrivacyStatus'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
-import { useCreateDemoAnalysis } from './api'
+import { useCreateAnalysisUpload, useCreateDemoAnalysis } from './api'
 
-/** The Start screen (`docs/ui-specification.md` §4.1). Upload is
- * presented but structurally disabled — there is no backend route to
- * submit an uploaded file to yet (`WP-024`'s disclosed non-goal,
- * carried forward here as `WP-025`'s Recorded assumption 3). */
+/** The Start screen (`docs/ui-specification.md` §4.1). Upload is now
+ * enabled (`WP-029`, `API-01`/`UI-01` extending) — CSV only, matching
+ * the backend's own current `POST /analyses` scope; `.xlsx` (`ING-03`)
+ * remains a later, separate package. */
 export function StartRoute() {
   const navigate = useNavigate()
   const createDemo = useCreateDemoAnalysis()
+  const createUpload = useCreateAnalysisUpload()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleRunDemo = () => {
     createDemo.mutate(undefined, {
       onSuccess: (response) => {
         void navigate(`/analyses/${response.analysis.analysis_id}/overview`)
+      },
+    })
+  }
+
+  const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+    createUpload.mutate(file, {
+      onSuccess: (response) => {
+        void navigate(`/analyses/${response.analysis.analysis_id}/overview`)
+      },
+      onSettled: () => {
+        // Allow re-selecting the same file after an error without a
+        // page reload (browsers do not fire `change` for an unchanged
+        // selection otherwise).
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
       },
     })
   }
@@ -47,16 +70,27 @@ export function StartRoute() {
         </p>
         <div className="mt-4 flex flex-col items-center gap-2">
           <input
+            ref={fileInputRef}
             type="file"
+            accept=".csv"
             aria-label="Choose a file to upload"
-            disabled
+            disabled={createUpload.isPending}
+            onChange={handleFileSelected}
             className="text-sm text-slate-500"
           />
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            File upload is not available yet in this preview. Try the sales demo
-            below instead.
+            {createUpload.isPending
+              ? 'Uploading and analyzing…'
+              : 'CSV files only for now. Excel (.xlsx) support is not available yet.'}
           </p>
         </div>
+        {createUpload.isError && (
+          <div className="mt-4">
+            <Alert variant="error" title="Could not analyze the uploaded file">
+              {createUpload.error.message}
+            </Alert>
+          </div>
+        )}
       </section>
 
       <section
