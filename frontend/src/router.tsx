@@ -1,19 +1,20 @@
 import { createBrowserRouter, redirect } from 'react-router'
 import { AnalysisLayoutRoute } from './features/analysis/AnalysisLayoutRoute'
+import { FindingDetailRoute } from './features/analysis/FindingDetailRoute'
 import { FindingsRoute } from './features/analysis/FindingsRoute'
 import { OverviewRoute } from './features/analysis/OverviewRoute'
 import { StartRoute } from './features/analysis/StartRoute'
 
 /**
- * React Router Data Mode router (`UI-01`, `WP-025`) — replaces `FND-01`'s
- * placeholder route with the real investigation shell.
+ * React Router Data Mode router (`UI-01`, `WP-025`; `findings/:findingId`
+ * added by `WP-028`) — replaces `FND-01`'s placeholder route with the
+ * real investigation shell.
  *
  * `/` redirects to `/analyses/new`: no analysis list/dashboard exists
  * yet (no persistence, `DB-01` not built) — `WP-025`'s Recorded
  * assumption 2. `docs/ui-specification.md` §3's fuller route tree
- * (`/context`, `/findings/:findingId`, `/rules`, `/report`,
- * `/technical`) is not built by this package; see the work package's
- * `backlog_remaining` disclosure.
+ * (`/context`, `/rules`, `/report`, `/technical`) remains open; see
+ * `WP-025`'s `backlog_remaining` disclosure.
  */
 export const router = createBrowserRouter([
   {
@@ -30,6 +31,7 @@ export const router = createBrowserRouter([
     children: [
       { path: 'overview', element: <OverviewRoute /> },
       { path: 'findings', element: <FindingsRoute /> },
+      { path: 'findings/:findingId', element: <FindingDetailRoute /> },
     ],
   },
 ])

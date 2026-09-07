@@ -1,4 +1,4 @@
-import { useParams, useSearchParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { FindingSeverityBadge } from '../../components/provenance/FindingSeverityBadge'
 import { filterFindings, sortFindingsByPriority } from '../../domain/finding'
 import { useAnalysisFindings } from './api'
@@ -165,14 +165,21 @@ export function FindingsRoute() {
           <tbody>
             {sorted.map((finding) => (
               <tr
-                key={`${finding.detector_id}-${finding.calculated_observation}`}
+                key={finding.finding_id}
                 className="border-b border-slate-100 dark:border-slate-900"
               >
                 <td className="py-2 pr-4">
                   <FindingSeverityBadge severity={finding.severity} />
                 </td>
                 <td className="py-2 pr-4">{finding.category}</td>
-                <td className="py-2 pr-4">{finding.calculated_observation}</td>
+                <td className="py-2 pr-4">
+                  <Link
+                    to={`/analyses/${analysisId ?? ''}/findings/${finding.finding_id}`}
+                    className="underline hover:no-underline"
+                  >
+                    {finding.calculated_observation}
+                  </Link>
+                </td>
                 <td className="py-2 pr-4">{finding.affected_row_count}</td>
               </tr>
             ))}
