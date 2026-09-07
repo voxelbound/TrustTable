@@ -12,6 +12,7 @@ const ANALYSIS_ID = 'findings-under-test'
 
 const FIXTURE_ITEMS = [
   {
+    finding_id: '0',
     detector_id: 'validity.future_dates',
     detector_version: '1.0.0',
     category: 'validity',
@@ -26,6 +27,7 @@ const FIXTURE_ITEMS = [
     evidence_count: 2,
   },
   {
+    finding_id: '1',
     detector_id: 'consistency.inconsistent_capitalization',
     detector_version: '1.0.0',
     category: 'consistency',

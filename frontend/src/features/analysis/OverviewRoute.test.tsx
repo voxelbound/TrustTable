@@ -42,6 +42,7 @@ function findingFixture(
   severity = 'medium',
 ) {
   return {
+    finding_id: detectorId,
     detector_id: detectorId,
     detector_version: '1.0.0',
     category: 'validity',

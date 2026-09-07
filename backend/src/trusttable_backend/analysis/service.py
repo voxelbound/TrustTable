@@ -45,6 +45,7 @@ from ..demo_data import SEED, generate
 from ..detectors.catalogue import DETECTORS
 from ..detectors.contract import FindingCandidate, SecurityExposureState
 from ..detectors.engine import run_detectors
+from ..domain.evidence import Evidence
 from ..domain.parsing import Dataset, DatasetFormat, DatasetSourceType
 from ..parsers.csv_parser import parse_csv
 from ..profiling.metrics import compute_dataset_profile
@@ -118,11 +119,18 @@ class Analysis:
     """One in-memory analysis record.
 
     Invariants tie every result field and terminal timestamp to `state`:
-    `dataset_profile`/`findings`/`priority_scores`/`trust_assessment` are
-    all empty/`None` unless `state == COMPLETED`; `completed_at` is set
-    if and only if `state == COMPLETED`; `failure`/`failed_at` are set if
-    and only if `state == FAILED`; `cancelled_at` is set if and only if
-    `state == CANCELLED`; `priority_scores` is always 1:1 with `findings`.
+    `dataset_profile`/`findings`/`priority_scores`/`trust_assessment`/
+    `evidence` are all empty/`None` unless `state == COMPLETED`;
+    `completed_at` is set if and only if `state == COMPLETED`;
+    `failure`/`failed_at` are set if and only if `state == FAILED`;
+    `cancelled_at` is set if and only if `state == CANCELLED`;
+    `priority_scores` is always 1:1 with `findings`.
+
+    `evidence` (`WP-027`) holds every `Evidence` object every detector
+    run produced for this analysis — captured by `run_analysis` from
+    each `DetectorRunResult.evidence` (previously computed and then
+    discarded before this package). `get_finding_evidence` resolves a
+    finding's own `evidence_ids` against this collection.
     """
 
     analysis_id: str
@@ -132,6 +140,7 @@ class Analysis:
     dataset_profile: DatasetProfile | None
     findings: tuple[FindingCandidate, ...]
     priority_scores: tuple[float, ...]
+    evidence: tuple[Evidence, ...]
     trust_assessment: TrustAssessment | None
     failure: AnalysisFailure | None
     created_at: datetime
@@ -157,6 +166,8 @@ class Analysis:
                 raise ValueError("Analysis: dataset_profile must be None unless state is COMPLETED")
             if self.findings:
                 raise ValueError("Analysis: findings must be empty unless state is COMPLETED")
+            if self.evidence:
+                raise ValueError("Analysis: evidence must be empty unless state is COMPLETED")
             if self.trust_assessment is not None:
                 raise ValueError(
                     "Analysis: trust_assessment must be None unless state is COMPLETED"
@@ -181,6 +192,21 @@ class AnalysisNotFoundError(Exception):
     def __init__(self, analysis_id: str) -> None:
         super().__init__(f"Analysis not found: {analysis_id}")
         self.analysis_id = analysis_id
+
+
+class FindingNotFoundError(Exception):
+    """Raised by `get_finding`/`get_finding_evidence` (`WP-027`) for an
+    unknown, malformed, or out-of-range `finding_id` — including a known
+    analysis that has not yet reached `COMPLETED` (its `findings` tuple
+    is still empty, so every `finding_id` is currently out of range,
+    reusing `get_findings`' existing "empty until completed" semantics
+    rather than a separate state check).
+    """
+
+    def __init__(self, analysis_id: str, finding_id: str) -> None:
+        super().__init__(f"Finding not found: {finding_id} (analysis {analysis_id})")
+        self.analysis_id = analysis_id
+        self.finding_id = finding_id
 
 
 class AnalysisStore:
@@ -242,6 +268,7 @@ def create_analysis(store: AnalysisStore) -> Analysis:
         dataset_profile=None,
         findings=(),
         priority_scores=(),
+        evidence=(),
         trust_assessment=None,
         failure=None,
         created_at=now,
@@ -309,6 +336,7 @@ def run_analysis(
             analysis_timestamp=effective_now,
         )
         findings = tuple(finding for result in results for finding in result.findings)
+        evidence = tuple(item for result in results for item in result.evidence)
         priority_scores = calculate_finding_priority_scores(
             findings, dataset_profile=dataset_profile
         )
@@ -334,6 +362,7 @@ def run_analysis(
         dataset_profile=dataset_profile,
         findings=findings,
         priority_scores=priority_scores,
+        evidence=evidence,
         trust_assessment=trust_assessment,
         started_at=started_at,
         completed_at=completed_at,
@@ -369,6 +398,51 @@ def get_findings(store: AnalysisStore, analysis_id: str) -> tuple[FindingCandida
     Raises `AnalysisNotFoundError` for an unknown ID.
     """
     return get_status(store, analysis_id).findings
+
+
+def get_finding(store: AnalysisStore, analysis_id: str, finding_id: str) -> FindingCandidate:
+    """Return one `FindingCandidate` by its `finding_id` (`WP-027`).
+
+    `finding_id` is a stringified zero-based index into the analysis's
+    own `findings` tuple — a disclosed, reversible interim scheme
+    (`FindingCandidate`'s own docstring already anticipates "a later
+    package assigns a finding ID" once persistence exists); stable only
+    within one in-memory analysis's own findings, matching this
+    package's in-memory-only, no-persistence scope.
+
+    Raises `AnalysisNotFoundError` for an unknown `analysis_id` and
+    `FindingNotFoundError` for a non-numeric, negative, or out-of-range
+    `finding_id` (including a known analysis not yet `COMPLETED`, whose
+    `findings` tuple is still empty).
+    """
+    analysis = get_status(store, analysis_id)
+    try:
+        index = int(finding_id)
+    except ValueError:
+        raise FindingNotFoundError(analysis_id, finding_id) from None
+    if index < 0 or index >= len(analysis.findings):
+        raise FindingNotFoundError(analysis_id, finding_id)
+    return analysis.findings[index]
+
+
+def get_finding_evidence(
+    store: AnalysisStore, analysis_id: str, finding_id: str
+) -> tuple[Evidence, ...]:
+    """Return the `Evidence` objects referenced by one finding's own
+    `evidence_ids` (`WP-027`), resolved against `Analysis.evidence`, in
+    the same order as `evidence_ids`.
+
+    Raises `AnalysisNotFoundError`/`FindingNotFoundError` with the same
+    semantics as `get_finding`.
+    """
+    analysis = get_status(store, analysis_id)
+    finding = get_finding(store, analysis_id, finding_id)
+    evidence_by_id = {item.evidence_id: item for item in analysis.evidence}
+    return tuple(
+        evidence_by_id[evidence_id]
+        for evidence_id in finding.evidence_ids
+        if evidence_id in evidence_by_id
+    )
 
 
 def cancel_analysis(store: AnalysisStore, analysis_id: str) -> Analysis:

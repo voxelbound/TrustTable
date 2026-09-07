@@ -277,6 +277,7 @@ def test_get_analysis_findings_item_shape(client: TestClient) -> None:
     item = response.json()["items"][0]
 
     assert set(item.keys()) == {
+        "finding_id",
         "detector_id",
         "detector_version",
         "category",
@@ -288,12 +289,28 @@ def test_get_analysis_findings_item_shape(client: TestClient) -> None:
         "affected_row_count",
         "evidence_count",
     }
+    assert item["finding_id"] == "0"
     assert "." in item["detector_id"]
     assert 0.0 <= item["confidence"] <= 1.0
     assert 0.0 <= item["priority_score"] <= 100.0
     # Every FindingCandidate has at least one evidence object
     # (docs/domain-model.md #12, DET-01's own invariant).
     assert item["evidence_count"] >= 1
+
+
+def test_get_analysis_findings_item_finding_ids_are_distinct_and_ordered(
+    client: TestClient,
+) -> None:
+    """`WP-027`: every list item's `finding_id` is the stringified index
+    of its position in the returned list, matching
+    `analysis.service.get_finding`'s own addressing scheme exactly.
+    """
+    created = _create_demo_analysis(client)["analysis"]
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings")
+    items = response.json()["items"]
+
+    assert [item["finding_id"] for item in items] == [str(index) for index in range(len(items))]
 
 
 def test_get_analysis_findings_unknown_id_returns_structured_404(client: TestClient) -> None:
@@ -313,6 +330,147 @@ def test_get_analysis_findings_empty_before_completion(client: TestClient) -> No
 
     assert response.status_code == 200
     assert response.json() == {"items": [], "total_items": 0}
+
+
+# --- GET /analyses/{id}/findings/{finding_id} (`WP-027`) -----------------
+
+
+def test_get_analysis_finding_detail_shape(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/0")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body.keys()) == {
+        "finding_id",
+        "detector_id",
+        "detector_version",
+        "category",
+        "severity",
+        "confidence",
+        "priority_score",
+        "calculated_observation",
+        "affected_columns",
+        "affected_row_count",
+        "evidence_count",
+        "security_exposure",
+    }
+    assert body["finding_id"] == "0"
+    assert body["evidence_count"] >= 1
+    assert body["security_exposure"] == {
+        "model_provider_enabled": False,
+        "sample_transmission_enabled": False,
+    }
+
+
+def test_get_analysis_finding_detail_matches_list_item(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    list_item = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings").json()["items"][0]
+
+    detail = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/0").json()
+
+    for key in (
+        "finding_id",
+        "detector_id",
+        "detector_version",
+        "category",
+        "severity",
+        "confidence",
+        "priority_score",
+        "calculated_observation",
+        "affected_columns",
+        "affected_row_count",
+        "evidence_count",
+    ):
+        assert detail[key] == list_item[key]
+
+
+def test_get_analysis_finding_detail_unknown_analysis_returns_structured_404(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/v1/analyses/does-not-exist/findings/0")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
+
+
+def test_get_analysis_finding_detail_out_of_range_id_returns_structured_404(
+    client: TestClient,
+) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    out_of_range_id = str(created["finding_count"])
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/{out_of_range_id}")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "FINDING_NOT_FOUND"
+
+
+def test_get_analysis_finding_detail_before_completion_returns_finding_not_found(
+    client: TestClient,
+) -> None:
+    """White-box: a known, not-yet-`completed` analysis has an empty
+    `findings` tuple, so every `finding_id` is out of range —
+    `FINDING_NOT_FOUND`, not a separate state-conflict error.
+    """
+    analysis_id = _create_queued_analysis_id(client)
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/0")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "FINDING_NOT_FOUND"
+
+
+# --- GET /analyses/{id}/findings/{finding_id}/evidence (`WP-027`) --------
+
+
+def test_get_analysis_finding_evidence_shape(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/0/evidence")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body.keys()) == {"items", "total_items"}
+    assert body["total_items"] >= 1
+    assert len(body["items"]) == body["total_items"]
+    item = body["items"][0]
+    assert set(item.keys()) == {
+        "evidence_id",
+        "evidence_type",
+        "display_safe_summary",
+        "affected_columns",
+        "affected_row_count",
+        "scope",
+    }
+    assert item["display_safe_summary"]
+    # Never the raw structured payload (docs/domain-model.md #13: "report
+    # references use display-safe summaries").
+    assert "structured_payload" not in item
+
+
+def test_get_analysis_finding_evidence_unknown_analysis_returns_structured_404(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/v1/analyses/does-not-exist/findings/0/evidence")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
+
+
+def test_get_analysis_finding_evidence_out_of_range_id_returns_structured_404(
+    client: TestClient,
+) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    out_of_range_id = str(created["finding_count"])
+
+    response = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{out_of_range_id}/evidence"
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "FINDING_NOT_FOUND"
 
 
 # --- POST /analyses/{id}/cancel ------------------------------------------
