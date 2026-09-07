@@ -349,6 +349,29 @@ provider, API endpoint, or UI exists yet (`AI-01`/`AI-02`/`API-01`/
 `UI-01`, later packages); `DET-SEC-01` (the prompt-injection detector
 itself) also remains a separate, later package.
 
+### AI provider interface
+
+`trusttable_backend.ai_provider` (`AI-01`) implements the seam every
+future real provider (`AI-02` disabled/mock, `AI-03` Ollama) plugs into,
+matching `docs/product-requirements.md` §12's six model-call operations
+(`AIOperation`: context inference, guided questions, finding
+explanation, remediation, rule description, report summary) plus a
+separate `AIProvider.health_check()` liveness/availability probe.
+`ProviderRequest`/`ProviderResponse` are built directly on `SEC-02`'s
+existing `PromptEnvelope`/`validate_model_output` contract rather than a
+new parallel schema — `ProviderResponse.raw_output` is exactly the
+`Mapping[str, object]` shape `validate_model_output` already accepts,
+proven by a round-trip test. `AIProvider` is a single structural
+`Protocol` (`provider_name`, `health_check()`, `complete()`) tagged by
+`AIOperation`, mirroring `DET-01`'s own `Detector.supports`/`run`
+precedent rather than one method per operation. A `ProviderError`
+hierarchy (`ProviderTimeoutError`, `ProviderConnectionError`,
+`ProviderInvalidResponseError`) gives a future caller distinct failure
+modes to catch for `D-006`'s "complete AI-disabled mode" deterministic
+fallback. No real provider, network I/O, FastAPI route, or UI exists yet
+— tested against stub/fake providers only, the same precedent `DET-01`
+set ahead of `DET-02`'s real detectors.
+
 ### Risk scoring package
 
 `trusttable_backend.risk` (`RISK-01`) implements the "Risk scoring"
