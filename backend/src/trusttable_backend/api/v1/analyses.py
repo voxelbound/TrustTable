@@ -1,32 +1,34 @@
 """Analysis HTTP routes (`API-01`), exposing `analysis.service`'s
 in-memory orchestration engine (`WP-023` enabling slice) over `/api/v1`.
+Extended with generic CSV upload (`POST /analyses`, `WP-029`).
 
-Implements exactly the six behaviors `docs/implementation-backlog.md#API-01`
+Implements the six behaviors `docs/implementation-backlog.md#API-01`
 names: create analysis, load demo (`POST /demo/sales`), status
 (`GET .../status`), profile (`GET .../profile`), findings
-(`GET .../findings`), and cancel (`POST .../cancel`). Route handlers do
-not call any deterministic/AI logic directly — every request delegates to
-`trusttable_backend.analysis.service`'s existing, already-tested public
-functions (`docs/architecture.md` §3: "API routes -> Application
-services").
+(`GET .../findings`), and cancel (`POST .../cancel`) — plus generic
+file-upload analysis creation (`POST /analyses`, CSV only). Route
+handlers do not call any deterministic/AI logic directly — every request
+delegates to `trusttable_backend.analysis.service`'s existing,
+already-tested public functions (`docs/architecture.md` §3: "API routes
+-> Application services").
 
 The `AnalysisStore` is held on `app.state.analysis_store`, created once
 per `FastAPI` application instance in `main.create_app()` — in-memory,
 lost on process restart, no concurrency safety (`DB-01`/`JOB-01`, not yet
 built; the same disclosed non-goal `WP-023` already recorded for the
-store itself). `POST /demo/sales` creates *and* runs the pipeline
-synchronously within the same request-response cycle — there is no
-background worker yet, so the returned analysis is typically already
-`completed` (or `failed`) by the time the response is sent, not
+store itself). Both `POST /demo/sales` and `POST /analyses` create *and*
+run the pipeline synchronously within the same request-response cycle —
+there is no background worker yet, so the returned analysis is typically
+already `completed` (or `failed`) by the time the response is sent, not
 `queued`. Still documented and returned as `202 Accepted` per
-`docs/api-specification.md` §5's response shape, since the client-facing
-contract (poll `status_url`) remains forward-compatible with a future
-real background-execution package.
+`docs/api-specification.md` §5/§6's response shape, since the
+client-facing contract (poll `status_url`) remains forward-compatible
+with a future real background-execution package.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, UploadFile
 
 from trusttable_backend.analysis import (
     Analysis,
@@ -37,11 +39,13 @@ from trusttable_backend.analysis import (
     FindingNotFoundError,
     cancel_analysis,
     create_analysis,
+    create_analysis_from_upload,
     get_finding,
     get_finding_evidence,
     get_status,
     run_analysis,
 )
+from trusttable_backend.config import get_settings
 from trusttable_backend.detectors.contract import FindingCandidate, SecurityExposureState
 from trusttable_backend.domain.evidence import Evidence
 from trusttable_backend.domain.parsing import Dataset
@@ -67,10 +71,16 @@ from trusttable_backend.schemas.analysis import (
     SampleMetadataResponse,
     SecurityExposureResponse,
     TrustAssessmentResponse,
+    UploadAnalysisResponse,
     WarningResponse,
 )
+from trusttable_backend.uploads import sanitize_filename
 
 router = APIRouter(tags=["analyses"])
+
+#: The only format this route accepts today (`docs/implementation-backlog.md`
+#: splits XLSX out to `ING-03`, not yet built).
+_SUPPORTED_UPLOAD_EXTENSION = ".csv"
 
 #: Fixed, safe per-state polling message (`docs/api-specification.md` §6's
 #: "current message"). Never derived from dataset content.
@@ -288,6 +298,76 @@ def _evidence_item(evidence: Evidence) -> FindingEvidenceItem:
         affected_row_count=len(evidence.affected_row_references),
         scope=evidence.scope.value,
     )
+
+
+@router.post("/analyses", response_model=UploadAnalysisResponse, status_code=202)
+async def post_analysis_upload(file: UploadFile, request: Request) -> UploadAnalysisResponse:
+    """Create an analysis from an uploaded CSV file and run it to
+    completion (`docs/api-specification.md` §6, disclosed CSV-only
+    subset — `WP-029`).
+
+    Follows `docs/product-requirements.md` §8.2's ordered validation
+    steps: filename required, `.csv` extension required, size bounded
+    before full content is read, then filename sanitized before the
+    analysis is created. `file: UploadFile` takes no `= File(...)`
+    default — FastAPI already treats a required `UploadFile` annotation
+    as a file-upload parameter, avoiding the `ruff` `B008`
+    function-call-in-default-argument pattern `WP-024` already found and
+    avoided for `Depends`.
+    """
+    original_name = file.filename
+    if not original_name:
+        # Defense in depth: `UploadFile.filename` is typed `str | None` and
+        # can in principle be an empty string or `None` even when a `file`
+        # part is present (a `Content-Disposition` with no/blank `filename`
+        # parameter). A request with no `file` part at all never reaches
+        # here — FastAPI's own required-parameter validation rejects it
+        # first, via the app's existing `RequestValidationError` -> `422
+        # INVALID_REQUEST` global handler (`FND-04`).
+        raise AppError(
+            "INVALID_REQUEST",
+            "A filename is required.",
+            status_code=400,
+            details={},
+        )
+    if not original_name.lower().endswith(_SUPPORTED_UPLOAD_EXTENSION):
+        raise AppError(
+            "UNSUPPORTED_FILE_TYPE",
+            "Only .csv files are currently supported.",
+            status_code=415,
+            details={
+                "filename": sanitize_filename(original_name),
+                "supported_extensions": [_SUPPORTED_UPLOAD_EXTENSION],
+            },
+        )
+
+    max_bytes = get_settings().max_file_size_mb * 1024 * 1024
+    # Bound the read itself so an oversized upload never fully enters
+    # memory before being rejected (`docs/security-threat-model.md`
+    # §3.1 "resource exhaustion").
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise AppError(
+            "FILE_TOO_LARGE",
+            "The uploaded file exceeds the maximum allowed size.",
+            status_code=413,
+            details={"max_bytes": max_bytes},
+        )
+    if not content:
+        raise AppError(
+            "INVALID_REQUEST",
+            "The uploaded file is empty.",
+            status_code=400,
+            details={},
+        )
+
+    store = get_analysis_store(request)
+    analysis = create_analysis_from_upload(
+        store, content=content, original_filename=sanitize_filename(original_name)
+    )
+    analysis = run_analysis(store, analysis.analysis_id)
+    status_url = f"/api/v1/analyses/{analysis.analysis_id}/status"
+    return UploadAnalysisResponse(analysis=_analysis_resource(analysis), status_url=status_url)
 
 
 @router.post("/demo/sales", response_model=DemoAnalysisResponse, status_code=202)

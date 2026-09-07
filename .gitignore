@@ -242,7 +242,7 @@ vite.config.*.timestamp-*
 
 # Application runtime data
 data/
-uploads/
+/uploads/
 reports/
 tmp/
 temp/
