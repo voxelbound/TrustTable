@@ -13,6 +13,7 @@ import {
   getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGet,
   getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet,
   getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet,
+  postAnalysisUploadApiV1AnalysesPost,
   postDemoSalesApiV1DemoSalesPost,
   type AnalysisResource,
   type AnalysisStatusResponse,
@@ -20,6 +21,7 @@ import {
   type FindingDetailResponse,
   type FindingEvidenceListResponse,
   type FindingsListResponse,
+  type UploadAnalysisResponse,
 } from '../../api'
 import { client } from '../../api/client.gen'
 import { getApiErrorMessage } from '../../lib/apiError'
@@ -92,6 +94,23 @@ export function useCreateDemoAnalysis() {
       // truthiness check on `error` cannot exclude the failure branch
       // and `data` remains possibly-`undefined` after the check.
       const result = await postDemoSalesApiV1DemoSalesPost()
+      if (result.data === undefined) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+  })
+}
+
+/** `POST /analyses` (`API-01`/`UI-01`, extending — `WP-029`, generic
+ * CSV upload). Mirrors `useCreateDemoAnalysis`'s error-handling pattern
+ * exactly; the only difference is the multipart `file` body. */
+export function useCreateAnalysisUpload() {
+  return useMutation<UploadAnalysisResponse, ApiCallError, File>({
+    mutationFn: async (file: File) => {
+      const result = await postAnalysisUploadApiV1AnalysesPost({
+        body: { file },
+      })
       if (result.data === undefined) {
         throw new ApiCallError(result.error)
       }

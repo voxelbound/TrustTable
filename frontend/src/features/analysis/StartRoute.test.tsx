@@ -51,15 +51,64 @@ describe('StartRoute', () => {
     ).toBeInTheDocument()
   })
 
-  it('AC-01: presents a visibly disabled upload control with explanatory text', async () => {
+  it('AC-01: presents an enabled CSV-only upload control', async () => {
     renderStartRoute()
     await screen.findByRole('heading', { name: 'TrustTable' })
 
     const fileInput = screen.getByLabelText('Choose a file to upload')
-    expect(fileInput).toBeDisabled()
+    expect(fileInput).toBeEnabled()
+    expect(fileInput).toHaveAttribute('accept', '.csv')
+    expect(screen.getByText(/CSV files only for now/i)).toBeInTheDocument()
+  })
+
+  it('WP-029: selecting a CSV file uploads it and navigates to the overview route', async () => {
+    const user = userEvent.setup()
+    const router = renderStartRoute()
+    await screen.findByRole('heading', { name: 'TrustTable' })
+
+    const fileInput = screen.getByLabelText('Choose a file to upload')
+    const file = new File(['name,amount\nAlice,10\n'], 'sample.csv', {
+      type: 'text/csv',
+    })
+    await user.upload(fileInput, file)
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(
+        `/analyses/${DEMO_ANALYSIS_ID}/overview`,
+      )
+    })
+  })
+
+  it('WP-029: a rejected upload shows a safe inline error and does not navigate', async () => {
+    // The input's `accept=".csv"` attribute means `userEvent.upload` will
+    // not attach a non-matching file at all — this exercises a server-side
+    // rejection (the authoritative check) on an otherwise `.csv`-named
+    // file, not a client-side extension mismatch.
+    server.use(
+      http.post('http://localhost/api/v1/analyses', () => {
+        return HttpResponse.json(
+          apiErrorBody(
+            'FILE_TOO_LARGE',
+            'The uploaded file exceeds the maximum allowed size.',
+          ),
+          { status: 413 },
+        )
+      }),
+    )
+    const user = userEvent.setup()
+    const router = renderStartRoute()
+    await screen.findByRole('heading', { name: 'TrustTable' })
+
+    const fileInput = screen.getByLabelText('Choose a file to upload')
+    const file = new File(['name,amount\n'], 'huge.csv', { type: 'text/csv' })
+    await user.upload(fileInput, file)
+
     expect(
-      screen.getByText(/File upload is not available yet/i),
+      await screen.findByText(
+        'The uploaded file exceeds the maximum allowed size.',
+      ),
     ).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/analyses/new')
   })
 
   it('AC-01: renders the fixed AI-disabled status', async () => {

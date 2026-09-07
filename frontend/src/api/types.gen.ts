@@ -147,6 +147,16 @@ export type AnalysisStatusResponse = {
 };
 
 /**
+ * Body_post_analysis_upload_api_v1_analyses_post
+ */
+export type BodyPostAnalysisUploadApiV1AnalysesPost = {
+    /**
+     * File
+     */
+    file: Blob | File;
+};
+
+/**
  * ColumnProfileResponse
  *
  * Mirrors `profiling.schemas.ColumnProfile`.
@@ -612,6 +622,22 @@ export type TrustAssessmentResponse = {
 };
 
 /**
+ * UploadAnalysisResponse
+ *
+ * Body for `POST /analyses` (`WP-029`; `docs/api-specification.md`
+ * §6's disclosed subset: "analysis resource" + "status URL" — the
+ * same shape as `DemoAnalysisResponse`, kept as its own type for a
+ * distinct generated client function name).
+ */
+export type UploadAnalysisResponse = {
+    analysis: AnalysisResource;
+    /**
+     * Status Url
+     */
+    status_url: string;
+};
+
+/**
  * ValidationError
  */
 export type ValidationError = {
@@ -689,6 +715,31 @@ export type WarningResponse = {
      */
     message: string;
 };
+
+export type PostAnalysisUploadApiV1AnalysesPostData = {
+    body: BodyPostAnalysisUploadApiV1AnalysesPost;
+    path?: never;
+    query?: never;
+    url: '/api/v1/analyses';
+};
+
+export type PostAnalysisUploadApiV1AnalysesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostAnalysisUploadApiV1AnalysesPostError = PostAnalysisUploadApiV1AnalysesPostErrors[keyof PostAnalysisUploadApiV1AnalysesPostErrors];
+
+export type PostAnalysisUploadApiV1AnalysesPostResponses = {
+    /**
+     * Successful Response
+     */
+    202: UploadAnalysisResponse;
+};
+
+export type PostAnalysisUploadApiV1AnalysesPostResponse = PostAnalysisUploadApiV1AnalysesPostResponses[keyof PostAnalysisUploadApiV1AnalysesPostResponses];
 
 export type GetAnalysisApiV1AnalysesAnalysisIdGetData = {
     body?: never;

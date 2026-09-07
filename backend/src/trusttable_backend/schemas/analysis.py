@@ -129,6 +129,17 @@ class DemoAnalysisResponse(BaseModel):
     status_url: str
 
 
+class UploadAnalysisResponse(BaseModel):
+    """Body for `POST /analyses` (`WP-029`; `docs/api-specification.md`
+    §6's disclosed subset: "analysis resource" + "status URL" — the
+    same shape as `DemoAnalysisResponse`, kept as its own type for a
+    distinct generated client function name).
+    """
+
+    analysis: AnalysisResource
+    status_url: str
+
+
 class AnalysisStatusResponse(BaseModel):
     """Body for `GET /analyses/{analysis_id}/status` — a lightweight
     polling endpoint (`docs/api-specification.md` §6).

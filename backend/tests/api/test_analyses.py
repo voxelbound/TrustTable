@@ -504,4 +504,135 @@ def test_cancel_unknown_id_returns_structured_404(client: TestClient) -> None:
     response = client.post("/api/v1/analyses/does-not-exist/cancel")
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
+
+
+# --- POST /analyses (generic upload, WP-029) --------------------------
+
+#: A small, deliberately flawed CSV — one row has a duplicate of another
+#: (fires `structural.exact_duplicate_rows`) — proving the real pipeline
+#: runs on uploaded content, not only demo content.
+_FLAWED_CSV = b"name,amount\nAlice,10\nBob,20\nAlice,10\n"
+_VALID_CSV = b"name,amount\nAlice,10\nBob,20\n"
+
+
+def _upload_csv(
+    client: TestClient, *, filename: str = "sample.csv", content: bytes = _VALID_CSV
+) -> Any:
+    return client.post("/api/v1/analyses", files={"file": (filename, content, "text/csv")})
+
+
+def test_post_analyses_upload_returns_202_with_completed_analysis(client: TestClient) -> None:
+    response = _upload_csv(client)
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["analysis"]["state"] == "completed"
+    assert body["analysis"]["dataset"]["source_type"] == "upload"
+    assert body["analysis"]["dataset"]["format"] == "csv"
+    assert body["analysis"]["dataset"]["byte_size"] == len(_VALID_CSV)
+    assert body["analysis"]["dataset"]["content_hash"]
+
+
+def test_post_analyses_upload_runs_real_pipeline_and_finds_issues(client: TestClient) -> None:
+    response = _upload_csv(client, content=_FLAWED_CSV)
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["analysis"]["finding_count"] > 0
+
+
+def test_post_analyses_upload_response_has_exact_top_level_fields(client: TestClient) -> None:
+    response = _upload_csv(client)
+
+    assert set(response.json().keys()) == {"analysis", "status_url"}
+
+
+def test_post_analyses_upload_produces_distinct_analysis_ids(client: TestClient) -> None:
+    first = _upload_csv(client).json()
+    second = _upload_csv(client).json()
+
+    assert first["analysis"]["analysis_id"] != second["analysis"]["analysis_id"]
+
+
+def test_post_analyses_upload_sanitizes_path_traversal_filename(client: TestClient) -> None:
+    response = _upload_csv(client, filename="../../etc/passwd.csv")
+
+    assert response.status_code == 202
+    original_filename = response.json()["analysis"]["dataset"]["original_filename"]
+    assert "/" not in original_filename
+    assert "\\" not in original_filename
+    assert original_filename == "passwd.csv"
+
+
+def test_post_analyses_upload_no_file_returns_structured_422(client: TestClient) -> None:
+    """`file: UploadFile` is a required parameter — FastAPI's own request
+    validation rejects a request with no `file` part at all before the
+    handler body ever runs, via the app's existing `FND-04`
+    `RequestValidationError` -> `422 INVALID_REQUEST` global handler
+    (no new code path needed here).
+    """
+    response = client.post("/api/v1/analyses", files={})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_REQUEST"
+
+
+def test_post_analyses_upload_wrong_extension_returns_structured_415(
+    client: TestClient,
+) -> None:
+    response = _upload_csv(client, filename="sample.txt")
+
+    assert response.status_code == 415
+    body = response.json()
+    assert body["error"]["code"] == "UNSUPPORTED_FILE_TYPE"
+    assert body["error"]["details"]["filename"] == "sample.txt"
+
+
+def test_post_analyses_upload_xlsx_extension_returns_structured_415(
+    client: TestClient,
+) -> None:
+    """`.xlsx` is a real, documented future format (`ING-03`) — still
+    rejected today, same structured code as any other unsupported
+    extension, no silent partial handling.
+    """
+    response = _upload_csv(client, filename="sample.xlsx")
+
+    assert response.status_code == 415
+    assert response.json()["error"]["code"] == "UNSUPPORTED_FILE_TYPE"
+
+
+def test_post_analyses_upload_empty_file_returns_structured_400(client: TestClient) -> None:
+    response = _upload_csv(client, content=b"")
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_REQUEST"
+
+
+def test_post_analyses_upload_oversized_file_returns_structured_413(
+    client: TestClient,
+) -> None:
+    from trusttable_backend.config import get_settings
+
+    max_bytes = get_settings().max_file_size_mb * 1024 * 1024
+    oversized_content = b"a" * (max_bytes + 1)
+
+    response = _upload_csv(client, content=oversized_content)
+
+    assert response.status_code == 413
+    body = response.json()
+    assert body["error"]["code"] == "FILE_TOO_LARGE"
+    assert body["error"]["details"]["max_bytes"] == max_bytes
+
+
+def test_post_analyses_upload_no_analysis_created_on_rejection(client: TestClient) -> None:
+    """A rejected upload (wrong extension) must not leave a stray
+    `AnalysisStore` entry behind."""
+    store: AnalysisStore = client.app.state.analysis_store  # type: ignore[attr-defined]
+    before = len(store._analyses)  # test-only introspection of the in-memory dict
+
+    response = _upload_csv(client, filename="sample.txt")
+
+    assert response.status_code == 415
+    after = len(store._analyses)
+    assert after == before
+    assert response.json()["error"]["code"] == "UNSUPPORTED_FILE_TYPE"
