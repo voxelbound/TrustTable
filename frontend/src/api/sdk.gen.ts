@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetAnalysisApiV1AnalysesAnalysisIdGetData, GetAnalysisApiV1AnalysesAnalysisIdGetErrors, GetAnalysisApiV1AnalysesAnalysisIdGetResponses, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetData, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetErrors, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetErrors, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetData, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetErrors, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses, GetLivenessApiV1HealthLiveGetData, GetLivenessApiV1HealthLiveGetResponses, GetReadinessApiV1HealthReadyGetData, GetReadinessApiV1HealthReadyGetResponses, GetVersionApiV1VersionGetData, GetVersionApiV1VersionGetResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostData, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostDemoSalesApiV1DemoSalesPostData, PostDemoSalesApiV1DemoSalesPostResponses } from './types.gen';
+import type { GetAnalysisApiV1AnalysesAnalysisIdGetData, GetAnalysisApiV1AnalysesAnalysisIdGetErrors, GetAnalysisApiV1AnalysesAnalysisIdGetResponses, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetData, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetErrors, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetData, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetErrors, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetData, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetErrors, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetErrors, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetData, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetErrors, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses, GetLivenessApiV1HealthLiveGetData, GetLivenessApiV1HealthLiveGetResponses, GetReadinessApiV1HealthReadyGetData, GetReadinessApiV1HealthReadyGetResponses, GetVersionApiV1VersionGetData, GetVersionApiV1VersionGetResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostData, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostDemoSalesApiV1DemoSalesPostData, PostDemoSalesApiV1DemoSalesPostResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -46,6 +46,30 @@ export const postAnalysisCancelApiV1AnalysesAnalysisIdCancelPost = <ThrowOnError
  * `analysis.service.get_findings`'s own documented behavior exactly.
  */
 export const getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetData, ThrowOnError>): RequestResult<GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/findings', ...options });
+
+/**
+ * Get Analysis Finding
+ *
+ * Return one finding's detail (`WP-027`, a disclosed bounded subset
+ * of `docs/api-specification.md` §10's full documented finding-detail
+ * shape — see `FindingDetailResponse`'s own docstring).
+ *
+ * Raises `ANALYSIS_NOT_FOUND` (404) for an unknown `analysis_id` and
+ * `FINDING_NOT_FOUND` (404) for an unknown/out-of-range `finding_id`,
+ * including a known analysis that has not yet reached `completed`.
+ */
+export const getAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetData, ThrowOnError>): RequestResult<GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/findings/{finding_id}', ...options });
+
+/**
+ * Get Analysis Finding Evidence
+ *
+ * Return one finding's bounded evidence (`WP-027`), each item's
+ * `display_safe_summary` only — never the raw `structured_payload`
+ * (see `FindingEvidenceItem`'s own docstring).
+ *
+ * Same not-found semantics as `get_analysis_finding`.
+ */
+export const getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetData, ThrowOnError>): RequestResult<GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/findings/{finding_id}/evidence', ...options });
 
 /**
  * Get Analysis Profile

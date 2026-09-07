@@ -31,8 +31,11 @@ from trusttable_backend.analysis.service import (
     AnalysisNotFoundError,
     AnalysisState,
     AnalysisStore,
+    FindingNotFoundError,
     cancel_analysis,
     create_analysis,
+    get_finding,
+    get_finding_evidence,
     get_findings,
     get_profile,
     get_status,
@@ -46,6 +49,7 @@ from trusttable_backend.detectors.contract import (
     SecurityExposureState,
 )
 from trusttable_backend.detectors.engine import run_detectors
+from trusttable_backend.domain.evidence import Evidence, EvidenceType
 from trusttable_backend.domain.parsing import (
     Dataset,
     DatasetFormat,
@@ -106,6 +110,7 @@ def _make_analysis(**overrides: object) -> Analysis:
         "dataset_profile": None,
         "findings": (),
         "priority_scores": (),
+        "evidence": (),
         "trust_assessment": None,
         "failure": None,
         "created_at": FIXED_NOW,
@@ -142,7 +147,7 @@ def _make_completed_analysis(**overrides: object) -> Analysis:
     return _make_analysis(**fields)
 
 
-def _make_finding() -> FindingCandidate:
+def _make_finding(evidence_ids: tuple[str, ...] = ("evidence-1",)) -> FindingCandidate:
     column = ColumnReference(original_name="col", internal_key="col", ordinal=0)
     return FindingCandidate(
         detector_id="test.detector",
@@ -153,9 +158,23 @@ def _make_finding() -> FindingCandidate:
         calculated_observation="test observation",
         affected_columns=(column,),
         affected_row_references=(),
-        evidence_ids=("evidence-1",),
+        evidence_ids=evidence_ids,
         default_remediation_template_key=None,
         default_validation_rule_template_key=None,
+    )
+
+
+def _make_evidence(evidence_id: str = "evidence-1") -> Evidence:
+    column = ColumnReference(original_name="col", internal_key="col", ordinal=0)
+    return Evidence(
+        evidence_id=evidence_id,
+        evidence_type=EvidenceType.METRIC,
+        calculation_version="1",
+        structured_payload={"count": 1},
+        affected_columns=(column,),
+        affected_row_references=(),
+        scope=SamplingScope.FULL,
+        display_safe_summary=f"Safe summary for {evidence_id}.",
     )
 
 
@@ -250,6 +269,11 @@ def test_analysis_non_completed_rejects_dataset_profile() -> None:
 def test_analysis_non_completed_rejects_findings() -> None:
     with pytest.raises(ValueError, match="findings"):
         _make_analysis(findings=(_make_finding(),), priority_scores=(50.0,))
+
+
+def test_analysis_non_completed_rejects_evidence() -> None:
+    with pytest.raises(ValueError, match="evidence"):
+        _make_analysis(evidence=(_make_evidence(),))
 
 
 def test_analysis_non_completed_rejects_trust_assessment() -> None:
@@ -362,6 +386,25 @@ def test_run_analysis_completes_queued_analysis() -> None:
     assert completed.completed_at is not None
     assert completed.failure is None
     assert completed.failed_at is None
+
+
+def test_run_analysis_captures_evidence_from_all_detector_results() -> None:
+    """`WP-027`: `run_analysis` must capture every `DetectorRunResult.evidence`
+    it already receives, not silently discard it as before this package.
+    """
+    store = AnalysisStore()
+    created = create_analysis(store)
+
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+    assert len(completed.evidence) > 0
+    # Every finding's own evidence_ids must resolve within the captured
+    # collection (docs/domain-model.md #12: "every finding has at least
+    # one evidence object", proven end to end here, not only per-detector).
+    known_evidence_ids = {item.evidence_id for item in completed.evidence}
+    for finding in completed.findings:
+        for evidence_id in finding.evidence_ids:
+            assert evidence_id in known_evidence_ids
     assert completed.cancelled_at is None
 
 
@@ -441,6 +484,7 @@ def test_run_analysis_isolates_pipeline_failure(monkeypatch: pytest.MonkeyPatch)
     assert failed.dataset_profile is None
     assert failed.findings == ()
     assert failed.priority_scores == ()
+    assert failed.evidence == ()
     assert failed.trust_assessment is None
 
 
@@ -505,6 +549,84 @@ def test_get_findings_cancelled_is_empty() -> None:
     created = create_analysis(store)
     cancelled = cancel_analysis(store, created.analysis_id)
     assert get_findings(store, cancelled.analysis_id) == ()
+
+
+# ---------------------------------------------------------------------------
+# WP-027 AC-03/AC-04: get_finding / get_finding_evidence
+# ---------------------------------------------------------------------------
+
+
+def test_get_finding_returns_correct_finding_for_valid_id() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+    assert len(completed.findings) > 0
+
+    for index, expected in enumerate(completed.findings):
+        assert get_finding(store, completed.analysis_id, str(index)) == expected
+
+
+def test_get_finding_raises_for_out_of_range_or_malformed_id() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+    with pytest.raises(FindingNotFoundError) as excinfo:
+        get_finding(store, completed.analysis_id, str(len(completed.findings)))
+    assert excinfo.value.analysis_id == completed.analysis_id
+    assert excinfo.value.finding_id == str(len(completed.findings))
+
+    with pytest.raises(FindingNotFoundError):
+        get_finding(store, completed.analysis_id, "-1")
+    with pytest.raises(FindingNotFoundError):
+        get_finding(store, completed.analysis_id, "not-a-number")
+
+
+def test_get_finding_raises_for_not_yet_completed_analysis() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    with pytest.raises(FindingNotFoundError):
+        get_finding(store, created.analysis_id, "0")
+
+
+def test_get_finding_raises_analysis_not_found_for_unknown_id() -> None:
+    store = AnalysisStore()
+    with pytest.raises(AnalysisNotFoundError):
+        get_finding(store, "unknown-id", "0")
+
+
+def test_get_finding_evidence_resolves_referenced_evidence_in_order() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+    assert len(completed.findings) > 0
+
+    for index, finding in enumerate(completed.findings):
+        evidence = get_finding_evidence(store, completed.analysis_id, str(index))
+        assert len(evidence) > 0
+        assert tuple(item.evidence_id for item in evidence) == finding.evidence_ids
+
+
+def test_get_finding_evidence_raises_same_not_found_semantics_as_get_finding() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+    with pytest.raises(FindingNotFoundError):
+        get_finding_evidence(store, completed.analysis_id, str(len(completed.findings)))
+    with pytest.raises(AnalysisNotFoundError):
+        get_finding_evidence(store, "unknown-id", "0")
+
+
+# ---------------------------------------------------------------------------
+# WP-027: FindingNotFoundError
+# ---------------------------------------------------------------------------
+
+
+def test_finding_not_found_error_carries_requested_ids() -> None:
+    error = FindingNotFoundError("analysis-1", "99")
+    assert error.analysis_id == "analysis-1"
+    assert error.finding_id == "99"
 
 
 # ---------------------------------------------------------------------------

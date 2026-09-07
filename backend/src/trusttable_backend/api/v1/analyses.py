@@ -34,12 +34,16 @@ from trusttable_backend.analysis import (
     AnalysisNotFoundError,
     AnalysisState,
     AnalysisStore,
+    FindingNotFoundError,
     cancel_analysis,
     create_analysis,
+    get_finding,
+    get_finding_evidence,
     get_status,
     run_analysis,
 )
 from trusttable_backend.detectors.contract import FindingCandidate, SecurityExposureState
+from trusttable_backend.domain.evidence import Evidence
 from trusttable_backend.domain.parsing import Dataset
 from trusttable_backend.domain.value_objects import ColumnReference
 from trusttable_backend.errors import AppError
@@ -54,6 +58,9 @@ from trusttable_backend.schemas.analysis import (
     ColumnReferenceResponse,
     DatasetSummaryResponse,
     DemoAnalysisResponse,
+    FindingDetailResponse,
+    FindingEvidenceItem,
+    FindingEvidenceListResponse,
     FindingItem,
     FindingsListResponse,
     ProfilingTimingResponse,
@@ -102,6 +109,26 @@ def _get_or_404(store: AnalysisStore, analysis_id: str) -> Analysis:
         return get_status(store, analysis_id)
     except AnalysisNotFoundError as exc:
         raise _not_found(analysis_id) from exc
+
+
+def _finding_not_found(analysis_id: str, finding_id: str) -> AppError:
+    return AppError(
+        "FINDING_NOT_FOUND",
+        "The requested finding was not found.",
+        status_code=404,
+        details={"analysis_id": analysis_id, "finding_id": finding_id},
+    )
+
+
+def _get_finding_or_404(
+    store: AnalysisStore, analysis_id: str, finding_id: str
+) -> FindingCandidate:
+    try:
+        return get_finding(store, analysis_id, finding_id)
+    except AnalysisNotFoundError as exc:
+        raise _not_found(analysis_id) from exc
+    except FindingNotFoundError as exc:
+        raise _finding_not_found(analysis_id, finding_id) from exc
 
 
 def _column_reference(reference: ColumnReference) -> ColumnReferenceResponse:
@@ -214,8 +241,9 @@ def _profile_response(profile: DatasetProfile) -> AnalysisProfileResponse:
     )
 
 
-def _finding_item(finding: FindingCandidate, priority_score: float) -> FindingItem:
+def _finding_item(finding: FindingCandidate, priority_score: float, finding_id: str) -> FindingItem:
     return FindingItem(
+        finding_id=finding_id,
         detector_id=finding.detector_id,
         detector_version=finding.detector_version,
         category=finding.category.value,
@@ -226,6 +254,39 @@ def _finding_item(finding: FindingCandidate, priority_score: float) -> FindingIt
         affected_columns=[_column_reference(column) for column in finding.affected_columns],
         affected_row_count=len(finding.affected_row_references),
         evidence_count=len(finding.evidence_ids),
+    )
+
+
+def _finding_detail(
+    finding: FindingCandidate,
+    priority_score: float,
+    finding_id: str,
+    exposure: SecurityExposureState,
+) -> FindingDetailResponse:
+    return FindingDetailResponse(
+        finding_id=finding_id,
+        detector_id=finding.detector_id,
+        detector_version=finding.detector_version,
+        category=finding.category.value,
+        severity=finding.severity.value,
+        confidence=finding.confidence,
+        priority_score=priority_score,
+        calculated_observation=finding.calculated_observation,
+        affected_columns=[_column_reference(column) for column in finding.affected_columns],
+        affected_row_count=len(finding.affected_row_references),
+        evidence_count=len(finding.evidence_ids),
+        security_exposure=_security_exposure(exposure),
+    )
+
+
+def _evidence_item(evidence: Evidence) -> FindingEvidenceItem:
+    return FindingEvidenceItem(
+        evidence_id=evidence.evidence_id,
+        evidence_type=evidence.evidence_type.value,
+        display_safe_summary=evidence.display_safe_summary,
+        affected_columns=[_column_reference(column) for column in evidence.affected_columns],
+        affected_row_count=len(evidence.affected_row_references),
+        scope=evidence.scope.value,
     )
 
 
@@ -285,10 +346,51 @@ def get_analysis_findings(analysis_id: str, request: Request) -> FindingsListRes
     """
     analysis = _get_or_404(get_analysis_store(request), analysis_id)
     items = [
-        _finding_item(finding, priority_score)
-        for finding, priority_score in zip(analysis.findings, analysis.priority_scores, strict=True)
+        _finding_item(finding, priority_score, str(index))
+        for index, (finding, priority_score) in enumerate(
+            zip(analysis.findings, analysis.priority_scores, strict=True)
+        )
     ]
     return FindingsListResponse(items=items, total_items=len(items))
+
+
+@router.get("/analyses/{analysis_id}/findings/{finding_id}", response_model=FindingDetailResponse)
+def get_analysis_finding(
+    analysis_id: str, finding_id: str, request: Request
+) -> FindingDetailResponse:
+    """Return one finding's detail (`WP-027`, a disclosed bounded subset
+    of `docs/api-specification.md` §10's full documented finding-detail
+    shape — see `FindingDetailResponse`'s own docstring).
+
+    Raises `ANALYSIS_NOT_FOUND` (404) for an unknown `analysis_id` and
+    `FINDING_NOT_FOUND` (404) for an unknown/out-of-range `finding_id`,
+    including a known analysis that has not yet reached `completed`.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    finding = _get_finding_or_404(store, analysis_id, finding_id)
+    priority_score = analysis.priority_scores[int(finding_id)]
+    return _finding_detail(finding, priority_score, finding_id, analysis.security_exposure)
+
+
+@router.get(
+    "/analyses/{analysis_id}/findings/{finding_id}/evidence",
+    response_model=FindingEvidenceListResponse,
+)
+def get_analysis_finding_evidence(
+    analysis_id: str, finding_id: str, request: Request
+) -> FindingEvidenceListResponse:
+    """Return one finding's bounded evidence (`WP-027`), each item's
+    `display_safe_summary` only — never the raw `structured_payload`
+    (see `FindingEvidenceItem`'s own docstring).
+
+    Same not-found semantics as `get_analysis_finding`.
+    """
+    store = get_analysis_store(request)
+    _get_finding_or_404(store, analysis_id, finding_id)
+    evidence = get_finding_evidence(store, analysis_id, finding_id)
+    items = [_evidence_item(item) for item in evidence]
+    return FindingEvidenceListResponse(items=items, total_items=len(items))
 
 
 @router.post("/analyses/{analysis_id}/cancel", response_model=AnalysisResource)
