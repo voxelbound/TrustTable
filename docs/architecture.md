@@ -378,16 +378,19 @@ rendering exists yet; those remain later packages.
 
 ### Analysis orchestration module
 
-`trusttable_backend.analysis` (`API-01`, enabling slice) implements the
-"Application services" backend layer named in this section's own layer
-list: a pure, framework-independent orchestration engine composing every
-layer below it (`ING-02` CSV parsing, `PROF-03` profiling, `DET-01`/
-`DET-02`/`DET-SEC-01` detectors via `run_detectors()`, `RISK-01` scoring)
-into one deterministic create-then-run pipeline over the bundled demo
-dataset (`DEMO-01`). `create_analysis()` generates the demo CSV bytes
-in-memory (byte-identical to the committed `demo-data/sales_demo.csv`)
-and stores a new `QUEUED` `Analysis`; `run_analysis()` transitions it
-through `VALIDATING`/`PARSING`/`PROFILING`/`DETECTING` to `COMPLETED`
+`trusttable_backend.analysis` (`API-01`, enabling slice; generalized to
+generic uploads, `WP-029`) implements the "Application services" backend
+layer named in this section's own layer list: a pure,
+framework-independent orchestration engine composing every layer below
+it (`ING-02` CSV parsing, `PROF-03` profiling, `DET-01`/`DET-02`/
+`DET-SEC-01` detectors via `run_detectors()`, `RISK-01` scoring) into one
+deterministic create-then-run pipeline over either the bundled demo
+dataset (`DEMO-01`, `create_analysis()`) or an uploaded CSV file
+(`create_analysis_from_upload()`, `WP-029`). Both constructors store the
+analysis's raw bytes on `Analysis.content` (in-memory only, no
+persistence); `run_analysis()` reads that same content — it is
+source-agnostic — and transitions the analysis through
+`VALIDATING`/`PARSING`/`PROFILING`/`DETECTING` to `COMPLETED`
 synchronously within one call, isolating any exception into a fixed,
 safe `FAILED` transition rather than raising (matching `DET-01`
 `engine.py`'s own exception-isolation precedent), and is idempotent.
@@ -397,8 +400,8 @@ deletion (`DEL-01`). `cancel_analysis()` is effective only while
 `QUEUED`; true mid-pipeline cancellation needs real bounded background
 execution (`JOB-01`, not yet built). Every `Analysis.security_exposure`
 is fixed to the disabled/no-transmission state — no AI/LLM provider
-exists yet. No persistence (`DB-01`) exists yet; generic file-upload
-analysis creation remains a later, separate package.
+exists yet. No persistence (`DB-01`) exists yet; XLSX upload support
+(`ING-03`) remains a later, separate package.
 
 ### Analysis API routes
 
@@ -408,7 +411,8 @@ above: `POST /demo/sales` (create + run the demo analysis
 synchronously), `GET /analyses/{id}`, `GET /analyses/{id}/status`,
 `GET /analyses/{id}/profile`, `GET /analyses/{id}/findings`, and
 `POST /analyses/{id}/cancel` — the exact six behaviors
-`docs/implementation-backlog.md#API-01` names. Every handler calls only
+`docs/implementation-backlog.md#API-01` names — plus `POST /analyses`
+(generic CSV upload, `WP-029`). Every handler calls only
 `analysis.service`'s existing public functions; no detector/profiling/
 scoring logic lives in the route layer. The `AnalysisStore` is held on
 `app.state.analysis_store`, created once per `FastAPI` application
@@ -420,11 +424,24 @@ not-yet-`completed` findings request returns an empty list, matching
 `analysis.service.get_findings`'s own documented behavior. New
 `schemas.analysis` Pydantic response models are an intentional,
 disclosed subset of `docs/api-specification.md`'s full documented
-surface — matching exactly `API-01`'s six listed behaviors, not the
-larger context/rules/reports/generic-upload surface those later,
-separate backlog items own. Generic file-upload analysis creation,
-persistence (`DB-01`), and true background execution (`JOB-01`) remain
-later, separate packages.
+surface — matching exactly `API-01`'s six listed behaviors plus the one
+upload extension, not the larger context/rules/reports surface those
+later, separate backlog items own. Persistence (`DB-01`) and true
+background execution (`JOB-01`) remain later, separate packages.
+
+`POST /analyses` (`WP-029`, `API-01`/`UI-01` extending) accepts a
+multipart `file` field, CSV only (`.xlsx` returns `415
+UNSUPPORTED_FILE_TYPE` — `ING-03` is a later, separate package). It
+validates the extension, bounds the read to `Settings.max_file_size_mb`
+before acting on the content (`413 FILE_TOO_LARGE` otherwise), sanitizes
+the filename (`trusttable_backend.uploads.filename.sanitize_filename` —
+strips path components and control characters, never derived for
+storage naming), then calls `create_analysis_from_upload` and
+`run_analysis` synchronously, mirroring `POST /demo/sales`'s own
+disclosed synchronous-execution precedent. `Dataset.stored_filename`/
+`storage_location` are always generated from a fresh `dataset_id`, never
+from the client-supplied name (`docs/security-threat-model.md` §3.6:
+"generated storage names").
 
 `API-01` was extended (`WP-027`) with `GET /analyses/{id}/findings
 /{finding_id}` and `GET /analyses/{id}/findings/{finding_id}/evidence`,
@@ -468,7 +485,7 @@ State categories:
 
 No global state library is planned for v1.
 
-### Investigation shell (UI-01, partial)
+### Investigation shell (UI-01)
 
 The real route tree (`frontend/src/router.tsx`, replacing `FND-01`'s
 placeholder route): `/` redirects to `/analyses/new` (the Start screen,
@@ -482,11 +499,17 @@ wrapping the generated `API-01` SDK functions; `frontend/src/domain/
 finding.ts` holds pure finding sort/filter/count logic with no React or
 API-client import; `frontend/src/components/{ui,provenance,layout}/`
 hold the UI-primitive and domain-component subset this slice needs.
-Finding detail, evidence display, and the dedicated prompt-injection-
-warning screen remain open — a separate, later UI-01 follow-on package.
-The backend gap that blocked them (no per-finding-detail or
-evidence-retrieval endpoint, no `finding_id`) is closed as of `WP-027`;
-see "Analysis API routes" above.
+`FindingDetailRoute` (`WP-028`) adds a Finding detail screen — evidence
+and representative examples split by `evidence_type`, technical
+metadata, and a dedicated `PromptInjectionWarning` presentation for
+`ai_processing_security` findings — consuming `WP-027`'s
+`GET .../findings/{finding_id}` and `.../evidence` routes (see "Analysis
+API routes" above for that backend gap's closure). Business impact,
+remediation, proposed validation rules, and review controls remain
+honestly disclosed as not-yet-available placeholders (`REM-01`/
+`RULE-01`/`REV-01`, not yet built). The Start screen's upload control is
+now enabled (`WP-029`, CSV only) — see "Analysis API routes" above for
+`POST /analyses`.
 
 ## 5. API contracts
 
