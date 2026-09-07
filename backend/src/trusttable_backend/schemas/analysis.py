@@ -207,16 +207,19 @@ class FindingItem(BaseModel):
     (`docs/api-specification.md` §10's documented list-item shape,
     narrowed to what `API-01`'s `FindingCandidate` actually carries).
 
-    No persistent `finding_id`/review-state field: the full `Finding`
-    aggregate (ID assignment, review state — `docs/domain-model.md` §12)
-    does not exist yet (`REV-01`, a later package); `API-01`'s engine
-    only produces `FindingCandidate` values. `affected_row_count` and
+    `finding_id` (`WP-027`) is a stringified zero-based index into the
+    analysis's own findings tuple — a disclosed, reversible interim
+    scheme (see `analysis.service.get_finding`); no full persisted
+    identifier exists yet. No review-state field: the full `Finding`
+    aggregate's review state (`docs/domain-model.md` §12) does not exist
+    yet (`REV-01`, a later package). `affected_row_count` and
     `evidence_count` are bounded counts, not the raw row-reference/
     evidence-ID lists — matching this repository's established
     "bounded, not raw" list-response convention (`PROF-03`'s profile
     endpoint precedent above).
     """
 
+    finding_id: str
     detector_id: str
     detector_version: str
     category: str
@@ -237,4 +240,67 @@ class FindingsListResponse(BaseModel):
     """
 
     items: list[FindingItem]
+    total_items: int
+
+
+class FindingDetailResponse(BaseModel):
+    """Body for `GET /analyses/{analysis_id}/findings/{finding_id}`
+    (`WP-027`, a disclosed bounded subset of `docs/api-specification.md`
+    §10's full documented finding-detail shape and
+    `docs/ui-specification.md` §4.7's "Finding detail" screen sections).
+
+    Exposes exactly what is genuinely computable today: observation,
+    affected columns/rows, evidence count, technical metadata, and
+    security exposure. Deliberately omits possible business impact,
+    remediation, proposed validation rules, and review state — no
+    package computes any of those yet (`REM-01`, `RULE-01`, `REV-01` are
+    all later, unimplemented backlog items); a placeholder field would
+    misrepresent "not built yet" as "computed but empty".
+    """
+
+    finding_id: str
+    detector_id: str
+    detector_version: str
+    category: str
+    severity: str
+    confidence: float
+    priority_score: float
+    calculated_observation: str
+    affected_columns: list[ColumnReferenceResponse]
+    affected_row_count: int
+    evidence_count: int
+    security_exposure: SecurityExposureResponse
+
+
+class FindingEvidenceItem(BaseModel):
+    """One entry in `GET .../findings/{finding_id}/evidence`'s response
+    (`WP-027`). Mirrors `domain.evidence.Evidence`, deliberately
+    excluding `structured_payload`: `docs/domain-model.md` §13's own
+    invariants ("report references use display-safe summaries"; raw
+    sensitive values are not embedded unless explicitly allowed, a
+    redaction guarantee not yet mechanically enforced pending `PRIV-01`)
+    both argue against exposing the open-ended raw payload through any
+    API response before that redaction package exists.
+    `affected_row_count` is a bounded count, matching `FindingItem`'s
+    established convention and `docs/domain-model.md` §13's "row
+    evidence is bounded for display" invariant — not the raw row
+    reference list.
+    """
+
+    evidence_id: str
+    evidence_type: str
+    display_safe_summary: str
+    affected_columns: list[ColumnReferenceResponse]
+    affected_row_count: int
+    scope: str
+
+
+class FindingEvidenceListResponse(BaseModel):
+    """Body for `GET /analyses/{analysis_id}/findings/{finding_id}/evidence`.
+    Returns an empty `items` list (not an error) if a valid finding
+    happens to have no resolvable evidence entries — defensive, matching
+    `FindingsListResponse`'s existing empty-list-not-an-error convention.
+    """
+
+    items: list[FindingEvidenceItem]
     total_items: int
