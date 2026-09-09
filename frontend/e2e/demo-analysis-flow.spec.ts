@@ -8,15 +8,22 @@ import { expect, test } from '@playwright/test'
  * `playwright.config.ts`) — demo action -> overview -> findings, plus
  * an axe-core scan on each of the three real screens.
  *
- * **Authored and typechecked, not live-executed by `WP-025`** — see
- * `smoke.spec.ts`'s disclosed EDS tooling-gap note (no broker-safe
- * operation class currently runs Playwright); this repository's own
- * `test-location-map.md` already classifies browser/e2e tests as a
- * release-candidate gate, not a PR gate. `POST /demo/sales` runs the
- * pipeline synchronously to completion within one request (`WP-023`'s
- * disclosed narrowing) — a real run is expected to observe the analysis
+ * **Live-executed for the first time by `WP-033`** (2026-09-08), closing
+ * `FUP-003` (no broker-safe operation class previously ran Playwright;
+ * EDS's `browser_test` operation class now does). `POST /demo/sales`
+ * runs the pipeline synchronously to completion within one request
+ * (`WP-023`'s disclosed narrowing) — a real run observes the analysis
  * already `completed` shortly after navigation, not a multi-frame
- * progress animation.
+ * progress animation, confirmed on this live run. This live run also
+ * found and fixed one genuine, previously-undetected defect in the
+ * first test below: the original `getByText('sales_demo.csv')`
+ * assertion was ambiguous (it matched both `AppShell`'s header banner
+ * and the Dataset summary panel, a `strict mode violation` Playwright
+ * itself refuses to resolve) — corrected to
+ * `getByLabel('Dataset summary').getByText(...)`, scoping the assertion
+ * to the panel it was actually meant to test. No product code changed;
+ * this was a test-precision defect in the assertion itself, not a
+ * product behavior fix.
  */
 
 test('runs the sales demo end to end: Start -> Overview -> Findings', async ({
@@ -47,7 +54,9 @@ test('runs the sales demo end to end: Start -> Overview -> Findings', async ({
   await expect(
     page.getByRole('heading', { name: 'Dataset summary' }),
   ).toBeVisible()
-  await expect(page.getByText('sales_demo.csv')).toBeVisible()
+  await expect(
+    page.getByLabel('Dataset summary').getByText('sales_demo.csv'),
+  ).toBeVisible()
 
   await page.getByRole('link', { name: 'View all findings' }).click()
   await expect(page).toHaveURL(/\/analyses\/[^/]+\/findings$/)
