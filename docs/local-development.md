@@ -1,9 +1,13 @@
 # Local development
 
-Repository-foundation stage (`FND-01`): only operational endpoints and a
-placeholder frontend route exist. No product features are implemented yet.
-This document covers running the backend and frontend natively, running the
-full stack with Docker Compose, and running the test suites — nothing more.
+TrustTable is currently at **v0.1 — Deterministic vertical slice**
+(`docs/release-plan.md`): a real, working local application. Upload a CSV
+or run the bundled synthetic sales demo and get deterministic findings,
+evidence, and a trust assessment through the running UI or API — no
+LLM/AI required (v0.1 has no AI path at all; local AI beta is v0.2, not
+yet wired in). This document covers running the backend and frontend
+natively, running the full stack with Docker Compose, exercising the
+demo and CSV-upload flows, and running the test suites.
 
 ## Prerequisites
 
@@ -42,9 +46,16 @@ npm install
 npm run dev
 ```
 
-Opens the Vite dev server (default `http://127.0.0.1:5173`). The placeholder
-route renders without a running backend — its query resolves a local value
-only, so no proxy is configured in dev mode.
+Opens the Vite dev server (default `http://127.0.0.1:5173`). The Start
+screen itself renders without a running backend, but no proxy is
+configured in dev mode (`vite.config.ts` has no `server.proxy` entry),
+so its two actions (the sales demo and CSV upload) cannot reach a
+backend this way even if one is running separately — relative
+`/api/v1/...` requests resolve against the Vite dev server itself, not
+port 8000. To exercise the real demo/upload flow end to end through the
+UI, use the full Docker Compose stack below, which does proxy
+`/api/v1/*` to the backend. `npm run dev` remains useful for frontend-only
+component work against the mocked test suite (`npm run test`, MSW-backed).
 
 ### Generating the typed API client (`FND-05`)
 
@@ -63,14 +74,60 @@ files under `frontend/src/api/`; re-run this command instead. The CI
 `contract` job fails if the committed output differs from a fresh
 regeneration.
 
+## Exercising the demo and CSV upload through the running application
+
+As of `API-01`/`UI-01`, the full deterministic pipeline (secure CSV
+parsing, type inference, profiling, detection, and risk scoring) is
+reachable both through the running backend API directly and through the
+real frontend — this is now the normal way to use the application, not
+just a future goal.
+
+**Through the UI** (open `http://127.0.0.1:8080` — the Docker Compose
+stack below; native `npm run dev` cannot reach a backend, per "Frontend —
+native" above):
+
+1. The Start screen (`/analyses/new`) offers two actions: **"Try the
+   sales demo"** (runs the bundled synthetic dataset immediately, no
+   file needed) or **upload your own `.csv` file** (drag-and-drop/file
+   picker, `.csv` only — `.xlsx` is not yet supported, `ING-03`).
+2. Either action navigates to `/analyses/{id}/overview` — a trust
+   assessment, the top findings, and a dataset summary (filename,
+   format, size).
+3. "View all findings" goes to `/analyses/{id}/findings` — a filterable,
+   sortable list of every finding.
+4. Selecting any finding row goes to
+   `/analyses/{id}/findings/{findingId}` — the observation, evidence,
+   representative examples, and technical metadata. The prompt-injection
+   detector's own finding (`security.possible_llm_prompt_injection`)
+   renders a dedicated warning presentation instead of the generic
+   evidence list, explaining what was detected, whether it was sent to a
+   model, and what protections apply.
+
+**Through the API directly** (`curl`, or any HTTP client), against a
+running backend (native on port 8000, or proxied through Compose on port
+8080 at `/api/v1/...`):
+
+```sh
+curl -s -X POST http://127.0.0.1:8000/api/v1/demo/sales
+# or, for a real file:
+curl -s -X POST http://127.0.0.1:8000/api/v1/analyses -F "file=@your-data.csv"
+```
+
+Both return `202` with an `analysis_id`; poll
+`GET /api/v1/analyses/{id}/status` until `state` is `completed`, then
+`GET /api/v1/analyses/{id}` (summary), `.../profile`, `.../findings`,
+`.../findings/{finding_id}`, and `.../findings/{finding_id}/evidence`.
+`docs/api-specification.md` documents the full contract; the generated
+OpenAPI schema (`backend/src/trusttable_backend/export_openapi.py`) is
+the authoritative live source (`docs/architecture.md` §5).
+
 ## Exercising the deterministic profiling pipeline directly
 
-As of `PROF-03`, secure CSV parsing (`ING-02`), type inference (`PROF-02`),
-and core profiling metrics (`PROF-03`) exist as backend library code, but
-**no API endpoint or UI route exposes them yet** (`API-01`/`UI-01`, both
-future backlog items). Until that wiring exists, the shortest way to
-exercise the pipeline is to call it directly against the bundled
-deterministic demo dataset (`demo-data/sales_demo.csv`, `DEMO-01`):
+The UI and API above are the normal way to use the application. For
+working on the profiling layer itself (`ING-02`/`PROF-02`/`PROF-03`)
+without a running server, the pipeline can still be called directly
+against the bundled deterministic demo dataset
+(`demo-data/sales_demo.csv`, `DEMO-01`):
 
 ```sh
 cd backend
@@ -104,6 +161,27 @@ deliberately dates after the reference date; five numeric measure
 columns -> `numeric`; `customer_name`/`product`/`category`/`region`/
 `status`/`constant_col` -> `categorical`; `order_id`/`notes` -> `text`;
 `empty_col` -> `unknown`).
+
+### A note on the demo's date-relative findings
+
+This is a **generation-time** constant, not a runtime one, and it is
+important not to conflate the two: `demo-data/sales_demo.csv`'s bytes
+are permanently reproducible (checked byte-for-byte in CI), but the
+`future_dates` detector's *finding count*, when computed by an actual
+running analysis (`POST /demo/sales` through the real API/UI, which
+always uses the real current date, never a frozen constant — this is
+required so the same detector correctly flags genuinely future-dated
+rows in any real uploaded dataset too), is not frozen in time. The two
+rows `DEMO-01` deliberately dates after the reference date use fixed
+absolute calendar dates (2026-11-22 and 2027-03-12): both are still in
+the future as of this writing, so a live "Try the sales demo" run
+currently reports "2 value(s) later than `<today's date>`" — correctly.
+Once real time passes 2026-11-22 this becomes 1, and once it passes
+2027-03-12 the demo's `future_dates` detector will report nothing at
+all. This is expected, correct behavior for a genuinely time-relative
+detector applied to a dataset with fixed calendar dates, not a defect —
+see `demo-data/README.md`'s "Seed and reproducibility" section for the
+scope of the reproducibility guarantee this does not affect.
 
 ## Full stack — Docker Compose
 
