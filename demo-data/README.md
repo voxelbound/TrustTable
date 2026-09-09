@@ -42,6 +42,23 @@ fixed constant reference date recorded in the generator module, not
 `date.today()`, so regenerating the file next year does not change its
 contents.
 
+**This reproducibility guarantee is about the generated file's bytes,
+not about analysis results computed against it later.** The two rows
+deliberately dated after the reference date (`REFERENCE_DATE + 90 days`
+and `REFERENCE_DATE + 200 days`) are fixed absolute calendar dates
+(2026-11-22 and 2027-03-12) baked permanently into this file — that part
+is reproducible. But when the running application actually analyzes this
+file (via "Try the sales demo" or the demo API route), the
+`future_dates` detector always compares against the real current date,
+not this generator's fixed reference date — the same real-clock
+comparison it must use for any real uploaded dataset, or future-date
+detection would stop working correctly once real time passed a frozen
+constant. So the *number of rows this detector reports* for this demo
+file is expected to change over calendar time (currently 2; it will
+become 1 after 2026-11-22, then 0 after 2027-03-12) even though the file
+itself never changes. This is intentional, correct-by-design behavior
+for a genuinely time-relative detector, not a reproducibility defect.
+
 ## Regeneration
 
 The dataset and its ground-truth manifest are produced by
