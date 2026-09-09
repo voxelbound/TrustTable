@@ -7,11 +7,13 @@ import { expect, test } from '@playwright/test'
  * of the repository-foundation placeholder route).
  *
  * Runs against the Compose/Nginx origin (see playwright.config.ts).
- * **Authored and typechecked, not live-executed by `WP-025`** — see
- * that work package's disclosed EDS tooling-gap note (no broker-safe
- * operation class currently runs Playwright); this repository's own
- * `test-location-map.md` already classifies browser/e2e tests as a
- * release-candidate gate, not a PR gate.
+ * **Live-executed for the first time by `WP-033`** (2026-09-08), closing
+ * `FUP-003` (no broker-safe operation class previously ran Playwright;
+ * EDS's `browser_test` operation class now does). All 3 tests in this
+ * file pass against a freshly rebuilt Compose stack. This repository's
+ * own `test-location-map.md` and `docs/testing-strategy.md` §5/§8 still
+ * classify browser/e2e tests as a release-candidate gate, not a PR gate
+ * — this package did not change that.
  */
 
 test('redirects "/" to the Start screen with no browser console errors', async ({
