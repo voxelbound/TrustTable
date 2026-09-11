@@ -16,6 +16,14 @@ Deliver:
 
 No LLM required.
 
+## v0.1.1 — Investigation UX
+
+Deliver:
+
+- row context for row-anchored findings
+
+No LLM required. Does not change v0.2's scope.
+
 ## v0.2 — Local AI beta
 
 Deliver:

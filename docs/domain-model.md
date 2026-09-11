@@ -394,6 +394,34 @@ Provides auditable support for findings.
 - report references use display-safe summaries
 - row evidence is bounded for display
 
+### Row context (non-Evidence)
+
+Purpose: on-demand read of the physical source-file neighborhood
+around a row a finding already references (identified by its existing
+RowReference), for user-driven legitimacy and root-cause inspection.
+
+Invariants:
+
+- available only for findings with at least one row reference
+- the anchor is a RowReference already belonging to the finding's own
+  affected row references — no separate row-numbering scheme is
+  introduced
+- shows all columns of the anchor row and its physical file-order
+  neighbors, not only the finding's affected column(s)
+- the server enforces a bounded maximum neighborhood size (exact
+  value set during implementation, recorded in the API contract)
+- default truncation of long values for display is a UI/readability
+  convention only — it does not redact or alter retained source data
+  and is not a privacy control; the full value remains available via
+  explicit user action
+- not an Evidence object: not persisted as Evidence, not included in
+  Report or export output by default
+- never automatically included in AI/model prompt construction
+- exposure posture is scoped to the local single-user deployment
+  model; a hosted/shared deployment must reassess this capability
+- retrieval mechanism is implementation-owned; must not require
+  retaining the full ParsedDataset as standing analysis state
+
 ## 14. AIInterpretation
 
 ### Purpose

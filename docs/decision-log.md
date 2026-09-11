@@ -125,3 +125,7 @@ Upload → Understand → Analyze → Review → Export
 ## D-024 — Engineering review records
 
 **Decision:** Store structured review records rather than fictional meeting minutes.
+
+## D-025 — Row-context exposure scoping
+
+**Decision:** `FIND-01` row context may display full-row, all-column physical neighborhoods around a finding's affected rows, scoped to the local single-user deployment model — not Evidence, not in Report/export output by default, never automatic AI-prompt input. Hosted/shared deployment (D-008/D-009, HOST-DEC-01) must reassess before enabling it; `PRIV-01` must consider row-context in future redaction design.
