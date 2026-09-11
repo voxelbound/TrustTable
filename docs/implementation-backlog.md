@@ -252,6 +252,17 @@ Compose stack with production hardening: SBOM, dependency/container
 scanning, and any remaining v0.1 feature and configuration work not already
 covered by `FND-01`'s foundation-only scope.
 
+# Investigation UX
+
+## FIND-01 — Row context for row-anchored findings
+
+Physical-neighborhood inspection around a row a finding already
+references: whole row, all columns, file-order adjacency, bounded
+default window with explicit expand. Not an Evidence type, not
+included in Report/export output, never automatic AI-prompt input.
+See `docs/decision-log.md` D-025 and
+`project-ops/changes/CHG-001-investigation-ux-row-context.md`.
+
 # Local AI beta
 
 ## AI-01 — Provider interface

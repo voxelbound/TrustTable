@@ -155,6 +155,7 @@ Sections:
 - possible business impact
 - evidence
 - representative examples
+- row context (row-anchored findings only)
 - remediation
 - validation rule
 - review controls
