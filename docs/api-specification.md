@@ -347,6 +347,40 @@ Returns bounded evidence details.
 
 Sensitive and suspicious values are escaped, truncated, and permissioned by product rules.
 
+### GET `/analyses/{analysis_id}/findings/{finding_id}/row-context`
+
+Request (query parameters):
+
+- `anchor_row` (required) — identifies the RowReference (the same
+  RowReference identity already used for this finding's affected row
+  references) to center the window on. `anchor_row` is not a second,
+  independently defined numbering; it is the RowReference's stable
+  internal row number. The value must equal the row number of one of
+  this finding's own affected row references, or the request is
+  rejected (404 `ROW_NOT_IN_FINDING`).
+- `before`, `after` (optional integers, default 3 each) — requested
+  window size. The server enforces a maximum per side; the exact
+  maximum, and whether an over-limit request is clamped or rejected,
+  is an implementation/verification decision to be recorded here once
+  selected. If clamping is used, the response must distinguish
+  requested from actual window size (below).
+
+Returns:
+
+- resolved window: `requested_before`, `requested_after`,
+  `actual_before`, `actual_after`, `truncated_at_start`,
+  `truncated_at_end`, current `max_window`
+- column list (original names, in source order)
+- one entry per row in the window: its RowReference, `is_anchor`,
+  `is_affected_by_finding` (true for the anchor and any other of this
+  finding's own affected rows inside the window), and values by column
+- values are returned as retained; any truncation for display is a
+  client rendering behavior, not a function this endpoint performs
+
+Capability boundary: `anchor_row` must resolve to a RowReference
+already belonging to the finding's own affected row references — this
+endpoint reads context around a finding, not arbitrary rows in the file.
+
 ## 11. Validation rules
 
 ### GET `/analyses/{analysis_id}/rules`

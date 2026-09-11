@@ -33,6 +33,17 @@
 - imported Markdown
 - HTTP input
 
+### Row-context exposure scope
+
+`FIND-01` row context widens which already-untrusted cell values are
+rendered for a given finding (full row, all columns) compared with
+curated Evidence (finding-relevant columns only). This does not add a
+new untrusted-content category — cell values were already untrusted —
+but it increases display breadth per finding. Scoped to the local
+single-user deployment model; not Evidence, not in Report/export
+output by default, never automatic AI-prompt input; a hosted/shared
+deployment must reassess this capability. See D-025 and `PRIV-01`.
+
 ## 3. Primary threats
 
 ### 3.1 Resource exhaustion
