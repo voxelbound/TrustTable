@@ -353,11 +353,14 @@ def test_get_analysis_finding_detail_shape(client: TestClient) -> None:
         "calculated_observation",
         "affected_columns",
         "affected_row_count",
+        "affected_row_numbers",
         "evidence_count",
         "security_exposure",
     }
     assert body["finding_id"] == "0"
     assert body["evidence_count"] >= 1
+    assert len(body["affected_row_numbers"]) == body["affected_row_count"]
+    assert body["affected_row_numbers"] == sorted(body["affected_row_numbers"])
     assert body["security_exposure"] == {
         "model_provider_enabled": False,
         "sample_transmission_enabled": False,
@@ -471,6 +474,161 @@ def test_get_analysis_finding_evidence_out_of_range_id_returns_structured_404(
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "FINDING_NOT_FOUND"
+
+
+# --- GET /analyses/{id}/findings/{finding_id}/row-context (`FIND-01`, `WP-038`) --
+
+
+def _finding_with_rows(client: TestClient, analysis_id: str) -> dict[str, Any]:
+    items = client.get(f"/api/v1/analyses/{analysis_id}/findings").json()["items"]
+    for item in items:
+        if item["affected_row_count"] > 0:
+            return item  # type: ignore[no-any-return]
+    raise AssertionError("expected at least one demo finding with affected rows")
+
+
+def _finding_without_rows(client: TestClient, analysis_id: str) -> dict[str, Any]:
+    items = client.get(f"/api/v1/analyses/{analysis_id}/findings").json()["items"]
+    for item in items:
+        if item["affected_row_count"] == 0:
+            return item  # type: ignore[no-any-return]
+    raise AssertionError("expected at least one demo finding with zero affected rows")
+
+
+def test_get_analysis_finding_row_context_shape(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    finding_item = _finding_with_rows(client, created["analysis_id"])
+    detail = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+    ).json()
+    anchor_row = detail["affected_row_numbers"][0]
+
+    response = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+        f"/row-context",
+        params={"anchor_row": anchor_row},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body.keys()) == {
+        "columns",
+        "requested_before",
+        "requested_after",
+        "actual_before",
+        "actual_after",
+        "truncated_at_start",
+        "truncated_at_end",
+        "max_window",
+        "rows",
+    }
+    assert body["requested_before"] == 3
+    assert body["requested_after"] == 3
+    anchor_rows = [row for row in body["rows"] if row["is_anchor"]]
+    assert len(anchor_rows) == 1
+    assert anchor_rows[0]["row_number"] == anchor_row
+    assert anchor_rows[0]["is_affected_by_finding"] is True
+    for row in body["rows"]:
+        assert set(row.keys()) == {
+            "row_number",
+            "is_anchor",
+            "is_affected_by_finding",
+            "values",
+        }
+        assert len(row["values"]) == len(body["columns"])
+
+
+def test_get_analysis_finding_row_context_custom_window(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    finding_item = _finding_with_rows(client, created["analysis_id"])
+    detail = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+    ).json()
+    anchor_row = detail["affected_row_numbers"][0]
+
+    response = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+        f"/row-context",
+        params={"anchor_row": anchor_row, "before": 1000, "after": 1000},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["requested_before"] == 1000
+    assert body["max_window"] == 25
+    assert body["actual_before"] <= 25
+    assert body["actual_after"] <= 25
+
+
+def test_get_analysis_finding_row_context_unrelated_row_returns_structured_404(
+    client: TestClient,
+) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    finding_item = _finding_without_rows(client, created["analysis_id"])
+
+    response = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+        f"/row-context",
+        params={"anchor_row": 0},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "ROW_NOT_IN_FINDING"
+
+
+def test_get_analysis_finding_row_context_unknown_analysis_returns_structured_404(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/api/v1/analyses/does-not-exist/findings/0/row-context", params={"anchor_row": 0}
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
+
+
+def test_get_analysis_finding_row_context_out_of_range_finding_returns_structured_404(
+    client: TestClient,
+) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    out_of_range_id = str(created["finding_count"])
+
+    response = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{out_of_range_id}/row-context",
+        params={"anchor_row": 0},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "FINDING_NOT_FOUND"
+
+
+def test_get_analysis_finding_row_context_missing_anchor_row_returns_422(
+    client: TestClient,
+) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    finding_item = _finding_with_rows(client, created["analysis_id"])
+
+    response = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+        f"/row-context"
+    )
+
+    assert response.status_code == 422
+
+
+def test_get_analysis_finding_row_context_negative_before_returns_422(
+    client: TestClient,
+) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    finding_item = _finding_with_rows(client, created["analysis_id"])
+
+    response = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+        f"/row-context",
+        params={"anchor_row": 0, "before": -1},
+    )
+
+    assert response.status_code == 422
 
 
 # --- POST /analyses/{id}/cancel ------------------------------------------

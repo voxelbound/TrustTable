@@ -55,6 +55,8 @@ from ..detectors.contract import FindingCandidate, SecurityExposureState
 from ..detectors.engine import run_detectors
 from ..domain.evidence import Evidence
 from ..domain.parsing import Dataset, DatasetFormat, DatasetSourceType
+from ..domain.row_context import RowContextEntry, RowContextWindow
+from ..domain.value_objects import RowReference
 from ..parsers.csv_parser import parse_csv
 from ..profiling.metrics import compute_dataset_profile
 from ..profiling.schemas import DatasetProfile
@@ -63,6 +65,14 @@ from ..risk.scoring import (
     calculate_finding_priority_scores,
     calculate_trust_assessment,
 )
+
+#: Maximum rows returned on either side of the anchor row for
+#: `get_finding_row_context` (`FIND-01`). CHG-001 Decision 6 left the exact
+#: value implementation-owned; a request exceeding this is clamped, not
+#: rejected — the response's own `requested_*`/`actual_*`/`truncated_at_*`
+#: fields already model that distinction. Recorded in
+#: `docs/api-specification.md` §10 once selected.
+_MAX_ROW_CONTEXT_WINDOW_PER_SIDE = 25
 
 _NO_EXPOSURE = SecurityExposureState(
     model_provider_enabled=False, sample_transmission_enabled=False
@@ -225,6 +235,27 @@ class FindingNotFoundError(Exception):
         super().__init__(f"Finding not found: {finding_id} (analysis {analysis_id})")
         self.analysis_id = analysis_id
         self.finding_id = finding_id
+
+
+class RowNotInFindingError(Exception):
+    """Raised by `get_finding_row_context` (`FIND-01`) when the requested
+    `anchor_row` does not equal the `row_number` of any of the finding's
+    own `affected_row_references` — including a finding with zero affected
+    rows, matching `docs/domain-model.md` §13's "available only for
+    findings with at least one row reference" invariant and
+    `docs/api-specification.md` §10's documented capability boundary (this
+    endpoint reads context around a finding, not arbitrary rows in the
+    file).
+    """
+
+    def __init__(self, analysis_id: str, finding_id: str, anchor_row: int) -> None:
+        super().__init__(
+            f"Row {anchor_row} is not one of finding {finding_id}'s affected rows "
+            f"(analysis {analysis_id})"
+        )
+        self.analysis_id = analysis_id
+        self.finding_id = finding_id
+        self.anchor_row = anchor_row
 
 
 class AnalysisStore:
@@ -524,6 +555,78 @@ def get_finding_evidence(
         evidence_by_id[evidence_id]
         for evidence_id in finding.evidence_ids
         if evidence_id in evidence_by_id
+    )
+
+
+def get_finding_row_context(
+    store: AnalysisStore,
+    analysis_id: str,
+    finding_id: str,
+    *,
+    anchor_row: int,
+    before: int = 3,
+    after: int = 3,
+) -> RowContextWindow:
+    """Return a bounded physical-neighborhood window around one finding's
+    affected row (`FIND-01`, `docs/domain-model.md` §13, `docs/
+    api-specification.md` §10).
+
+    Reconstructs the window from `Analysis.content` via the existing
+    `parsers.csv_parser.parse_csv` path on every call — CHG-001 Decision 5's
+    starting approach — rather than retaining a `ParsedDataset` as standing
+    analysis state.
+
+    Raises `AnalysisNotFoundError`/`FindingNotFoundError` with the same
+    semantics as `get_finding`, and `RowNotInFindingError` when `anchor_row`
+    does not equal the `row_number` of any of the finding's own
+    `affected_row_references` (including a finding with zero affected rows).
+    `before`/`after` are clamped to `[0, _MAX_ROW_CONTEXT_WINDOW_PER_SIDE]`
+    and to the file's own start/end — never rejected — with
+    `truncated_at_start`/`truncated_at_end` reporting whichever bound (or
+    both) actually applied.
+    """
+    analysis = get_status(store, analysis_id)
+    finding = get_finding(store, analysis_id, finding_id)
+
+    affected_row_numbers = {reference.row_number for reference in finding.affected_row_references}
+    if anchor_row not in affected_row_numbers:
+        raise RowNotInFindingError(analysis_id, finding_id, anchor_row)
+
+    parsed = parse_csv(analysis.content)
+    columns = parsed.parsed_dataset.columns
+    rows = parsed.rows
+    row_count = parsed.parsed_dataset.row_count
+
+    max_window = _MAX_ROW_CONTEXT_WINDOW_PER_SIDE
+    bounded_before = max(0, before)
+    bounded_after = max(0, after)
+
+    actual_before = min(bounded_before, max_window, anchor_row)
+    actual_after = min(bounded_after, max_window, row_count - 1 - anchor_row)
+
+    start = anchor_row - actual_before
+    end = anchor_row + actual_after
+
+    entries = tuple(
+        RowContextEntry(
+            row_reference=RowReference(row_number=row_number),
+            is_anchor=(row_number == anchor_row),
+            is_affected_by_finding=(row_number in affected_row_numbers),
+            values=rows[row_number],
+        )
+        for row_number in range(start, end + 1)
+    )
+
+    return RowContextWindow(
+        columns=columns,
+        requested_before=bounded_before,
+        requested_after=bounded_after,
+        actual_before=actual_before,
+        actual_after=actual_after,
+        truncated_at_start=actual_before < bounded_before,
+        truncated_at_end=actual_after < bounded_after,
+        max_window=max_window,
+        rows=entries,
     )
 
 

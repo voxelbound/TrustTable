@@ -267,6 +267,14 @@ class FindingDetailResponse(BaseModel):
     package computes any of those yet (`REM-01`, `RULE-01`, `REV-01` are
     all later, unimplemented backlog items); a placeholder field would
     misrepresent "not built yet" as "computed but empty".
+
+    `affected_row_numbers` (`FIND-01`, `WP-038`, extending) is a small,
+    disclosed addition: the finding's own affected `RowReference.row_number`
+    values, ascending. Needed by the Finding Detail UI's row-context
+    Prev/Next jump list (`docs/decision-log.md` D-025,
+    `project-ops/changes/CHG-001-investigation-ux-row-context.md` §3),
+    which cannot be built from `affected_row_count` alone. Every other
+    field is unchanged from `WP-027`.
     """
 
     finding_id: str
@@ -279,6 +287,7 @@ class FindingDetailResponse(BaseModel):
     calculated_observation: str
     affected_columns: list[ColumnReferenceResponse]
     affected_row_count: int
+    affected_row_numbers: list[int]
     evidence_count: int
     security_exposure: SecurityExposureResponse
 
@@ -315,3 +324,38 @@ class FindingEvidenceListResponse(BaseModel):
 
     items: list[FindingEvidenceItem]
     total_items: int
+
+
+class RowContextEntryResponse(BaseModel):
+    """One row in a `RowContextResponse` window (`FIND-01`, `WP-038`).
+    Mirrors `domain.row_context.RowContextEntry`. `values` is positional,
+    aligned by index with the owning response's `columns` list — not a
+    mapping, matching the domain type's own alignment convention.
+    `source_line_number`/`fingerprint` are omitted: `parsers.csv_parser`
+    never sets either on the `RowReference`s it produces today, so
+    exposing them would only ever be `null` — a disclosed, reversible
+    scoping choice, not a contract gap.
+    """
+
+    row_number: int
+    is_anchor: bool
+    is_affected_by_finding: bool
+    values: list[str | None]
+
+
+class RowContextResponse(BaseModel):
+    """Body for `GET /analyses/{analysis_id}/findings/{finding_id}/row-context`
+    (`FIND-01`, `WP-038`; `docs/api-specification.md` §10; `docs/domain-model.md`
+    §13's "Row context (non-Evidence)" subsection). Mirrors
+    `domain.row_context.RowContextWindow` exactly.
+    """
+
+    columns: list[ColumnReferenceResponse]
+    requested_before: int
+    requested_after: int
+    actual_before: int
+    actual_after: int
+    truncated_at_start: bool
+    truncated_at_end: bool
+    max_window: int
+    rows: list[RowContextEntryResponse]
