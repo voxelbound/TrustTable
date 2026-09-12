@@ -32,11 +32,13 @@ from trusttable_backend.analysis.service import (
     AnalysisState,
     AnalysisStore,
     FindingNotFoundError,
+    RowNotInFindingError,
     cancel_analysis,
     create_analysis,
     create_analysis_from_upload,
     get_finding,
     get_finding_evidence,
+    get_finding_row_context,
     get_findings,
     get_profile,
     get_status,
@@ -58,7 +60,7 @@ from trusttable_backend.domain.parsing import (
     SampleMetadata,
     SamplingScope,
 )
-from trusttable_backend.domain.value_objects import ColumnReference, Severity
+from trusttable_backend.domain.value_objects import ColumnReference, RowReference, Severity
 from trusttable_backend.parsers.csv_parser import parse_csv
 from trusttable_backend.profiling.metrics import compute_dataset_profile
 from trusttable_backend.profiling.schemas import DatasetProfile
@@ -149,7 +151,10 @@ def _make_completed_analysis(**overrides: object) -> Analysis:
     return _make_analysis(**fields)
 
 
-def _make_finding(evidence_ids: tuple[str, ...] = ("evidence-1",)) -> FindingCandidate:
+def _make_finding(
+    evidence_ids: tuple[str, ...] = ("evidence-1",),
+    affected_row_references: tuple[RowReference, ...] = (),
+) -> FindingCandidate:
     column = ColumnReference(original_name="col", internal_key="col", ordinal=0)
     return FindingCandidate(
         detector_id="test.detector",
@@ -159,7 +164,7 @@ def _make_finding(evidence_ids: tuple[str, ...] = ("evidence-1",)) -> FindingCan
         confidence=1.0,
         calculated_observation="test observation",
         affected_columns=(column,),
-        affected_row_references=(),
+        affected_row_references=affected_row_references,
         evidence_ids=evidence_ids,
         default_remediation_template_key=None,
         default_validation_rule_template_key=None,
@@ -698,6 +703,218 @@ def test_finding_not_found_error_carries_requested_ids() -> None:
     error = FindingNotFoundError("analysis-1", "99")
     assert error.analysis_id == "analysis-1"
     assert error.finding_id == "99"
+
+
+# ---------------------------------------------------------------------------
+# WP-038 (FIND-01): get_finding_row_context
+# ---------------------------------------------------------------------------
+
+
+_ROW_CONTEXT_CSV = b"col_a,col_b\nr0a,r0b\nr1a,r1b\nr2a,r2b\nr3a,r3b\nr4a,r4b\n"
+_ROW_CONTEXT_COLUMNS = (
+    ColumnReference(original_name="col_a", internal_key="col_a", ordinal=0),
+    ColumnReference(original_name="col_b", internal_key="col_b", ordinal=1),
+)
+
+
+def _find_finding_with_rows(completed: Analysis) -> tuple[int, FindingCandidate]:
+    for index, finding in enumerate(completed.findings):
+        if finding.affected_row_references:
+            return index, finding
+    raise AssertionError("expected at least one demo finding with affected rows")
+
+
+def _find_finding_without_rows(completed: Analysis) -> tuple[int, FindingCandidate]:
+    for index, finding in enumerate(completed.findings):
+        if not finding.affected_row_references:
+            return index, finding
+    raise AssertionError("expected at least one demo finding with zero affected rows")
+
+
+def test_get_finding_row_context_returns_window_matching_parsed_content() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+    index, finding = _find_finding_with_rows(completed)
+    anchor_row = finding.affected_row_references[0].row_number
+
+    window = get_finding_row_context(
+        store, completed.analysis_id, str(index), anchor_row=anchor_row
+    )
+
+    parsed = parse_csv(completed.content)
+    assert window.columns == parsed.parsed_dataset.columns
+    anchor_entries = [entry for entry in window.rows if entry.is_anchor]
+    assert len(anchor_entries) == 1
+    anchor_entry = anchor_entries[0]
+    assert anchor_entry.row_reference.row_number == anchor_row
+    assert anchor_entry.is_affected_by_finding is True
+    assert anchor_entry.values == parsed.rows[anchor_row]
+    for entry in window.rows:
+        assert entry.values == parsed.rows[entry.row_reference.row_number]
+
+
+def test_get_finding_row_context_default_window_is_three_each_side() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+    row_count = int(completed.dataset_profile.dataset_metrics["row_count"])  # type: ignore[union-attr,arg-type]
+    index, finding = _find_finding_with_rows(completed)
+    # Pick an affected row comfortably inside the file (not near either edge)
+    # so the default window is not itself clamped by the file boundary.
+    interior_rows = [
+        ref.row_number
+        for ref in finding.affected_row_references
+        if 3 <= ref.row_number <= row_count - 4
+    ]
+    if not interior_rows:
+        pytest.skip("no interior affected row available for this demo finding")
+    anchor_row = interior_rows[0]
+
+    window = get_finding_row_context(
+        store, completed.analysis_id, str(index), anchor_row=anchor_row
+    )
+
+    assert window.requested_before == 3
+    assert window.requested_after == 3
+    assert window.actual_before == 3
+    assert window.actual_after == 3
+    assert window.truncated_at_start is False
+    assert window.truncated_at_end is False
+    assert len(window.rows) == 7
+
+
+def test_get_finding_row_context_clamps_to_max_window() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+    row_count = int(completed.dataset_profile.dataset_metrics["row_count"])  # type: ignore[union-attr,arg-type]
+
+    index = None
+    anchor_row = None
+    for candidate_index, finding in enumerate(completed.findings):
+        interior_rows = [
+            ref.row_number
+            for ref in finding.affected_row_references
+            if 25 <= ref.row_number <= row_count - 26
+        ]
+        if interior_rows:
+            index = candidate_index
+            anchor_row = interior_rows[0]
+            break
+    if index is None or anchor_row is None:
+        pytest.skip("no sufficiently interior affected row available across any demo finding")
+
+    window = get_finding_row_context(
+        store, completed.analysis_id, str(index), anchor_row=anchor_row, before=1000, after=1000
+    )
+
+    assert window.requested_before == 1000
+    assert window.requested_after == 1000
+    assert window.actual_before == 25
+    assert window.actual_after == 25
+    assert window.max_window == 25
+    assert window.truncated_at_start is True
+    assert window.truncated_at_end is True
+
+
+def test_get_finding_row_context_truncates_at_file_boundaries() -> None:
+    finding = _make_finding(affected_row_references=(RowReference(row_number=2),))
+    analysis = _make_completed_analysis(
+        content=_ROW_CONTEXT_CSV, findings=(finding,), priority_scores=(50.0,)
+    )
+    store = AnalysisStore()
+    store.add(analysis)
+
+    window = get_finding_row_context(store, analysis.analysis_id, "0", anchor_row=2)
+
+    assert window.requested_before == 3
+    assert window.requested_after == 3
+    assert window.actual_before == 2
+    assert window.actual_after == 2
+    assert window.truncated_at_start is True
+    assert window.truncated_at_end is True
+    assert len(window.rows) == 5
+    assert [entry.row_reference.row_number for entry in window.rows] == [0, 1, 2, 3, 4]
+    assert window.rows[0].values == ("r0a", "r0b")
+    assert window.rows[4].values == ("r4a", "r4b")
+
+
+def test_get_finding_row_context_marks_every_affected_row_in_window() -> None:
+    finding = _make_finding(
+        affected_row_references=(RowReference(row_number=1), RowReference(row_number=3))
+    )
+    analysis = _make_completed_analysis(
+        content=_ROW_CONTEXT_CSV, findings=(finding,), priority_scores=(50.0,)
+    )
+    store = AnalysisStore()
+    store.add(analysis)
+
+    window = get_finding_row_context(store, analysis.analysis_id, "0", anchor_row=1)
+
+    affected = {
+        entry.row_reference.row_number: entry.is_affected_by_finding for entry in window.rows
+    }
+    assert affected == {0: False, 1: True, 2: False, 3: True, 4: False}
+    anchor_numbers = [entry.row_reference.row_number for entry in window.rows if entry.is_anchor]
+    assert anchor_numbers == [1]
+
+
+def test_get_finding_row_context_raises_row_not_in_finding_for_unrelated_row() -> None:
+    finding = _make_finding(affected_row_references=(RowReference(row_number=2),))
+    analysis = _make_completed_analysis(
+        content=_ROW_CONTEXT_CSV, findings=(finding,), priority_scores=(50.0,)
+    )
+    store = AnalysisStore()
+    store.add(analysis)
+
+    with pytest.raises(RowNotInFindingError) as excinfo:
+        get_finding_row_context(store, analysis.analysis_id, "0", anchor_row=0)
+    assert excinfo.value.analysis_id == analysis.analysis_id
+    assert excinfo.value.finding_id == "0"
+    assert excinfo.value.anchor_row == 0
+
+
+def test_get_finding_row_context_raises_row_not_in_finding_for_zero_row_finding() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+    index, _finding = _find_finding_without_rows(completed)
+
+    with pytest.raises(RowNotInFindingError):
+        get_finding_row_context(store, completed.analysis_id, str(index), anchor_row=0)
+
+
+def test_get_finding_row_context_raises_finding_not_found_for_out_of_range_id() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+    with pytest.raises(FindingNotFoundError):
+        get_finding_row_context(
+            store, completed.analysis_id, str(len(completed.findings)), anchor_row=0
+        )
+
+
+def test_get_finding_row_context_raises_finding_not_found_for_not_yet_completed_analysis() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+
+    with pytest.raises(FindingNotFoundError):
+        get_finding_row_context(store, created.analysis_id, "0", anchor_row=0)
+
+
+def test_get_finding_row_context_raises_analysis_not_found_for_unknown_id() -> None:
+    store = AnalysisStore()
+    with pytest.raises(AnalysisNotFoundError):
+        get_finding_row_context(store, "unknown-id", "0", anchor_row=0)
+
+
+def test_row_not_in_finding_error_carries_requested_ids() -> None:
+    error = RowNotInFindingError("analysis-1", "0", 7)
+    assert error.analysis_id == "analysis-1"
+    assert error.finding_id == "0"
+    assert error.anchor_row == 7
 
 
 # ---------------------------------------------------------------------------

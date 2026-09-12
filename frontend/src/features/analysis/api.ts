@@ -11,6 +11,7 @@ import {
   getAnalysisApiV1AnalysesAnalysisIdGet,
   getAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGet,
   getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGet,
+  getAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGet,
   getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet,
   getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet,
   postAnalysisUploadApiV1AnalysesPost,
@@ -21,6 +22,7 @@ import {
   type FindingDetailResponse,
   type FindingEvidenceListResponse,
   type FindingsListResponse,
+  type RowContextResponse,
   type UploadAnalysisResponse,
 } from '../../api'
 import { client } from '../../api/client.gen'
@@ -205,6 +207,51 @@ export function useFindingDetail(
       return result.data
     },
     enabled: Boolean(analysisId) && Boolean(findingId),
+  })
+}
+
+/** `GET .../findings/{finding_id}/row-context` (`FIND-01`, `WP-038`).
+ * `anchorRow` selects which of the finding's own affected rows to center
+ * the window on (Prev/Next jump list); `before`/`after` drive the expand
+ * control. Disabled until `anchorRow` is known (only meaningful once the
+ * finding detail response's `affected_row_numbers` has resolved). */
+export function useFindingRowContext(
+  analysisId: string | undefined,
+  findingId: string | undefined,
+  anchorRow: number | undefined,
+  windowSize: { before: number; after: number },
+) {
+  return useQuery<RowContextResponse, ApiCallError>({
+    queryKey: [
+      'analysis-finding-row-context',
+      analysisId,
+      findingId,
+      anchorRow,
+      windowSize.before,
+      windowSize.after,
+    ],
+    queryFn: async () => {
+      const result =
+        await getAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGet(
+          {
+            path: {
+              analysis_id: analysisId as string,
+              finding_id: findingId as string,
+            },
+            query: {
+              anchor_row: anchorRow as number,
+              before: windowSize.before,
+              after: windowSize.after,
+            },
+          },
+        )
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled:
+      Boolean(analysisId) && Boolean(findingId) && anchorRow !== undefined,
   })
 }
 

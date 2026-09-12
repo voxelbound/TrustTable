@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router'
 import { FindingSeverityBadge } from '../../components/provenance/FindingSeverityBadge'
 import { PromptInjectionWarning } from '../../components/provenance/PromptInjectionWarning'
+import { RowContext } from './RowContext'
 import { useFindingDetail, useFindingEvidence } from './api'
 
 const PROMPT_INJECTION_CATEGORY = 'ai_processing_security'
@@ -190,6 +191,14 @@ export function FindingDetailRoute() {
             ))}
           </ul>
         </section>
+      )}
+
+      {analysisId && (
+        <RowContext
+          analysisId={analysisId}
+          findingId={finding.finding_id}
+          affectedRowNumbers={finding.affected_row_numbers}
+        />
       )}
 
       <section aria-labelledby="remediation-heading">

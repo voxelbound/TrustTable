@@ -280,6 +280,14 @@ export type DemoAnalysisResponse = {
  * package computes any of those yet (`REM-01`, `RULE-01`, `REV-01` are
  * all later, unimplemented backlog items); a placeholder field would
  * misrepresent "not built yet" as "computed but empty".
+ *
+ * `affected_row_numbers` (`FIND-01`, `WP-038`, extending) is a small,
+ * disclosed addition: the finding's own affected `RowReference.row_number`
+ * values, ascending. Needed by the Finding Detail UI's row-context
+ * Prev/Next jump list (`docs/decision-log.md` D-025,
+ * `project-ops/changes/CHG-001-investigation-ux-row-context.md` §3),
+ * which cannot be built from `affected_row_count` alone. Every other
+ * field is unchanged from `WP-027`.
  */
 export type FindingDetailResponse = {
     /**
@@ -290,6 +298,10 @@ export type FindingDetailResponse = {
      * Affected Row Count
      */
     affected_row_count: number;
+    /**
+     * Affected Row Numbers
+     */
+    affected_row_numbers: Array<number>;
     /**
      * Calculated Observation
      */
@@ -553,6 +565,84 @@ export type ReadinessResponse = {
      * Status
      */
     status: 'ready' | 'not_ready';
+};
+
+/**
+ * RowContextEntryResponse
+ *
+ * One row in a `RowContextResponse` window (`FIND-01`, `WP-038`).
+ * Mirrors `domain.row_context.RowContextEntry`. `values` is positional,
+ * aligned by index with the owning response's `columns` list — not a
+ * mapping, matching the domain type's own alignment convention.
+ * `source_line_number`/`fingerprint` are omitted: `parsers.csv_parser`
+ * never sets either on the `RowReference`s it produces today, so
+ * exposing them would only ever be `null` — a disclosed, reversible
+ * scoping choice, not a contract gap.
+ */
+export type RowContextEntryResponse = {
+    /**
+     * Is Affected By Finding
+     */
+    is_affected_by_finding: boolean;
+    /**
+     * Is Anchor
+     */
+    is_anchor: boolean;
+    /**
+     * Row Number
+     */
+    row_number: number;
+    /**
+     * Values
+     */
+    values: Array<string | null>;
+};
+
+/**
+ * RowContextResponse
+ *
+ * Body for `GET /analyses/{analysis_id}/findings/{finding_id}/row-context`
+ * (`FIND-01`, `WP-038`; `docs/api-specification.md` §10; `docs/domain-model.md`
+ * §13's "Row context (non-Evidence)" subsection). Mirrors
+ * `domain.row_context.RowContextWindow` exactly.
+ */
+export type RowContextResponse = {
+    /**
+     * Actual After
+     */
+    actual_after: number;
+    /**
+     * Actual Before
+     */
+    actual_before: number;
+    /**
+     * Columns
+     */
+    columns: Array<ColumnReferenceResponse>;
+    /**
+     * Max Window
+     */
+    max_window: number;
+    /**
+     * Requested After
+     */
+    requested_after: number;
+    /**
+     * Requested Before
+     */
+    requested_before: number;
+    /**
+     * Rows
+     */
+    rows: Array<RowContextEntryResponse>;
+    /**
+     * Truncated At End
+     */
+    truncated_at_end: boolean;
+    /**
+     * Truncated At Start
+     */
+    truncated_at_start: boolean;
 };
 
 /**
@@ -898,6 +988,53 @@ export type GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEv
 };
 
 export type GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponse = GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses[keyof GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses];
+
+export type GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Finding Id
+         */
+        finding_id: string;
+    };
+    query: {
+        /**
+         * Anchor Row
+         */
+        anchor_row: number;
+        /**
+         * Before
+         */
+        before?: number;
+        /**
+         * After
+         */
+        after?: number;
+    };
+    url: '/api/v1/analyses/{analysis_id}/findings/{finding_id}/row-context';
+};
+
+export type GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetError = GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetErrors[keyof GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetErrors];
+
+export type GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: RowContextResponse;
+};
+
+export type GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetResponse = GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetResponses[keyof GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetResponses];
 
 export type GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData = {
     body?: never;

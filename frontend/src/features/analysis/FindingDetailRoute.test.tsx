@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
@@ -7,6 +8,7 @@ import {
   apiErrorBody,
   makeFindingDetailResponse,
   makeFindingEvidenceListResponse,
+  makeRowContextResponse,
 } from '../../test/msw/handlers'
 import { server } from '../../test/msw/server'
 import { FindingDetailRoute } from './FindingDetailRoute'
@@ -209,5 +211,100 @@ describe('FindingDetailRoute', () => {
     expect(
       screen.getByRole('link', { name: 'Back to findings' }),
     ).toHaveAttribute('href', `/analyses/${ANALYSIS_ID}/findings`)
+  })
+
+  it('WP-038 (FIND-01): renders the Row context section with the anchor row highlighted', async () => {
+    renderDetail()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Row context' }),
+    ).toBeInTheDocument()
+    const anchorCell = await screen.findByText('2099-01-01')
+    const anchorRow = anchorCell.closest('tr')
+    expect(anchorRow).not.toBeNull()
+    expect(anchorRow).toHaveAttribute('aria-current', 'true')
+  })
+
+  it('WP-038 (FIND-01): does not render Row context for a finding with zero affected rows', async () => {
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId',
+        () =>
+          HttpResponse.json(
+            makeFindingDetailResponse({
+              affected_row_count: 0,
+              affected_row_numbers: [],
+            }),
+          ),
+      ),
+    )
+
+    renderDetail()
+
+    await screen.findByRole('heading', { name: 'Observation' })
+    expect(screen.queryByRole('heading', { name: 'Row context' })).toBeNull()
+  })
+
+  it("WP-038 (FIND-01): Prev/Next jump between a finding's multiple affected rows", async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/row-context',
+        ({ request }) => {
+          const url = new URL(request.url)
+          const anchorRow = url.searchParams.get('anchor_row')
+          return HttpResponse.json(
+            makeRowContextResponse({
+              rows: [
+                {
+                  row_number: Number(anchorRow),
+                  is_anchor: true,
+                  is_affected_by_finding: true,
+                  values: [`row-${anchorRow}`, 'x'],
+                },
+              ],
+              actual_before: 0,
+              actual_after: 0,
+              truncated_at_start: false,
+              truncated_at_end: false,
+            }),
+          )
+        },
+      ),
+    )
+
+    renderDetail()
+
+    expect(await screen.findByText('Affected row 1 of 2')).toBeInTheDocument()
+    expect(await screen.findByText('row-4')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(await screen.findByText('Affected row 2 of 2')).toBeInTheDocument()
+    expect(await screen.findByText('row-17')).toBeInTheDocument()
+  })
+
+  it('WP-038 (FIND-01): Show more rows expands the requested window', async () => {
+    const user = userEvent.setup()
+    let lastBefore: string | null = null
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/row-context',
+        ({ request }) => {
+          const url = new URL(request.url)
+          lastBefore = url.searchParams.get('before')
+          return HttpResponse.json(makeRowContextResponse())
+        },
+      ),
+    )
+
+    renderDetail()
+
+    const expandButton = await screen.findByRole('button', {
+      name: 'Show more rows',
+    })
+    await user.click(expandButton)
+
+    expect(lastBefore).toBe('8')
   })
 })
