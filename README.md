@@ -6,7 +6,9 @@ It combines deterministic profiling and rule-based detection with evidence-groun
 
 ## Project status
 
-**Current milestone: v0.1 — Deterministic vertical slice.** Every bullet in `docs/release-plan.md`'s v0.1 checklist is implemented and tested. All three v0.1 release-qualification areas identified for this milestone — performance evidence, security qualification, and release-candidate testing — now have real, scoped-baseline evidence (see "Delivered work" below). This does **not** itself constitute full `docs/testing-strategy.md` §8 release-candidate CI-gate compliance: the full multi-browser/viewport matrix, SBOM/container scan/license check, full deterministic/AI evaluation, and migration tests remain open, mostly scoped to the later v1.0 milestone. A separate, later decision determines when v0.1 is considered release-ready.
+**v0.1 — Deterministic vertical slice: complete and recorded release-ready.** Every bullet in `docs/release-plan.md`'s v0.1 checklist is implemented and tested; all three release-qualification areas (performance evidence, security qualification, release-candidate testing) have real, scoped-baseline evidence; the human owner recorded v0.1 milestone-complete/release-ready. This does **not** itself constitute full `docs/testing-strategy.md` §8 release-candidate CI-gate compliance: the full multi-browser/viewport matrix, SBOM/container scan/license check, full deterministic/AI evaluation, and migration tests remain open, mostly scoped to the later v1.0 milestone.
+
+**Current milestone: v0.1.1 — Investigation UX.** `FIND-01` (row context for row-anchored findings) — this milestone's sole planned deliverable — is implemented in full: the row-context API endpoint, and a Finding Detail UI section with expand and Prev/Next navigation across a finding's own affected rows (see "Delivered work" below).
 
 Local AI beta (v0.2) work has also begun with the AI provider interface (interface-only — no real provider is wired in yet).
 
@@ -42,6 +44,10 @@ The product, domain model, API boundaries, detector framework, frontend architec
 - **SEC-01** (v0.1-scoped) — a security-qualification review closing a logging-safety test gap and adding an unsafe-HTML-rendering regression guard; SBOM generation, container scanning, and license checking remain `SEC-01`'s later, full scope.
 - **BROWSER-01 / A11Y-01** (v0.1-scoped) — release-candidate testing qualification: the first live execution of the Chromium/axe-core browser-accessibility suite against the real Docker Compose stack (6/6 tests passing); the full multi-browser/viewport matrix and full accessibility suite remain open, later v1.0-milestone scope.
 
+**v0.1.1 — Investigation UX (complete)**
+
+- **FIND-01** — row context for row-anchored findings: `GET /api/v1/analyses/{id}/findings/{finding_id}/row-context` returns a bounded (max 25 rows per side) physical-neighborhood window around one of a finding's own affected rows, reconstructed on demand from the analysis's retained upload bytes (never a standing `ParsedDataset`); the Finding Detail screen's new "Row context" section renders it with the anchor row highlighted, an expand control, and, for findings with more than one affected row, Prev/Next navigation between them. Not `Evidence`, not in Report/export output, never automatic AI-prompt input (`docs/decision-log.md` D-025).
+
 **Local AI beta (v0.2 — begun)**
 
 - **AI-01** (interface-only) — the AI provider interface: a framework-independent contract package (the six model-call operations, request/response/health-check shapes, a provider-error hierarchy, and the `AIProvider` protocol every future provider implements against); no real provider is wired in yet — that is `AI-02` (disabled/mock) and `AI-03` (Ollama), later backlog items.
@@ -72,13 +78,16 @@ backend API directly (`POST /api/v1/demo/sales`, `POST
 /api/v1/analyses` (CSV upload), `GET /api/v1/analyses/{id}`,
 `.../status`, `.../profile`, `.../findings`, `GET
 .../findings/{finding_id}`, `GET .../findings/{finding_id}/evidence`,
+`GET .../findings/{finding_id}/row-context`,
 `POST .../cancel`) and through the real frontend: open the running app
 and either choose "Try the sales demo" or upload your own `.csv` file
 on the Start screen to see a progress view, a trust-assessment Overview,
 a filterable Findings list, and — by selecting any finding — a Finding
-detail screen with its evidence, or, for the prompt-injection detector's
-own finding, a dedicated warning presentation explaining what was
-detected, whether it was sent to a model, and what protections apply.
+detail screen with its evidence, a "Row context" section around any of
+its own affected rows (row-anchored findings only), or, for the
+prompt-injection detector's own finding, a dedicated warning
+presentation explaining what was detected, whether it was sent to a
+model, and what protections apply.
 Excel (`.xlsx`) upload is not yet supported (**ING-03**, a later
 backlog item) — only `.csv` files are accepted today.
 [Local development](docs/local-development.md#exercising-the-deterministic-profiling-pipeline-directly)

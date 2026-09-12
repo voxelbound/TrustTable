@@ -18,6 +18,7 @@ from .parsing import (
     SamplingScope,
     WorksheetMetadata,
 )
+from .row_context import RowContextEntry, RowContextWindow
 from .value_objects import ColumnReference, RowReference, Severity
 
 __all__ = [
@@ -31,6 +32,8 @@ __all__ = [
     "EvidenceType",
     "ParsedDataset",
     "ParsingWarning",
+    "RowContextEntry",
+    "RowContextWindow",
     "SampleMetadata",
     "SamplingScope",
     "WorksheetMetadata",
