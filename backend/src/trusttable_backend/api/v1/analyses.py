@@ -28,7 +28,7 @@ with a future real background-execution package.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, UploadFile
+from fastapi import APIRouter, Query, Request, UploadFile
 
 from trusttable_backend.analysis import (
     Analysis,
@@ -37,11 +37,13 @@ from trusttable_backend.analysis import (
     AnalysisState,
     AnalysisStore,
     FindingNotFoundError,
+    RowNotInFindingError,
     cancel_analysis,
     create_analysis,
     create_analysis_from_upload,
     get_finding,
     get_finding_evidence,
+    get_finding_row_context,
     get_status,
     run_analysis,
 )
@@ -49,6 +51,7 @@ from trusttable_backend.config import get_settings
 from trusttable_backend.detectors.contract import FindingCandidate, SecurityExposureState
 from trusttable_backend.domain.evidence import Evidence
 from trusttable_backend.domain.parsing import Dataset
+from trusttable_backend.domain.row_context import RowContextWindow
 from trusttable_backend.domain.value_objects import ColumnReference
 from trusttable_backend.errors import AppError
 from trusttable_backend.profiling.schemas import ColumnProfile, DatasetProfile, ProfilingWarning
@@ -68,6 +71,8 @@ from trusttable_backend.schemas.analysis import (
     FindingItem,
     FindingsListResponse,
     ProfilingTimingResponse,
+    RowContextEntryResponse,
+    RowContextResponse,
     SampleMetadataResponse,
     SecurityExposureResponse,
     TrustAssessmentResponse,
@@ -139,6 +144,15 @@ def _get_finding_or_404(
         raise _not_found(analysis_id) from exc
     except FindingNotFoundError as exc:
         raise _finding_not_found(analysis_id, finding_id) from exc
+
+
+def _row_not_in_finding(analysis_id: str, finding_id: str, anchor_row: int) -> AppError:
+    return AppError(
+        "ROW_NOT_IN_FINDING",
+        "The requested row is not one of this finding's own affected rows.",
+        status_code=404,
+        details={"analysis_id": analysis_id, "finding_id": finding_id, "anchor_row": anchor_row},
+    )
 
 
 def _column_reference(reference: ColumnReference) -> ColumnReferenceResponse:
@@ -284,6 +298,9 @@ def _finding_detail(
         calculated_observation=finding.calculated_observation,
         affected_columns=[_column_reference(column) for column in finding.affected_columns],
         affected_row_count=len(finding.affected_row_references),
+        affected_row_numbers=sorted(
+            reference.row_number for reference in finding.affected_row_references
+        ),
         evidence_count=len(finding.evidence_ids),
         security_exposure=_security_exposure(exposure),
     )
@@ -297,6 +314,28 @@ def _evidence_item(evidence: Evidence) -> FindingEvidenceItem:
         affected_columns=[_column_reference(column) for column in evidence.affected_columns],
         affected_row_count=len(evidence.affected_row_references),
         scope=evidence.scope.value,
+    )
+
+
+def _row_context_response(window: RowContextWindow) -> RowContextResponse:
+    return RowContextResponse(
+        columns=[_column_reference(column) for column in window.columns],
+        requested_before=window.requested_before,
+        requested_after=window.requested_after,
+        actual_before=window.actual_before,
+        actual_after=window.actual_after,
+        truncated_at_start=window.truncated_at_start,
+        truncated_at_end=window.truncated_at_end,
+        max_window=window.max_window,
+        rows=[
+            RowContextEntryResponse(
+                row_number=entry.row_reference.row_number,
+                is_anchor=entry.is_anchor,
+                is_affected_by_finding=entry.is_affected_by_finding,
+                values=list(entry.values),
+            )
+            for entry in window.rows
+        ],
     )
 
 
@@ -471,6 +510,45 @@ def get_analysis_finding_evidence(
     evidence = get_finding_evidence(store, analysis_id, finding_id)
     items = [_evidence_item(item) for item in evidence]
     return FindingEvidenceListResponse(items=items, total_items=len(items))
+
+
+@router.get(
+    "/analyses/{analysis_id}/findings/{finding_id}/row-context",
+    response_model=RowContextResponse,
+)
+def get_analysis_finding_row_context(
+    analysis_id: str,
+    finding_id: str,
+    request: Request,
+    anchor_row: int = Query(...),
+    before: int = Query(3, ge=0),
+    after: int = Query(3, ge=0),
+) -> RowContextResponse:
+    """Return a bounded physical-neighborhood window around a finding's
+    affected row (`FIND-01`, `WP-038`; `docs/api-specification.md` §10).
+
+    Same `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` semantics as
+    `get_analysis_finding`. Raises `ROW_NOT_IN_FINDING` (404) when
+    `anchor_row` is not one of the finding's own affected rows (including
+    a finding with zero affected rows) — this endpoint reads context
+    around a finding, not arbitrary rows in the file. `before`/`after`
+    beyond the server's bounded maximum, or beyond the file's own start/
+    end, are clamped rather than rejected — see the response's own
+    `requested_*`/`actual_*`/`truncated_at_*` fields.
+    """
+    store = get_analysis_store(request)
+    _get_finding_or_404(store, analysis_id, finding_id)
+    try:
+        window = get_finding_row_context(
+            store, analysis_id, finding_id, anchor_row=anchor_row, before=before, after=after
+        )
+    except AnalysisNotFoundError as exc:
+        raise _not_found(analysis_id) from exc
+    except FindingNotFoundError as exc:
+        raise _finding_not_found(analysis_id, finding_id) from exc
+    except RowNotInFindingError as exc:
+        raise _row_not_in_finding(analysis_id, finding_id, anchor_row) from exc
+    return _row_context_response(window)
 
 
 @router.post("/analyses/{analysis_id}/cancel", response_model=AnalysisResource)

@@ -358,12 +358,12 @@ Request (query parameters):
   internal row number. The value must equal the row number of one of
   this finding's own affected row references, or the request is
   rejected (404 `ROW_NOT_IN_FINDING`).
-- `before`, `after` (optional integers, default 3 each) — requested
-  window size. The server enforces a maximum per side; the exact
-  maximum, and whether an over-limit request is clamped or rejected,
-  is an implementation/verification decision to be recorded here once
-  selected. If clamping is used, the response must distinguish
-  requested from actual window size (below).
+- `before`, `after` (optional integers, `>= 0`, default 3 each) —
+  requested window size. **Resolved (`FIND-01`, `WP-038`):** the server
+  enforces a maximum of 25 rows per side (`max_window`); an over-limit
+  request is clamped, not rejected, as is a request that would extend
+  past the start or end of the file. The response distinguishes
+  requested from actual window size in every case (below).
 
 Returns:
 
@@ -475,6 +475,7 @@ Raw suspicious text is never present in list endpoints.
 - CONTEXT_VERSION_CONFLICT
 - INVALID_CONTEXT
 - FINDING_NOT_FOUND
+- ROW_NOT_IN_FINDING
 - RULE_NOT_FOUND
 - RULE_INVALID
 - RULE_EXECUTION_FAILED

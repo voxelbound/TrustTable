@@ -6,6 +6,7 @@ import type {
   FindingDetailResponse,
   FindingEvidenceListResponse,
   FindingsListResponse,
+  RowContextResponse,
   UploadAnalysisResponse,
 } from '../../api'
 
@@ -107,11 +108,65 @@ export function makeFindingDetailResponse(
       { original_name: 'order_date', internal_key: 'order_date', ordinal: 3 },
     ],
     affected_row_count: 2,
+    affected_row_numbers: [4, 17],
     evidence_count: 2,
     security_exposure: {
       model_provider_enabled: false,
       sample_transmission_enabled: false,
     },
+    ...overrides,
+  }
+}
+
+export function makeRowContextResponse(
+  overrides: Partial<RowContextResponse> = {},
+): RowContextResponse {
+  const columns = overrides.columns ?? [
+    { original_name: 'order_id', internal_key: 'order_id', ordinal: 0 },
+    { original_name: 'order_date', internal_key: 'order_date', ordinal: 3 },
+  ]
+  const rows = overrides.rows ?? [
+    {
+      row_number: 2,
+      is_anchor: false,
+      is_affected_by_finding: false,
+      values: ['1002', '2026-01-02'],
+    },
+    {
+      row_number: 3,
+      is_anchor: false,
+      is_affected_by_finding: false,
+      values: ['1003', '2026-01-03'],
+    },
+    {
+      row_number: 4,
+      is_anchor: true,
+      is_affected_by_finding: true,
+      values: ['1004', '2099-01-01'],
+    },
+    {
+      row_number: 5,
+      is_anchor: false,
+      is_affected_by_finding: false,
+      values: ['1005', '2026-01-05'],
+    },
+    {
+      row_number: 6,
+      is_anchor: false,
+      is_affected_by_finding: false,
+      values: ['1006', '2026-01-06'],
+    },
+  ]
+  return {
+    columns,
+    requested_before: 3,
+    requested_after: 3,
+    actual_before: 2,
+    actual_after: 2,
+    truncated_at_start: true,
+    truncated_at_end: true,
+    max_window: 25,
+    rows,
     ...overrides,
   }
 }
@@ -214,4 +269,10 @@ export const handlers = [
   http.get(`${BASE}/analyses/:analysisId/findings/:findingId/evidence`, () => {
     return HttpResponse.json(makeFindingEvidenceListResponse())
   }),
+  http.get(
+    `${BASE}/analyses/:analysisId/findings/:findingId/row-context`,
+    () => {
+      return HttpResponse.json(makeRowContextResponse())
+    },
+  ),
 ]
