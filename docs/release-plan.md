@@ -38,6 +38,16 @@ Deliver:
 - prompt-injection trust boundary
 - local-model documentation
 
+> **Annotation (2026-09-13, does not edit the list above):** the
+> `v0.2 — Local AI beta` design session (`CHG-002`) reopened the
+> specific local runtime choice — `llama.cpp` and Ollama remain live
+> finalists pending a TrustTable-specific benchmark (see
+> `docs/decision-log.md` D-030–D-032, and D-007's appended review
+> note). The "Ollama provider" bullet above is stale relative to that
+> open decision and may be revised once a runtime is actually chosen;
+> it is left unedited here pending that decision, per this project's
+> historical-truth convention.
+
 This is the first promoted portfolio release.
 
 ## v0.3 — Complete manager workflow

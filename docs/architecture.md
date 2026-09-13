@@ -372,6 +372,36 @@ fallback. No real provider, network I/O, FastAPI route, or UI exists yet
 — tested against stub/fake providers only, the same precedent `DET-01`
 set ahead of `DET-02`'s real detectors.
 
+**Forward-looking design note (2026-09-13, `CHG-002`, not yet
+implemented):** the `v0.2` design session established that the eventual
+real-provider layer built on this seam must keep three concerns
+architecturally separate — the inference runtime/provider, the local
+model inventory, and the currently active model selection
+(`docs/decision-log.md` D-030) — so no specific model is ever hardcoded
+into `ai_provider`/`ai_boundary` consumers, and both a developer-facing
+and a later business-facing model-selection surface remain possible on
+top of the same `AIProvider` protocol. The same session also confirmed
+this package's existing design already correctly keeps full-dataset
+deterministic analysis and bounded per-call LLM context as separate
+concerns (D-027) — the model is never handed the raw uploaded file,
+only a bounded `PromptEnvelope`, regardless of dataset size. Runtime and
+model selection themselves remain undecided; see D-007's appended
+review note and D-030–D-032.
+
+### Local AI benchmark harness (planned, not yet built)
+
+A persistent, reusable, repository-resident evaluation capability
+(`docs/implementation-backlog.md` `AI-06`) is intended to sit alongside
+this package and `ai_boundary`, exercising the real `PromptEnvelope`/
+`build_safe_prompt`/`validate_model_output` contract against fixed,
+versioned, TrustTable-specific task fixtures built from the committed
+demo dataset — scoring structured-output validity, groundedness, retry
+rate, latency, and RAM/VRAM fit on both hardware profiles named in
+`docs/decision-log.md` D-029. Model/runtime selection is config-driven
+through this harness, not hardcoded. It is explicitly **not** product
+UI and **not** the production `AIProvider` integration — a separate,
+later, currently-unimplemented package (`D-032`).
+
 ### Risk scoring package
 
 `trusttable_backend.risk` (`RISK-01`) implements the "Risk scoring"
