@@ -26,27 +26,31 @@ No LLM required. Does not change v0.2's scope.
 
 ## v0.2 — Local AI beta
 
-Deliver:
+Deliver, in dependency order:
 
 - provider abstraction
 - disabled and mock providers
-- Ollama provider
+- persistent local-AI benchmark harness (TrustTable-specific, config-driven; see `docs/decision-log.md` D-032)
+- **human decision gate:** runtime, model family/exact model, quantization, and per-hardware-tier default — decided from the benchmark's evidence, not before (`docs/decision-log.md` D-033)
+- real local-inference provider (runtime selected via the decision gate above)
+- corresponding local runtime/model documentation
 - deterministic context hypotheses
 - validated context inference
 - guided questions
 - grounded explanations
 - prompt-injection trust boundary
-- local-model documentation
 
-> **Annotation (2026-09-13, does not edit the list above):** the
-> `v0.2 — Local AI beta` design session (`CHG-002`) reopened the
-> specific local runtime choice — `llama.cpp` and Ollama remain live
-> finalists pending a TrustTable-specific benchmark (see
-> `docs/decision-log.md` D-030–D-032, and D-007's appended review
-> note). The "Ollama provider" bullet above is stale relative to that
-> open decision and may be revised once a runtime is actually chosen;
-> it is left unedited here pending that decision, per this project's
-> historical-truth convention.
+> **Annotation (2026-09-13, `CHG-002`; corrected 2026-09-13, `CHG-003`
+> planning alignment):** the specific local runtime (`llama.cpp` vs.
+> Ollama) remains an open, human-owned decision — see
+> `docs/decision-log.md` D-007's appended review note, D-030–D-032, and
+> the sequencing decision D-033. The list above now reads "real
+> local-inference provider" rather than "Ollama provider" and includes
+> the previously-missing benchmark-harness and human-decision-gate
+> entries, sequenced ahead of the real provider per D-032/D-033
+> ("runtime and model selection follow from the benchmark harness's
+> results"). The prior "Ollama provider" wording is preserved in this
+> repository's own git history, not silently erased.
 
 This is the first promoted portfolio release.
 

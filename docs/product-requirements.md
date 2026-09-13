@@ -487,15 +487,15 @@ Required providers:
 
 - disabled
 - mock
-- Ollama
+- a real local-inference provider (runtime pending the human decision gate — see `docs/decision-log.md` D-007's appended review note, D-030–D-032, and D-033)
 
-> **Annotation (2026-09-13, does not edit the list above):** the
-> `v0.2 — Local AI beta` design session (`CHG-002`) reopened the
-> specific local runtime choice — `llama.cpp` and Ollama remain live
-> finalists pending a TrustTable-specific benchmark (see
-> `docs/decision-log.md` D-030–D-032, and D-007's appended review
-> note). "Ollama" above is stale relative to that open decision and
-> may be revised once a runtime is actually chosen.
+> **Annotation (2026-09-13, `CHG-002`; corrected 2026-09-13, `CHG-003`
+> planning alignment):** "Ollama" is replaced above with runtime-neutral
+> wording because the specific runtime remains an open, human-owned
+> decision, made only after `AI-06`'s benchmark evidence
+> (`docs/implementation-backlog.md` AI-06, `docs/decision-log.md`
+> D-032–D-033). The prior "Ollama" wording is preserved in this
+> repository's git history, not erased.
 
 Model calls may cover:
 

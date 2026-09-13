@@ -411,6 +411,16 @@ fixtures are deliberately drawn from a single dataset
 (`demo-data/sales_demo.csv`); a model selection treated as final should
 be corroborated against a second, distinct data source first (`D-032`).
 
+**Sequencing (2026-09-13, `CHG-003` planning alignment):** `AI-06` has
+no architectural dependency on `AI-03`'s real-provider implementation —
+it exercises the already-merged `AI-01`/`ai_boundary` seam directly, the
+same seam `AI-02`'s disabled/mock providers also use. Canonical `v0.2`
+sequencing therefore places `AI-06` and its benchmark evidence, followed
+by the human decision gate (runtime, model, quantization,
+per-hardware-tier default), before `AI-03` begins; see
+`docs/implementation-backlog.md`'s `Local AI beta` section and
+`docs/decision-log.md` D-032–D-033.
+
 ### Risk scoring package
 
 `trusttable_backend.risk` (`RISK-01`) implements the "Risk scoring"
