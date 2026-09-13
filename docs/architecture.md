@@ -402,6 +402,15 @@ through this harness, not hardcoded. It is explicitly **not** product
 UI and **not** the production `AIProvider` integration — a separate,
 later, currently-unimplemented package (`D-032`).
 
+Because it requires a real local model/runtime, it sits **outside** the
+standard CI-gated automated test suite (the same release-candidate-only
+gate precedent already used for this project's browser/performance
+layers, `docs/testing-strategy.md` §8) — it must not be wired into CI
+the way `AI-02`'s deterministic mock-provider tests are. Its first-round
+fixtures are deliberately drawn from a single dataset
+(`demo-data/sales_demo.csv`); a model selection treated as final should
+be corroborated against a second, distinct data source first (`D-032`).
+
 ### Risk scoring package
 
 `trusttable_backend.risk` (`RISK-01`) implements the "Risk scoring"
