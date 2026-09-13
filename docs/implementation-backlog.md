@@ -285,9 +285,26 @@ Support adversarial mock output.
 
 Configurable local model, timeout, structured output, health and availability.
 
+> Annotation (2026-09-13): the specific runtime (`llama.cpp` vs. Ollama)
+> is under active review as of `CHG-002`; see `docs/decision-log.md`
+> D-007's appended note and D-030–D-032. This item's exact scope is
+> pending that decision.
+
 ## AI-04 — Ollama documentation
 
 No paid account required.
+
+## AI-06 — Local AI benchmark harness
+
+Persistent, reusable, config-driven evaluation of candidate local
+models/runtimes against fixed, versioned, TrustTable-specific task
+fixtures (built from the real `ai_boundary` contract and the committed
+demo dataset), covering both the baseline and accelerated hardware
+profiles (`docs/decision-log.md` D-029). Scores structured-output
+validity, groundedness, retry rate, latency, RAM/VRAM fit, consistency,
+and practical usefulness. Not product UI; not the production AI
+provider integration. Runtime and model selection follow from this
+harness's results (D-032), not from generic public benchmarks.
 
 ## CTX-01 — Deterministic context hypotheses
 
