@@ -408,28 +408,46 @@ only a bounded `PromptEnvelope`, regardless of dataset size. Runtime and
 model selection themselves remain undecided; see D-007's appended
 review note and D-030–D-032.
 
-### Local AI benchmark harness (planned, not yet built)
+### Local AI benchmark harness
 
-A persistent, reusable, repository-resident evaluation capability
-(`docs/implementation-backlog.md` `AI-06`) is intended to sit alongside
-this package and `ai_boundary`, exercising the real `PromptEnvelope`/
-`build_safe_prompt`/`validate_model_output` contract against fixed,
-versioned, TrustTable-specific task fixtures built from the committed
-demo dataset — scoring structured-output validity, groundedness, retry
-rate, latency, and RAM/VRAM fit on both hardware profiles named in
-`docs/decision-log.md` D-029. Model/runtime selection is config-driven
+`trusttable_backend.ai_benchmark` (`AI-06`) is a persistent, reusable,
+config-driven evaluation capability sitting alongside `ai_provider` and
+`ai_boundary`: `fixtures.build_fixture_tasks()` builds six fixed,
+versioned `BenchmarkTask`s (one per `AIOperation`), each grounded in
+real `Evidence` from a deterministic demo-dataset analysis run at a
+fixed reference instant, reusing `analysis.service`'s already-merged
+pipeline rather than hand-authored synthetic evidence.
+`runner.run_benchmark(provider, tasks, config)` exercises any
+`AIProvider` against those fixtures and scores structured-output
+validity/groundedness (via `ai_boundary.validation.
+validate_model_output` — never a provider's own self-report), harness-
+measured latency, bounded retry rate (reusing `AI-01`'s
+`ProviderRequest.retry_feedback` field), and repeated-call consistency,
+producing a `BenchmarkReport`. Model/runtime selection is config-driven
 through this harness, not hardcoded. It is explicitly **not** product
-UI and **not** the production `AIProvider` integration — a separate,
-later, currently-unimplemented package (`D-032`).
+UI and **not** the production `AIProvider` integration.
 
-Because it requires a real local model/runtime, it sits **outside** the
-standard CI-gated automated test suite (the same release-candidate-only
-gate precedent already used for this project's browser/performance
-layers, `docs/testing-strategy.md` §8) — it must not be wired into CI
-the way `AI-02`'s deterministic mock-provider tests are. Its first-round
-fixtures are deliberately drawn from a single dataset
-(`demo-data/sales_demo.csv`); a model selection treated as final should
-be corroborated against a second, distinct data source first (`D-032`).
+RAM/VRAM fit and "practical usefulness" (`docs/implementation-
+backlog.md` `AI-06`'s own listed scoring criteria) are **not** computed
+by this harness — `BenchmarkConfig.hardware_profile` is a caller-
+supplied label matching `docs/decision-log.md` D-029's two named
+profiles, not measured host telemetry; `BenchmarkReport.notes` is an
+optional free-text field for a human evaluator's own judgment.
+
+This package proves the harness itself against `AI-02`'s already-merged
+`MockProvider`/`DisabledProvider` — it has never yet been run against a
+real local model/runtime. That separate "hands-on benchmark/model
+evaluation" step (`D-032`/`D-033`) requires the human owner's own local
+hardware and remains open. Because a real hands-on run requires a real
+local model/runtime, it sits **outside** the standard CI-gated automated
+test suite (the same release-candidate-only gate precedent already used
+for this project's browser/performance layers, `docs/testing-
+strategy.md` §8) — only this package's own `MockProvider`/
+`DisabledProvider`-based unit tests run in CI, the same way `AI-02`'s
+deterministic mock-provider tests do. Its first-round fixtures are
+deliberately drawn from a single dataset (`demo-data/sales_demo.csv`); a
+model selection treated as final should be corroborated against a
+second, distinct data source first (`D-032`).
 
 **Sequencing (2026-09-13, `CHG-003` planning alignment):** `AI-06` has
 no architectural dependency on `AI-03`'s real-provider implementation —
