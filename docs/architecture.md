@@ -378,9 +378,19 @@ precedent rather than one method per operation. A `ProviderError`
 hierarchy (`ProviderTimeoutError`, `ProviderConnectionError`,
 `ProviderInvalidResponseError`) gives a future caller distinct failure
 modes to catch for `D-006`'s "complete AI-disabled mode" deterministic
-fallback. No real provider, network I/O, FastAPI route, or UI exists yet
-— tested against stub/fake providers only, the same precedent `DET-01`
-set ahead of `DET-02`'s real detectors.
+fallback. `AI-02` adds the two non-real concrete providers this
+interface requires: `DisabledProvider` (`llm_provider="disabled"`,
+always unavailable, `complete()` raises `ProviderConnectionError`) and
+`MockProvider` (`llm_provider="mock"`, always available, configurable
+static or dynamic output — the dynamic `response_factory` seam is what
+makes "adversarial mock output" possible, proven end-to-end against
+`validate_model_output`'s real rejection paths), plus a small
+`create_provider(llm_provider: str)` factory that stays
+framework-independent by taking a plain string rather than `Settings`.
+No real provider (`AI-03`, pending the runtime decision gate), network
+I/O, FastAPI route, or UI exists yet — tested against stub/fake and the
+two `AI-02` providers only, the same precedent `DET-01` set ahead of
+`DET-02`'s real detectors.
 
 **Forward-looking design note (2026-09-13, `CHG-002`, not yet
 implemented):** the `v0.2` design session established that the eventual
