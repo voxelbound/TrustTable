@@ -434,28 +434,48 @@ supplied label matching `docs/decision-log.md` D-029's two named
 profiles, not measured host telemetry; `BenchmarkReport.notes` is an
 optional free-text field for a human evaluator's own judgment.
 
-**Explicit scoring boundary (2026-09-14, confirmed via human review
-before merge):** this harness measures structural validity/groundedness,
-latency, retry rate, and repeated-call consistency — it does **not**
-score narrative/explanation *quality*, semantic correctness beyond the
-existing grounding checks, or *category accuracy*. No numeric
-acceptance threshold for any metric is defined by this harness or by
-any currently accepted decision — `docs/decision-log.md` D-029/D-030/
-D-032 do not specify one. If narrative-quality or category-accuracy
-scoring, or specific numeric acceptance thresholds, prove necessary
+**Explicit three-tier scoring/evidence boundary (confirmed 2026-09-14
+via human review before merge; extended r3 with explicit candidate/
+resource-observation fields):**
+
+- **Measured by this harness itself:** structural output validity/
+  groundedness (via `ai_boundary.validation.validate_model_output`),
+  harness-measured latency, bounded retry rate, and repeated-call
+  consistency.
+- **Supplied/observed during the later hands-on run, not measured by
+  this package:** runtime/model/quantization identity and the hardware
+  profile (`persistence.CandidateMetadata` — `runtime_identifier`,
+  `model_identifier`, `hardware_profile` required; `quantization_
+  identifier` nullable for an unquantized/not-applicable candidate),
+  and peak RSS/VRAM (`persistence.ResourceObservations.peak_rss_mb`/
+  `peak_vram_mb`, both optional). These are plain caller-supplied
+  numbers/strings — this package adds no `psutil`, GPU library,
+  subprocess probing, or automatic hardware measurement of any kind.
+- **Still unscored, not implemented anywhere in this package:**
+  narrative/explanation *quality*, semantic correctness beyond the
+  existing grounding checks, *category accuracy*, and "practical
+  usefulness" (`BenchmarkReport.notes`, a free-text field only).
+
+No numeric acceptance threshold for any metric in any of the three
+tiers above is defined by this harness or by any currently accepted
+decision — `docs/decision-log.md` D-029/D-030/D-032 do not specify one.
+If narrative-quality or category-accuracy scoring, automatic resource
+measurement, or specific numeric acceptance thresholds prove necessary
 before a final model-selection decision, that is future benchmark-
 design work (an expected-answer/expected-category rubric, an LLM-judge/
-human-review step, or a governed threshold decision) requiring its own
-human-approved change record — not something this harness invents on
-its own authority.
+human-review step, a host-telemetry package, or a governed threshold
+decision) requiring its own human-approved change record — not
+something this harness invents on its own authority.
 
-`persistence.save_report(report, config, path)`/`load_report(path)`
-write and read a single deterministic (`sort_keys=True`) JSON document
-per run — schema/fixture-set version, provider/model identifiers as
-supplied by the caller, the hardware-profile label, the full
-`BenchmarkConfig` used, every per-task result, and the aggregate
-metrics — so multiple runs across candidate runtimes/models/
-quantizations can be compared later. Persistence is explicit and
+`persistence.save_report(report, config, path, candidate=..., resource_
+observations=...)`/`load_report(path)` write and read a single
+deterministic (`sort_keys=True`) JSON document per run — schema/
+fixture-set version, provider/model identifiers as self-reported by the
+`AIProvider`, the explicit `CandidateMetadata`/`ResourceObservations`
+above, the full `BenchmarkConfig` used, every per-task result, and the
+aggregate metrics — so multiple runs across candidate runtimes/models/
+quantizations can be compared later without a comparison tool having to
+parse free-form identifier strings. Persistence is explicit and
 caller-controlled: this module never chooses a file location, a
 database, an API, or a network destination on its own.
 
