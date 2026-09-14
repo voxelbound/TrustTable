@@ -10,7 +10,7 @@ It combines deterministic profiling and rule-based detection with evidence-groun
 
 **Current milestone: v0.1.1 — Investigation UX.** `FIND-01` (row context for row-anchored findings) — this milestone's sole planned deliverable — is implemented in full: the row-context API endpoint, and a Finding Detail UI section with expand and Prev/Next navigation across a finding's own affected rows (see "Delivered work" below).
 
-Local AI beta (v0.2) work has also begun: the AI provider interface plus its two non-real providers (disabled, mock) are implemented; the real local-inference provider remains open pending a human-owned runtime decision.
+Local AI beta (v0.2) work has also begun: the AI provider interface, its two non-real providers (disabled, mock), and a local-AI benchmark harness (proven against those two providers, not yet run against a real model) are implemented; the hands-on benchmark/model evaluation step, the human-owned runtime decision, and the real local-inference provider remain open.
 
 The product, domain model, API boundaries, detector framework, frontend architecture, testing strategy, threat model, release plan, and implementation backlog were all defined before production implementation began (see `docs/`).
 
@@ -52,6 +52,7 @@ The product, domain model, API boundaries, detector framework, frontend architec
 
 - **AI-01** — the AI provider interface: a framework-independent contract package (the six model-call operations, request/response/health-check shapes, a provider-error hierarchy, and the `AIProvider` protocol every provider implements against).
 - **AI-02** — the two non-real providers required by `docs/product-requirements.md` §12: `DisabledProvider` (`llm_provider=disabled`, `D-006`'s "complete AI-disabled mode") and `MockProvider` (`llm_provider=mock`, configurable static or dynamic output, proven capable of producing and having rejected genuinely adversarial "attempt to follow the injected instruction" output against the real `validate_model_output`), plus a small `create_provider` factory. The real local-inference provider (`AI-03`) remains open, pending the human-owned runtime/model/quantization decision gate.
+- **AI-06** (harness only) — a persistent, config-driven local-AI benchmark harness: six fixed, versioned task fixtures (one per `AIOperation`) grounded in real demo-dataset evidence, and a runner scoring structured-output validity/groundedness, latency, bounded retry rate, and repeated-call consistency for any `AIProvider`. Proven against `AI-02`'s `MockProvider`/`DisabledProvider` only — the separate hands-on step of running it against a real downloaded local model/runtime has not happened and remains open, human-owned follow-on work, ahead of the runtime/model/quantization decision gate.
 
 The first production target is a local, single-instance application that:
 

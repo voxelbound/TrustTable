@@ -408,28 +408,91 @@ only a bounded `PromptEnvelope`, regardless of dataset size. Runtime and
 model selection themselves remain undecided; see D-007's appended
 review note and D-030–D-032.
 
-### Local AI benchmark harness (planned, not yet built)
+### Local AI benchmark harness
 
-A persistent, reusable, repository-resident evaluation capability
-(`docs/implementation-backlog.md` `AI-06`) is intended to sit alongside
-this package and `ai_boundary`, exercising the real `PromptEnvelope`/
-`build_safe_prompt`/`validate_model_output` contract against fixed,
-versioned, TrustTable-specific task fixtures built from the committed
-demo dataset — scoring structured-output validity, groundedness, retry
-rate, latency, and RAM/VRAM fit on both hardware profiles named in
-`docs/decision-log.md` D-029. Model/runtime selection is config-driven
+`trusttable_backend.ai_benchmark` (`AI-06`) is a persistent, reusable,
+config-driven evaluation capability sitting alongside `ai_provider` and
+`ai_boundary`: `fixtures.build_fixture_tasks()` builds six fixed,
+versioned `BenchmarkTask`s (one per `AIOperation`), each grounded in
+real `Evidence` from a deterministic demo-dataset analysis run at a
+fixed reference instant, reusing `analysis.service`'s already-merged
+pipeline rather than hand-authored synthetic evidence.
+`runner.run_benchmark(provider, tasks, config)` exercises any
+`AIProvider` against those fixtures and scores structured-output
+validity/groundedness (via `ai_boundary.validation.
+validate_model_output` — never a provider's own self-report), harness-
+measured latency, bounded retry rate (reusing `AI-01`'s
+`ProviderRequest.retry_feedback` field), and repeated-call consistency,
+producing a `BenchmarkReport`. Model/runtime selection is config-driven
 through this harness, not hardcoded. It is explicitly **not** product
-UI and **not** the production `AIProvider` integration — a separate,
-later, currently-unimplemented package (`D-032`).
+UI and **not** the production `AIProvider` integration.
 
-Because it requires a real local model/runtime, it sits **outside** the
-standard CI-gated automated test suite (the same release-candidate-only
-gate precedent already used for this project's browser/performance
-layers, `docs/testing-strategy.md` §8) — it must not be wired into CI
-the way `AI-02`'s deterministic mock-provider tests are. Its first-round
-fixtures are deliberately drawn from a single dataset
-(`demo-data/sales_demo.csv`); a model selection treated as final should
-be corroborated against a second, distinct data source first (`D-032`).
+RAM/VRAM fit and "practical usefulness" (`docs/implementation-
+backlog.md` `AI-06`'s own listed scoring criteria) are **not** computed
+by this harness — `BenchmarkConfig.hardware_profile` is a caller-
+supplied label matching `docs/decision-log.md` D-029's two named
+profiles, not measured host telemetry; `BenchmarkReport.notes` is an
+optional free-text field for a human evaluator's own judgment.
+
+**Explicit three-tier scoring/evidence boundary (confirmed 2026-09-14
+via human review before merge; extended r3 with explicit candidate/
+resource-observation fields):**
+
+- **Measured by this harness itself:** structural output validity/
+  groundedness (via `ai_boundary.validation.validate_model_output`),
+  harness-measured latency, bounded retry rate, and repeated-call
+  consistency.
+- **Supplied/observed during the later hands-on run, not measured by
+  this package:** runtime/model/quantization identity and the hardware
+  profile (`persistence.CandidateMetadata` — `runtime_identifier`,
+  `model_identifier`, `hardware_profile` required; `quantization_
+  identifier` nullable for an unquantized/not-applicable candidate),
+  and peak RSS/VRAM (`persistence.ResourceObservations.peak_rss_mb`/
+  `peak_vram_mb`, both optional). These are plain caller-supplied
+  numbers/strings — this package adds no `psutil`, GPU library,
+  subprocess probing, or automatic hardware measurement of any kind.
+- **Still unscored, not implemented anywhere in this package:**
+  narrative/explanation *quality*, semantic correctness beyond the
+  existing grounding checks, *category accuracy*, and "practical
+  usefulness" (`BenchmarkReport.notes`, a free-text field only).
+
+No numeric acceptance threshold for any metric in any of the three
+tiers above is defined by this harness or by any currently accepted
+decision — `docs/decision-log.md` D-029/D-030/D-032 do not specify one.
+If narrative-quality or category-accuracy scoring, automatic resource
+measurement, or specific numeric acceptance thresholds prove necessary
+before a final model-selection decision, that is future benchmark-
+design work (an expected-answer/expected-category rubric, an LLM-judge/
+human-review step, a host-telemetry package, or a governed threshold
+decision) requiring its own human-approved change record — not
+something this harness invents on its own authority.
+
+`persistence.save_report(report, config, path, candidate=..., resource_
+observations=...)`/`load_report(path)` write and read a single
+deterministic (`sort_keys=True`) JSON document per run — schema/
+fixture-set version, provider/model identifiers as self-reported by the
+`AIProvider`, the explicit `CandidateMetadata`/`ResourceObservations`
+above, the full `BenchmarkConfig` used, every per-task result, and the
+aggregate metrics — so multiple runs across candidate runtimes/models/
+quantizations can be compared later without a comparison tool having to
+parse free-form identifier strings. Persistence is explicit and
+caller-controlled: this module never chooses a file location, a
+database, an API, or a network destination on its own.
+
+This package proves the harness itself against `AI-02`'s already-merged
+`MockProvider`/`DisabledProvider` — it has never yet been run against a
+real local model/runtime. That separate "hands-on benchmark/model
+evaluation" step (`D-032`/`D-033`) requires the human owner's own local
+hardware and remains open. Because a real hands-on run requires a real
+local model/runtime, it sits **outside** the standard CI-gated automated
+test suite (the same release-candidate-only gate precedent already used
+for this project's browser/performance layers, `docs/testing-
+strategy.md` §8) — only this package's own `MockProvider`/
+`DisabledProvider`-based unit tests run in CI, the same way `AI-02`'s
+deterministic mock-provider tests do. Its first-round fixtures are
+deliberately drawn from a single dataset (`demo-data/sales_demo.csv`); a
+model selection treated as final should be corroborated against a
+second, distinct data source first (`D-032`).
 
 **Sequencing (2026-09-13, `CHG-003` planning alignment):** `AI-06` has
 no architectural dependency on `AI-03`'s real-provider implementation —
