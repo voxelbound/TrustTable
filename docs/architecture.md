@@ -434,6 +434,31 @@ supplied label matching `docs/decision-log.md` D-029's two named
 profiles, not measured host telemetry; `BenchmarkReport.notes` is an
 optional free-text field for a human evaluator's own judgment.
 
+**Explicit scoring boundary (2026-09-14, confirmed via human review
+before merge):** this harness measures structural validity/groundedness,
+latency, retry rate, and repeated-call consistency — it does **not**
+score narrative/explanation *quality*, semantic correctness beyond the
+existing grounding checks, or *category accuracy*. No numeric
+acceptance threshold for any metric is defined by this harness or by
+any currently accepted decision — `docs/decision-log.md` D-029/D-030/
+D-032 do not specify one. If narrative-quality or category-accuracy
+scoring, or specific numeric acceptance thresholds, prove necessary
+before a final model-selection decision, that is future benchmark-
+design work (an expected-answer/expected-category rubric, an LLM-judge/
+human-review step, or a governed threshold decision) requiring its own
+human-approved change record — not something this harness invents on
+its own authority.
+
+`persistence.save_report(report, config, path)`/`load_report(path)`
+write and read a single deterministic (`sort_keys=True`) JSON document
+per run — schema/fixture-set version, provider/model identifiers as
+supplied by the caller, the hardware-profile label, the full
+`BenchmarkConfig` used, every per-task result, and the aggregate
+metrics — so multiple runs across candidate runtimes/models/
+quantizations can be compared later. Persistence is explicit and
+caller-controlled: this module never chooses a file location, a
+database, an API, or a network destination on its own.
+
 This package proves the harness itself against `AI-02`'s already-merged
 `MockProvider`/`DisabledProvider` — it has never yet been run against a
 real local model/runtime. That separate "hands-on benchmark/model

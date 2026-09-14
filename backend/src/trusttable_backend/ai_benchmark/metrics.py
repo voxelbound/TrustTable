@@ -14,6 +14,12 @@ backlog.md#AI-06`'s own listed criteria) are not computed by this
 module — see `BenchmarkReport.hardware_profile`/`notes` and this
 package's Non-goals.
 
+**Explicit scoring boundary:** neither `TaskResult` nor `BenchmarkReport`
+carries a narrative/explanation-quality score, a semantic-correctness
+score beyond grounding, or a category-accuracy field — none of these
+are computed anywhere in this package (`__init__.py`'s own "Scoring
+boundary" note).
+
 Framework-independent: no FastAPI/SQLAlchemy/pydantic import. Stdlib
 only.
 """

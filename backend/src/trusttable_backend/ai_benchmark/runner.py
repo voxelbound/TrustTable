@@ -17,6 +17,11 @@ wired into CI as a live-model-executing job for the same reason;
 CI exercises only this module's own unit tests against `AI-02`'s
 `MockProvider`/`DisabledProvider`.
 
+**Explicit scoring boundary:** this module never scores narrative/
+explanation quality, semantic correctness beyond grounding, or category
+accuracy — see `__init__.py`'s "Scoring boundary" note and
+`metrics.py`'s own disclosure.
+
 Framework-independent: no FastAPI/SQLAlchemy/pydantic import. Stdlib
 only, plus reuse of `ai_provider`/`ai_boundary`'s own stdlib-only types.
 """
