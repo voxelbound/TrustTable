@@ -15,7 +15,12 @@ from trusttable_backend.ai_benchmark.fixtures import (
     build_fixture_tasks,
 )
 from trusttable_backend.ai_provider.contract import AIOperation
-from trusttable_backend.analysis.service import AnalysisStore, create_analysis, run_analysis
+from trusttable_backend.analysis.service import (
+    Analysis,
+    AnalysisStore,
+    create_analysis,
+    run_analysis,
+)
 
 _REFERENCE_INSTANT = datetime(2026, 8, 24, tzinfo=UTC)
 
@@ -28,7 +33,7 @@ _EXPECTED_TASK_DETECTOR_IDS = {
 }
 
 
-def _independent_reference_analysis():
+def _independent_reference_analysis() -> Analysis:
     """Build a second, wholly independent reference analysis (its own
     store/instance) for AC-03's independent re-verification, rather than
     reusing anything `fixtures.py` itself constructed."""
