@@ -504,6 +504,25 @@ per-hardware-tier default), before `AI-03` begins; see
 `docs/implementation-backlog.md`'s `Local AI beta` section and
 `docs/decision-log.md` D-032–D-033.
 
+**Benchmark-only real-runtime adapter (2026-09-14):**
+`ai_benchmark.adapters.llama_cpp_http.LlamaCppHttpProvider` closes the
+one gap that prevented `AI-06` from running against a real model: an
+`AIProvider`-conformant class that reuses `build_safe_prompt` unmodified
+and calls a caller-supplied local `llama-server` instance over HTTP
+(`httpx`, already a dependency), returning the model's parsed JSON
+output for `runner.py`'s existing central `validate_model_output` call
+to grade — the adapter itself never validates output. It is
+**evaluation tooling only**: `provider_name` is a distinct,
+self-describing string, never registered in `ai_provider.factory`, never
+selectable via `Settings.llm_provider`, never reachable from any FastAPI
+route or application service, and deliberately not re-exported from
+`ai_benchmark`'s own top-level `__init__.py`. Endpoint, timeout, and
+generation settings are all caller-supplied and independent of
+`Settings.llm_base_url`/`llm_model`/`llm_timeout_seconds`. This adapter
+makes the hands-on benchmark/model evaluation step *possible*; it does
+not perform that run, select a runtime/model/quantization, or start
+`AI-03` — all three remain exactly as open as `D-032`/`D-033` left them.
+
 ### Risk scoring package
 
 `trusttable_backend.risk` (`RISK-01`) implements the "Risk scoring"

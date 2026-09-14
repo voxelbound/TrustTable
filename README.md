@@ -10,7 +10,7 @@ It combines deterministic profiling and rule-based detection with evidence-groun
 
 **Current milestone: v0.1.1 — Investigation UX.** `FIND-01` (row context for row-anchored findings) — this milestone's sole planned deliverable — is implemented in full: the row-context API endpoint, and a Finding Detail UI section with expand and Prev/Next navigation across a finding's own affected rows (see "Delivered work" below).
 
-Local AI beta (v0.2) work has also begun: the AI provider interface, its two non-real providers (disabled, mock), and a local-AI benchmark harness (proven against those two providers, not yet run against a real model) are implemented; the hands-on benchmark/model evaluation step, the human-owned runtime decision, and the real local-inference provider remain open.
+Local AI beta (v0.2) work has also begun: the AI provider interface, its two non-real providers (disabled, mock), and a local-AI benchmark harness (proven against those two providers) are implemented. The benchmark harness can now also reach a real, locally running `llama-server` through a benchmark-only adapter (`ai_benchmark/adapters/llama_cpp_http.py`) — evaluation tooling only, not a product provider, not registered or selectable anywhere in the running application. No runtime, model, or quantization has been selected; nothing has been downloaded or installed by this work. The hands-on benchmark/model evaluation step, the human-owned runtime decision, and the real local-inference provider (`AI-03`) all remain open.
 
 The product, domain model, API boundaries, detector framework, frontend architecture, testing strategy, threat model, release plan, and implementation backlog were all defined before production implementation began (see `docs/`).
 
