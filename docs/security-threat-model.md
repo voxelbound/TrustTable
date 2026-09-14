@@ -133,7 +133,8 @@ Mitigations:
 
 Mitigations:
 
-- local Ollama default
+- local-only inference runtime by default (specific runtime open —
+  see `docs/decision-log.md` D-007, D-033)
 - clear provider and model-location status
 - sample sending disabled
 - no telemetry requirement

@@ -21,8 +21,16 @@ FastAPI application
    └── Bounded in-process workers
           │
           ├── SQLite + mounted files
-          └── Optional host Ollama
+          └── Optional host local AI runtime
 ```
+
+> **Annotation (2026-09-14, `CHG-003` documentation-consistency
+> alignment):** the specific local AI runtime (`llama.cpp` vs. Ollama)
+> remains an open, human-owned decision — see `docs/decision-log.md`
+> `D-007`'s appended review note and `D-030`–`D-033`. References to
+> "Ollama" below have been corrected to runtime-neutral wording; the
+> prior wording is preserved in this repository's git history, not
+> erased. See also the "Local AI benchmark harness" section below.
 
 ## 2. Deployment
 
@@ -30,8 +38,8 @@ FastAPI application
 
 - frontend and backend run in Docker
 - SQLite and files use a mounted volume
-- Ollama runs on the host
-- backend reaches Ollama through a configurable base URL
+- the local AI runtime (once selected) runs on the host
+- backend reaches the local AI runtime through a configurable base URL
 - no paid API key is required
 
 ### Public deployment
@@ -64,7 +72,7 @@ Rules:
 
 - detector modules do not import FastAPI
 - domain modules do not import SQLAlchemy models
-- route handlers do not call Ollama directly
+- route handlers do not call the local AI runtime directly
 - persistence models do not define business behavior
 - AI output never bypasses validation
 - deterministic results are stored independently from AI interpretations
@@ -352,8 +360,10 @@ itself) also remains a separate, later package.
 ### AI provider interface
 
 `trusttable_backend.ai_provider` (`AI-01`) implements the seam every
-future real provider (`AI-02` disabled/mock, `AI-03` Ollama) plugs into,
-matching `docs/product-requirements.md` §12's six model-call operations
+future real provider (`AI-02` disabled/mock, `AI-03` the real
+local-inference provider — runtime pending the decision gate, `D-007`/
+`D-033`) plugs into, matching `docs/product-requirements.md` §12's six
+model-call operations
 (`AIOperation`: context inference, guided questions, finding
 explanation, remediation, rule description, report summary) plus a
 separate `AIProvider.health_check()` liveness/availability probe.
@@ -410,6 +420,16 @@ the way `AI-02`'s deterministic mock-provider tests are. Its first-round
 fixtures are deliberately drawn from a single dataset
 (`demo-data/sales_demo.csv`); a model selection treated as final should
 be corroborated against a second, distinct data source first (`D-032`).
+
+**Sequencing (2026-09-13, `CHG-003` planning alignment):** `AI-06` has
+no architectural dependency on `AI-03`'s real-provider implementation —
+it exercises the already-merged `AI-01`/`ai_boundary` seam directly, the
+same seam `AI-02`'s disabled/mock providers also use. Canonical `v0.2`
+sequencing therefore places `AI-06` and its benchmark evidence, followed
+by the human decision gate (runtime, model, quantization,
+per-hardware-tier default), before `AI-03` begins; see
+`docs/implementation-backlog.md`'s `Local AI beta` section and
+`docs/decision-log.md` D-032–D-033.
 
 ### Risk scoring package
 

@@ -2,7 +2,7 @@
 
 **Target:** Production-quality local-first v1.0  
 **Public hosting:** Deferred post-v1  
-**LLM:** Optional local Ollama  
+**LLM:** Optional local AI runtime (specific runtime open — see `docs/decision-log.md` D-007, D-033)  
 **CI LLM:** Mock provider
 
 ## Global agent rules
@@ -281,19 +281,6 @@ Operations:
 
 Support adversarial mock output.
 
-## AI-03 — Ollama provider
-
-Configurable local model, timeout, structured output, health and availability.
-
-> Annotation (2026-09-13): the specific runtime (`llama.cpp` vs. Ollama)
-> is under active review as of `CHG-002`; see `docs/decision-log.md`
-> D-007's appended note and D-030–D-032. This item's exact scope is
-> pending that decision.
-
-## AI-04 — Ollama documentation
-
-No paid account required.
-
 ## AI-06 — Local AI benchmark harness
 
 Persistent, reusable, config-driven evaluation of candidate local
@@ -305,6 +292,39 @@ validity, groundedness, retry rate, latency, RAM/VRAM fit, consistency,
 and practical usefulness. Not product UI; not the production AI
 provider integration. Runtime and model selection follow from this
 harness's results (D-032), not from generic public benchmarks.
+
+> Annotation (2026-09-13, `CHG-003` sequencing): `AI-06` depends only on
+> `AI-01`/`AI-02` (the already-merged provider seam and mock/disabled
+> providers) and the committed demo fixture — it has no architectural
+> dependency on `AI-03`'s real-runtime implementation. It is sequenced
+> here, ahead of `AI-03`, per `docs/decision-log.md` D-032/D-033.
+
+## Human decision gate — runtime, model, and quantization
+
+Not an implementation item. After `AI-06`'s hands-on benchmark evidence
+exists, the human owner decides: runtime (`llama.cpp` vs. Ollama),
+model family and exact model, quantization, and whether the default
+model differs by hardware tier (`docs/decision-log.md` D-007's appended
+review note, D-029, D-030–D-033). `AI-03` must not start before this
+gate is complete.
+
+## AI-03 — Ollama provider
+
+Configurable local model, timeout, structured output, health and availability.
+
+> Annotation (2026-09-13, `CHG-002`; corrected 2026-09-13, `CHG-003`
+> sequencing): the specific runtime (`llama.cpp` vs. Ollama) is an open,
+> human-owned decision — see `docs/decision-log.md` D-007's appended
+> note and D-030–D-032. The heading above is left unedited pending that
+> decision, per this project's historical-truth convention (same
+> treatment `CHG-002` already applied). **This item must not be treated
+> as ready before `AI-06` (the benchmark harness) and the human decision
+> gate above are both complete — see D-033.** This item's exact scope
+> is pending the runtime decision.
+
+## AI-04 — Ollama documentation
+
+No paid account required.
 
 ## CTX-01 — Deterministic context hypotheses
 
@@ -350,7 +370,8 @@ Acceptance:
 
 ## REL-02 — v0.2 package
 
-Local Ollama and AI-disabled operation both pass.
+The real local-inference provider (runtime selected via the human
+decision gate — D-033) and AI-disabled operation both pass.
 
 # Complete manager workflow
 
@@ -422,7 +443,7 @@ Compare against hidden manifest.
 
 ## EVAL-02 — AI grounding evaluation
 
-Fixture mode required; live Ollama mode optional before release.
+Fixture mode required; live local-AI-runtime mode optional before release (runtime selected via the decision gate — D-033).
 
 ## SEC-01 — Security hardening
 
