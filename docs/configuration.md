@@ -56,11 +56,21 @@ are present, correctly typed, and bounded from day one.
 
 ## LLM provider
 
+> **Note (2026-09-14, `CHG-003` documentation-consistency alignment):**
+> the `LLM_PROVIDER` enum's `ollama` literal reflects existing,
+> already-committed `FND-02`-era code (`Settings`,
+> `backend/src/trusttable_backend/config.py`) and is unchanged by this
+> docs-only package — it does not itself represent a runtime decision.
+> The specific local AI runtime remains an open, human-owned decision
+> pending the `AI-06` benchmark and human decision gate (see
+> `docs/decision-log.md` D-007's appended review note and D-030–D-033);
+> this value may be revisited when `AI-03` is actually implemented.
+
 | Variable | Type | Default | Effect |
 |---|---|---|---|
 | `LLM_PROVIDER` | enum: `disabled` \| `mock` \| `ollama` | `disabled` | Will select the active AI provider once the provider abstraction exists (`AI-01`/`AI-02`/`AI-03`). |
-| `LLM_BASE_URL` | non-empty string (potentially sensitive) | `http://host.docker.internal:11434` | Will configure the local Ollama endpoint once the Ollama provider exists (`AI-03`). |
-| `LLM_MODEL` | string (unconstrained, default empty) | `""` (empty) | Will select the local model name once the Ollama provider exists. |
+| `LLM_BASE_URL` | non-empty string (potentially sensitive) | `http://host.docker.internal:11434` | Will configure the local AI runtime's endpoint once the real local-inference provider exists (`AI-03`; specific runtime pending the decision gate — D-007, D-033). |
+| `LLM_MODEL` | string (unconstrained, default empty) | `""` (empty) | Will select the local model name once the real local-inference provider exists (`AI-03`). |
 | `LLM_TEMPERATURE` | float, `0`–`2` | `0` | Will configure model sampling temperature once a provider calls a model. |
 | `LLM_CONTEXT_WINDOW` | positive integer | `8192` | Will bound the model context window once a provider calls a model. |
 | `LLM_TIMEOUT_SECONDS` | positive integer | `120` | Will bound a single model call's timeout once a provider calls a model. |
