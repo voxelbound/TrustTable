@@ -65,7 +65,7 @@ Cover:
 - rules
 - export
 - AI-disabled state
-- Ollama unavailable
+- local AI runtime unavailable
 - prompt-injection warning
 - deletion confirmation
 
@@ -81,7 +81,7 @@ Required scenarios:
 6. confirm and dismiss findings
 7. rule execution and export
 8. analysis deletion
-9. Ollama unavailable
+9. local AI runtime unavailable
 10. prompt-injection dataset
 11. restart with completed analysis
 12. retry interrupted analysis
@@ -220,7 +220,10 @@ Release candidate:
 - all browser tests
 - full deterministic evaluation
 - AI fixture evaluation
-- optional live Ollama evaluation
+- optional live local-AI runtime evaluation (`AI-06` benchmark harness;
+  specific runtime open until the human decision gate — see
+  `docs/decision-log.md` D-032, D-033, and `docs/architecture.md`'s
+  "Local AI benchmark harness" section)
 - migration tests
 - container scan
 - SBOM generation

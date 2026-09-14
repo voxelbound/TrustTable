@@ -90,7 +90,7 @@ Production definition:
 - local-first
 - single instance
 - Docker
-- optional local Ollama
+- optional local AI runtime (specific runtime open — see `docs/decision-log.md` D-007, D-033)
 - no paid inference API
 - no public hosting requirement
 

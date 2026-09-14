@@ -671,7 +671,7 @@ Version 1 is complete when:
 
 - Docker starts the application from a clean checkout
 - CSV and XLSX workflows work
-- Ollama and AI-disabled modes work
+- the real local-inference provider and AI-disabled modes work (runtime selected via the decision gate — D-007, D-033)
 - data survives restart
 - deletion and retry work
 - evidence-backed findings work

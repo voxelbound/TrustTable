@@ -2,7 +2,7 @@
 
 **Target:** Production-quality local-first v1.0  
 **Public hosting:** Deferred post-v1  
-**LLM:** Optional local Ollama  
+**LLM:** Optional local AI runtime (specific runtime open — see `docs/decision-log.md` D-007, D-033)  
 **CI LLM:** Mock provider
 
 ## Global agent rules
@@ -370,7 +370,8 @@ Acceptance:
 
 ## REL-02 — v0.2 package
 
-Local Ollama and AI-disabled operation both pass.
+The real local-inference provider (runtime selected via the human
+decision gate — D-033) and AI-disabled operation both pass.
 
 # Complete manager workflow
 
@@ -442,7 +443,7 @@ Compare against hidden manifest.
 
 ## EVAL-02 — AI grounding evaluation
 
-Fixture mode required; live Ollama mode optional before release.
+Fixture mode required; live local-AI-runtime mode optional before release (runtime selected via the decision gate — D-033).
 
 ## SEC-01 — Security hardening
 
