@@ -102,6 +102,46 @@ def _evidence_for_ids(analysis: Analysis, evidence_ids: tuple[str, ...]) -> tupl
     return tuple(by_id[eid] for eid in evidence_ids)
 
 
+def _known_numeric_facts_from_evidence(evidence: tuple[Evidence, ...]) -> dict[str, float]:
+    """Derive a flat `known_numeric_facts` allow-list from the numeric
+    fields of each included `Evidence.structured_payload`, aggregated by
+    original field name.
+
+    Only numeric scalar values (`int`/`float`, excluding `bool` — `bool`
+    is a subclass of `int` in Python) participate; non-numeric fields
+    (e.g. `validity.future_dates`' own `reference_date` string) are
+    skipped. The flat `numeric_claims`/`known_numeric_facts` key contract
+    is unchanged — keys are never namespaced by `evidence_id`.
+
+    Collision rule (fixed, not caller-configurable):
+    - A field name present in exactly one place is exposed as that flat
+      key/value.
+    - A field name present in multiple places with the *same* numeric
+      value is exposed once, deterministically — independent of
+      encounter order, never last-write-wins.
+    - A field name present in multiple places with *different* numeric
+      values is ambiguous and is **omitted** entirely (fails closed): a
+      model claim using that key then correctly resolves to
+      `unknown_numeric_claim` through `validate_model_output`, rather
+      than silently asserting one of the conflicting values.
+    """
+    values: dict[str, float] = {}
+    ambiguous: set[str] = set()
+    for item in evidence:
+        for key, raw_value in item.structured_payload.items():
+            if isinstance(raw_value, bool) or not isinstance(raw_value, int | float):
+                continue
+            if key in ambiguous:
+                continue
+            numeric_value = float(raw_value)
+            if key not in values:
+                values[key] = numeric_value
+            elif values[key] != numeric_value:
+                ambiguous.add(key)
+                del values[key]
+    return values
+
+
 def _make_task(
     *,
     task_id: str,
@@ -120,7 +160,11 @@ def _make_task(
         task_id=task_id,
         operation=operation,
         description=description,
-        request=ProviderRequest(operation=operation, envelope=envelope, known_numeric_facts={}),
+        request=ProviderRequest(
+            operation=operation,
+            envelope=envelope,
+            known_numeric_facts=_known_numeric_facts_from_evidence(evidence),
+        ),
     )
 
 
