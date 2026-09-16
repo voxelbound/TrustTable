@@ -56,21 +56,21 @@ are present, correctly typed, and bounded from day one.
 
 ## LLM provider
 
-> **Note (2026-09-14, `CHG-003` documentation-consistency alignment):**
-> the `LLM_PROVIDER` enum's `ollama` literal reflects existing,
-> already-committed `FND-02`-era code (`Settings`,
-> `backend/src/trusttable_backend/config.py`) and is unchanged by this
-> docs-only package — it does not itself represent a runtime decision.
-> The specific local AI runtime remains an open, human-owned decision
-> pending the `AI-06` benchmark and human decision gate (see
-> `docs/decision-log.md` D-007's appended review note and D-030–D-033);
-> this value may be revisited when `AI-03` is actually implemented.
+> **Note (2026-09-16, `AI-03` implemented):** the local AI runtime
+> decision named below is now resolved — `llama.cpp` is the selected
+> v0.2 baseline runtime (`docs/decision-log.md` D-035), and
+> Qwen3.5-4B-Q4_K_M is the selected baseline-profile model (`D-034`).
+> `LLM_PROVIDER`'s `ollama` literal (the placeholder this note
+> previously described) has been replaced with `llama_cpp`, the real
+> value `AI-03`'s provider is registered under. The accelerated/GPU
+> hardware-tier default remains a separate, later, explicitly deferred
+> decision (`D-035`) and does not affect these defaults.
 
 | Variable | Type | Default | Effect |
 |---|---|---|---|
-| `LLM_PROVIDER` | enum: `disabled` \| `mock` \| `ollama` | `disabled` | Will select the active AI provider once the provider abstraction exists (`AI-01`/`AI-02`/`AI-03`). |
-| `LLM_BASE_URL` | non-empty string (potentially sensitive) | `http://host.docker.internal:11434` | Will configure the local AI runtime's endpoint once the real local-inference provider exists (`AI-03`; specific runtime pending the decision gate — D-007, D-033). |
-| `LLM_MODEL` | string (unconstrained, default empty) | `""` (empty) | Will select the local model name once the real local-inference provider exists (`AI-03`). |
+| `LLM_PROVIDER` | enum: `disabled` \| `mock` \| `llama_cpp` | `disabled` | Selects the active AI provider (`AI-01`/`AI-02`/`AI-03`). `llama_cpp` requires `LLM_BASE_URL`/`LLM_MODEL` to point at a running `llama-server` instance. |
+| `LLM_BASE_URL` | non-empty string (potentially sensitive) | `http://host.docker.internal:8080` | The `llama-server` (`llama.cpp`) endpoint `AI-03`'s provider connects to when `LLM_PROVIDER=llama_cpp`. |
+| `LLM_MODEL` | string (unconstrained, default empty) | `""` (empty) | The exact model identifier `AI-03`'s provider requests — set this to the identifier your `llama-server` instance reports for the baseline-profile model (Qwen3.5-4B-Q4_K_M, `D-034`). |
 | `LLM_TEMPERATURE` | float, `0`–`2` | `0` | Will configure model sampling temperature once a provider calls a model. |
 | `LLM_CONTEXT_WINDOW` | positive integer | `8192` | Will bound the model context window once a provider calls a model. |
 | `LLM_TIMEOUT_SECONDS` | positive integer | `120` | Will bound a single model call's timeout once a provider calls a model. |
