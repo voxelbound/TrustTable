@@ -65,7 +65,7 @@ EXPECTED_DEFAULTS = {
     "analysis_retention_hours": 0,
     "background_worker_count": 2,
     "llm_provider": "disabled",
-    "llm_base_url": "http://host.docker.internal:11434",
+    "llm_base_url": "http://host.docker.internal:8080",
     "llm_model": "",
     "llm_temperature": 0.0,
     "llm_context_window": 8192,
@@ -133,13 +133,13 @@ def test_app_env_accepts_documented_values(value: str) -> None:
     assert Settings(_env_file=None, app_env=value).app_env == value
 
 
-@pytest.mark.parametrize("value", ["openai", "", "OLLAMA", "azure"])
+@pytest.mark.parametrize("value", ["openai", "", "LLAMA_CPP", "ollama"])
 def test_llm_provider_rejects_invalid_values(value: str) -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, llm_provider=value)
 
 
-@pytest.mark.parametrize("value", ["disabled", "mock", "ollama"])
+@pytest.mark.parametrize("value", ["disabled", "mock", "llama_cpp"])
 def test_llm_provider_accepts_documented_values(value: str) -> None:
     assert Settings(_env_file=None, llm_provider=value).llm_provider == value
 
