@@ -1,0 +1,93 @@
+{
+  "aggregate": {
+    "accepted_count": 6,
+    "average_duration_ms": 17685.49241233268,
+    "average_retries_used": 0.16666666666666666,
+    "consistency_rate": 1.0,
+    "task_count": 6,
+    "validity_rate": 1.0
+  },
+  "candidate": {
+    "hardware_profile": "baseline (CPU-only, context 8192, reasoning off)",
+    "model_identifier": "Qwen3.5-4B-Q4_K_M",
+    "quantization_identifier": "Q4_K_M",
+    "runtime_identifier": "llama.cpp 0.4.0-dev build 10951 commit 093a2f86c"
+  },
+  "config": {
+    "consistency_repeats": 2,
+    "hardware_profile": "baseline",
+    "max_retries": 2,
+    "notes": "AI-06 hands-on full-fixture-set run (post-WP-045 fixture/validator numeric-grounding fix, following the accepted single-fixture smoke AI-06-hands-on-smoke-20260915-r4): all 6 fixtures against a local llama.cpp 0.4.0-dev (build 10951, commit 093a2f86c) server, Qwen3.5 4B Q4_K_M, CPU-only, context 8192, reasoning off. One complete per-candidate baseline result. Bounded non-WP activity evidence only, no runtime/model winner selection."
+  },
+  "created_at": "2026-09-15T17:44:23.604479+00:00",
+  "fixture_set_version": "1",
+  "hardware_profile": "baseline",
+  "model_identifier": "Qwen3.5-4B-Q4_K_M",
+  "notes": "AI-06 hands-on full-fixture-set run (post-WP-045 fixture/validator numeric-grounding fix, following the accepted single-fixture smoke AI-06-hands-on-smoke-20260915-r4): all 6 fixtures against a local llama.cpp 0.4.0-dev (build 10951, commit 093a2f86c) server, Qwen3.5 4B Q4_K_M, CPU-only, context 8192, reasoning off. One complete per-candidate baseline result. Bounded non-WP activity evidence only, no runtime/model winner selection.",
+  "provider_name": "llama_cpp_http_benchmark_only",
+  "resource_observations": null,
+  "run_id": "ai-06-hands-on-full-set-20260915",
+  "schema_version": "2",
+  "task_results": [
+    {
+      "accepted": true,
+      "consistent": true,
+      "duration_ms": 14019.069139001658,
+      "operation": "context_inference",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "context_inference"
+    },
+    {
+      "accepted": true,
+      "consistent": true,
+      "duration_ms": 13897.152233999805,
+      "operation": "guided_questions",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "guided_questions"
+    },
+    {
+      "accepted": true,
+      "consistent": true,
+      "duration_ms": 12676.297756996064,
+      "operation": "finding_explanation",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "finding_explanation"
+    },
+    {
+      "accepted": true,
+      "consistent": true,
+      "duration_ms": 17817.97808099509,
+      "operation": "remediation",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "remediation"
+    },
+    {
+      "accepted": true,
+      "consistent": true,
+      "duration_ms": 17779.542430005677,
+      "operation": "rule_description",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "rule_description"
+    },
+    {
+      "accepted": true,
+      "consistent": true,
+      "duration_ms": 29922.914832997776,
+      "operation": "report_summary",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 1,
+      "task_id": "report_summary"
+    }
+  ]
+}

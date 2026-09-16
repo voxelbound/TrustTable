@@ -1,0 +1,93 @@
+{
+  "aggregate": {
+    "accepted_count": 0,
+    "average_duration_ms": 12749.670075167765,
+    "average_retries_used": 0.0,
+    "consistency_rate": 0.0,
+    "task_count": 6,
+    "validity_rate": 0.0
+  },
+  "candidate": {
+    "hardware_profile": "baseline (CPU-only, context 8192, reasoning off)",
+    "model_identifier": "Ministral-3-3B-Instruct-Q4_K_M",
+    "quantization_identifier": "Q4_K_M",
+    "runtime_identifier": "llama.cpp 0.4.0-dev build 10951 commit 093a2f86c"
+  },
+  "config": {
+    "consistency_repeats": 2,
+    "hardware_profile": "baseline",
+    "max_retries": 2,
+    "notes": "AI-06 multi-candidate comparison batch (AI-06-multi-candidate-batch-20260916): all 6 fixtures against 'Ministral-3-3B-Instruct-Q4_K_M' (server-reported identifier: redacted for publication — independently verified to match the intended candidate before benchmarking via the governed activity's fail-closed identity check), CPU-only, context 8192, reasoning off. Frozen protocol, identical to the accepted Qwen3.5-4B-Q4_K_M baseline (AI-06-hands-on-full-set-20260915). Bounded non-WP activity evidence only, no runtime/model winner selection."
+  },
+  "created_at": "2026-09-16T07:03:11.917949+00:00",
+  "fixture_set_version": "1",
+  "hardware_profile": "baseline",
+  "model_identifier": "Ministral-3-3B-Instruct-Q4_K_M",
+  "notes": "AI-06 multi-candidate comparison batch (AI-06-multi-candidate-batch-20260916): all 6 fixtures against 'Ministral-3-3B-Instruct-Q4_K_M' (server-reported identifier: redacted for publication — independently verified to match the intended candidate before benchmarking via the governed activity's fail-closed identity check), CPU-only, context 8192, reasoning off. Frozen protocol, identical to the accepted Qwen3.5-4B-Q4_K_M baseline (AI-06-hands-on-full-set-20260915). Bounded non-WP activity evidence only, no runtime/model winner selection.",
+  "provider_name": "llama_cpp_http_benchmark_only",
+  "resource_observations": null,
+  "run_id": "ai-06-multi-candidate-batch-20260916-ministral-3-3b-instruct",
+  "schema_version": "2",
+  "task_results": [
+    {
+      "accepted": false,
+      "consistent": false,
+      "duration_ms": 17724.221086005855,
+      "operation": "context_inference",
+      "provider_error": "ProviderInvalidResponseError: benchmark-only llama-server model output was not valid JSON (JSONDecodeError): ```json\n{\n  \"schema_version\": \"1\",\n  \"narrative\": \"The dataset appears to contain a structured table with a column ('empty_col') that consistently contains no non-blank values (300 null entries). This suggests the column may serve as a placeholder, flag for missing data, or unused attribute in a dataset likely related to **customer profiles, transaction records, or inventory management**, where such a column could indicate:\n  - **Audit flags** (e.g., 'inactive', 'pending', 'null' status),\n  - **",
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "context_inference"
+    },
+    {
+      "accepted": false,
+      "consistent": false,
+      "duration_ms": 8816.024931998982,
+      "operation": "guided_questions",
+      "provider_error": "ProviderInvalidResponseError: benchmark-only llama-server model output was not valid JSON (JSONDecodeError): ```json\n{\n  \"schema_version\": \"1\",\n  \"narrative\": \"The dataset appears to have a potential completeness issue in the 'order_id' column, where one row lacks a value. To ensure data integrity and avoid misinterpretation, the business analyst should confirm whether this missing value is an error or a valid omission (e.g., pending processing).\",\n  \"provenance\": \"ai_interpretation\",\n  \"referenced_evidence_ids\": [\"completeness.missing_likely_identifier.evidence.order_id\"],\n  \"referenced_columns\": [\"or",
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "guided_questions"
+    },
+    {
+      "accepted": false,
+      "consistent": false,
+      "duration_ms": 9805.181951000122,
+      "operation": "finding_explanation",
+      "provider_error": "ProviderInvalidResponseError: benchmark-only llama-server model output was not valid JSON (JSONDecodeError): ```json\n{\n  \"schema_version\": \"1\",\n  \"narrative\": \"In the dataset, there are two records where the date in the 'order_date' column appears to be in the future, specifically after August 24, 2026. This suggests that these entries may not reflect actual past transactions or valid dates for records that should logically occur in the past.\",\n  \"provenance\": \"ai_interpretation\",\n  \"referenced_evidence_ids\": [\"validity.future_dates.evidence.order_date\"],\n  \"referenced_columns\": [\"order_date\"],\n  \"nume",
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "finding_explanation"
+    },
+    {
+      "accepted": false,
+      "consistent": false,
+      "duration_ms": 13057.961393998994,
+      "operation": "remediation",
+      "provider_error": "ProviderInvalidResponseError: benchmark-only llama-server model output was not valid JSON (JSONDecodeError): ```json\n{\n  \"schema_version\": \"1\",\n  \"narrative\": \"The dataset contains negative values in the 'quantity' column, which is likely intended to represent non-negative measurements (e.g., counts, measurements, or monetary values). Remediation should include validation logic to enforce non-negativity, such as adding a data quality check or transformation step to replace or flag negative values with a default (e.g., zero) or remove them from analysis if contextually invalid.\",\n  \"provenance\": \"ai_int",
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "remediation"
+    },
+    {
+      "accepted": false,
+      "consistent": false,
+      "duration_ms": 9215.372266000486,
+      "operation": "rule_description",
+      "provider_error": "ProviderInvalidResponseError: benchmark-only llama-server model output was not valid JSON (JSONDecodeError): ```json\n{\n  \"schema_version\": \"1\",\n  \"narrative\": \"This rule checks that a percentage value—like a discount—is always between 0% and 100%. If a number is outside this range (for example, a negative percentage or more than 100%), it’s considered incorrect and needs fixing.\",\n  \"provenance\": \"ai_interpretation\",\n  \"referenced_columns\": [\"discount_pct\"],\n  \"numeric_claims\": {\n    \"invalid_values_found\": 1,\n    \"valid_range_min\": 0,\n    \"valid_range_max\": 100\n  },\n  \"severity\": \"medium\"\n}\n```",
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "rule_description"
+    },
+    {
+      "accepted": false,
+      "consistent": false,
+      "duration_ms": 17879.258822002157,
+      "operation": "report_summary",
+      "provider_error": "ProviderInvalidResponseError: benchmark-only llama-server model output was not valid JSON (JSONDecodeError): ```json\n{\n  \"schema_version\": \"1\",\n  \"narrative\": \"The dataset exhibits critical trust concerns across multiple dimensions. Key findings include:\n  - **Data Completeness Issues**: A high proportion of missing values (99.67%) in the 'notes' column, and a single missing 'order_id' value.\n  - **Cross-Field Inconsistencies**: Two rows exhibit discrepancies in 'line_total' calculations, suggesting potential calculation errors or misaligned business logic.\n  No untrusted data samples were provided, so",
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "report_summary"
+    }
+  ]
+}
