@@ -308,6 +308,16 @@ model differs by hardware tier (`docs/decision-log.md` D-007's appended
 review note, D-029, D-030–D-033). `AI-03` must not start before this
 gate is complete.
 
+> Annotation (2026-09-16, `D-034`): the model family/exact model
+> (Qwen3.5-4B), quantization (Q4_K_M), and baseline/CPU-oriented
+> hardware-tier default are now decided — see `docs/decision-log.md`
+> D-034. **Two items named above remain genuinely open: the runtime
+> (`llama.cpp` vs. Ollama — every hands-on evaluation round used a
+> benchmark-only `llama.cpp` adapter exclusively, never Ollama) and the
+> accelerated/developer hardware-tier default (D-029's second profile
+> was never evaluated — every round ran CPU-only).** This gate is not
+> yet complete; `AI-03` must still not start.
+
 ## AI-03 — Ollama provider
 
 Configurable local model, timeout, structured output, health and availability.
@@ -321,6 +331,12 @@ Configurable local model, timeout, structured output, health and availability.
 > as ready before `AI-06` (the benchmark harness) and the human decision
 > gate above are both complete — see D-033.** This item's exact scope
 > is pending the runtime decision.
+>
+> Annotation (2026-09-16, `D-034`): the exact model (Qwen3.5-4B-Q4_K_M)
+> is now decided for the baseline hardware tier — see `docs/decision-
+> log.md` D-034. This does not change this item's status: the runtime
+> decision this heading itself names ("Ollama") is still unresolved and
+> is not confirmed by `D-034`, so this item remains not-ready to start.
 
 ## AI-04 — Ollama documentation
 

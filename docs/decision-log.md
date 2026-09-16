@@ -56,6 +56,14 @@ under active review and must not be treated as reaffirmed until a
 runtime decision is actually recorded. See `D-030`–`D-032` and
 `project-ops/changes/CHG-002-v02-local-ai-design-outcome.md`.
 
+**Still under review (2026-09-16, appended — the model decision below
+does not resolve this):** `D-034` selects an exact model and
+quantization for the baseline hardware profile. The runtime question
+this entry names remains fully open — every hands-on evaluation round
+to date used a benchmark-only `llama.cpp` adapter exclusively (never
+the production provider integration, and never Ollama at all). This
+runtime choice still must be made before `AI-03` can start.
+
 ## D-008 — Public hosted demo
 
 **Decision:** Defer public hosting until after v1.
@@ -210,3 +218,17 @@ runtime decision is actually recorded. See `D-030`–`D-032` and
 **Reason:** `D-032` already establishes that runtime and model selection follow from `AI-06`'s benchmark results, not the reverse; this entry makes that dependency an explicit implementation-sequencing constraint rather than leaving it implicit — `AI-06` has no architectural dependency on `AI-03`'s real-provider implementation and can (and should) be built and run first.
 
 **Classification:** planning alignment / sequencing correction, not a new design choice — no acceptance criteria, scope, or release outcome changes. The four human-owned decisions this gate exists to make (runtime, model family/exact model, quantization, per-hardware-tier default) remain exactly as open as `CHG-002` left them; see `D-007`'s appended review note and `D-030`–`D-032`. See `project-ops/changes/CHG-003-v02-sequencing-and-planning-alignment.md`.
+
+**Partially resolved (2026-09-16, appended):** `D-034` resolves the model family/exact model, quantization, and baseline-hardware-tier-default portions of this gate's four named items. Runtime and the accelerated-hardware-tier default remain open. `AI-03` must still not start until both are resolved.
+
+## D-034 — v0.2 baseline-profile model selection: Qwen3.5-4B-Q4_K_M
+
+**Decision:** Qwen3.5-4B-Q4_K_M is selected as the CPU-oriented/default TrustTable model (`D-029`'s baseline business/evaluator hardware profile). Qwen3.5-9B-Q4_K_M is retained, not disqualified, as a documented higher-capacity reevaluation/escalation candidate, to be revisited only if a future, product-realistic workload demonstrates a concrete capability limit in Qwen3.5-4B that Qwen3.5-9B is shown to resolve. This is a bounded product decision for the evaluated candidates and hardware profile — not a claim that Qwen3.5-4B is universally better than Qwen3.5-9B.
+
+**Basis:** across three independent hands-on evaluation rounds (structural screening, a blind qualitative comparison, and a controlled performance/resource comparison — full detail in `docs/evaluation/ai-06-first-round-model-screening-2026-09-16.md`), both candidates were structurally identical (6/6 accepted outputs, zero provider errors, identical retry behavior, every round). The blind qualitative comparison was close and mixed and did not establish a consistent output-quality advantage for either candidate. The controlled performance/resource comparison (host confirmed idle/reserved before measurement) showed Qwen3.5-9B costs roughly 30–50% more aggregate latency and roughly 50–60% more peak working-set memory than Qwen3.5-4B. No TrustTable-specific evidence demonstrates a product-relevant capability advantage for Qwen3.5-9B that justifies that additional cost as the default.
+
+**Explicit scope — resolved:** model family and exact model (Qwen3.5-4B), quantization (Q4_K_M), and the baseline/CPU-oriented hardware-tier default.
+
+**Explicit scope — not resolved:** the runtime (`D-007`; `llama.cpp` and Ollama remain finalists — every evaluation round used a benchmark-only `llama.cpp` adapter, never the production integration and never Ollama) and the accelerated/developer hardware-tier default (`D-029`'s second named profile was never evaluated — every round ran CPU-only). `AI-03` must not start until both remaining items are resolved (`D-033`).
+
+**Standing instruction:** the model benchmark (all three rounds) is not to be re-run absent a genuinely new product requirement creating new evidence needs.
