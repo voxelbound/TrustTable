@@ -180,27 +180,34 @@ model reliability:
   very first attempt's parsed JSON output using **exact structural
   equality**. A single mismatch (or a repeat call itself failing) marks
   the fixture "not consistent."
-- **This is a strict, byte/structure-exact repeatability check under
-  fixed decoding parameters (`temperature=0.0`, `max_tokens=512` — the
-  same for every candidate) — not a semantic-similarity, paraphrase-
-  tolerant, or general model-stability judgment.** A repeat response
-  that says the same thing in different words counts as "inconsistent."
-  The metric also does not identify *why* two attempts differed.
+- **This is a strict exact-match-after-JSON-parsing repeatability
+  check — the model's raw text output is parsed into a JSON object and
+  compared to the first attempt's parsed JSON object using Python dict
+  equality — under fixed decoding parameters (`temperature=0.0`,
+  `max_tokens=512` — the same for every candidate). It is not a
+  raw-output byte-comparison, and not a semantic-similarity,
+  paraphrase-tolerant, or general model-stability judgment.** A repeat
+  response that says the same thing in different words counts as
+  "inconsistent" under this metric, unless it happens to parse to an
+  identical JSON object. The metric also does not identify *why* two
+  attempts differed.
 
 Applying this to the data above:
 
 - **Qwen3.5-4B and Qwen3.5-9B**: consistency was genuinely evaluated for
-  all 6 fixtures each, and every repeat matched the first attempt
-  exactly — a real, measured result of full byte-exact repeatability
-  under this protocol.
+  all 6 fixtures each, and every repeat's parsed JSON output was exactly
+  equal to the first attempt's parsed JSON output under the benchmark's
+  Python-dict equality check — a real, measured result of full
+  exact-match consistency under this protocol.
 - **Granite-4.2-8B, Gemma-4-E4B-it, and 4 of Granite-4.2-3B's 6
   fixtures**: consistency was genuinely evaluated (the final attempt did
-  parse as JSON) and found **not** exact-match repeatable, despite
+  parse as JSON) and found **not** exact-match consistent, despite
   `temperature=0.0` — a real, measured non-determinism signal. The
   harness does not isolate the cause (e.g. multi-threaded CPU
-  floating-point summation order is a known source of non-bit-exact
-  reproducibility in llama.cpp even at zero temperature, but this
-  benchmark cannot confirm that as the specific cause here).
+  floating-point summation order is a known source of non-deterministic
+  numerical results in llama.cpp even at zero temperature, which could
+  in turn change the parsed JSON content, but this benchmark cannot
+  confirm that as the specific cause here).
 - **Ministral-3-3B-Instruct (all 6 fixtures) and 2 of Granite-4.2-3B's 6
   fixtures (`guided_questions`, `report_summary`)**: consistency was
   **never evaluated** — the final attempt's output did not parse as
