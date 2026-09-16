@@ -309,9 +309,11 @@ review note, D-029, D-030–D-033). `AI-03` must not start before this
 gate is complete.
 
 > Annotation (2026-09-16, `D-034`): the model family/exact model
-> (Qwen3.5-4B), quantization (Q4_K_M), and baseline/CPU-oriented
-> hardware-tier default are now decided — see `docs/decision-log.md`
-> D-034. **Two items named above remain genuinely open: the runtime
+> (Qwen3.5-4B) and the baseline/CPU-oriented hardware-tier default are
+> now decided — see `docs/decision-log.md` D-034. Q4_K_M is recorded as
+> the selected quantization because it is what the selected model was
+> evaluated at; no comparative quantization study was performed. **Two
+> items named above remain genuinely open: the runtime
 > (`llama.cpp` vs. Ollama — every hands-on evaluation round used a
 > benchmark-only `llama.cpp` adapter exclusively, never Ollama) and the
 > accelerated/developer hardware-tier default (D-029's second profile
