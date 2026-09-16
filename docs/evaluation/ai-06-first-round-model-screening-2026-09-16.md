@@ -417,7 +417,7 @@ trustworthiness beyond exactly what is described above.**
   not assume "has a rejection reason" implies "the final attempt
   parsed."
 
-## 10. EDS / host-service tooling observations
+## 10. Host-service tooling observations
 
 *(Infrastructure only — none of the following affected any model result
 above; every affected service start was independently re-verified
@@ -433,6 +433,13 @@ health/identity checks, before its benchmark ran.)*
   (a momentarily-absent internal heartbeat file) that resolved on retry,
   with the underlying host-resident process confirmed continuously
   alive throughout.
+- During the later controlled performance/resource comparison (§14), a
+  candidate-switch step once reported success while the previous
+  candidate's process was still transiently reachable; this was caught
+  by the same independent identity re-verification convention before
+  any measurement was captured, and one governed service-management
+  step needed a manual restart to fully clear it. No measurement in §14
+  reflects the wrong candidate.
 
 ## 11. Explicit limitations of this screening round
 
@@ -441,9 +448,12 @@ health/identity checks, before its benchmark ran.)*
   disclosed "small and reproducible first round" scope. A selection
   based only on this round risks fitting that dataset's own quirks.
 - **Single hardware/runtime configuration.** CPU-only, one machine
-  class, llama.cpp only — no Ollama comparison yet (the second named
-  runtime finalist, D-007/D-030), no accelerated-hardware-tier data, and
-  no resource observations (peak RSS/VRAM) were captured this round.
+  class, llama.cpp only — no Ollama comparison (the second named
+  runtime finalist, D-007/D-030) and no accelerated-hardware-tier data
+  exist anywhere in this evaluation. Peak working-set memory was
+  captured for the two finalists only, in the later controlled
+  comparison (§14) — not for all six first-round candidates, and not on
+  the accelerated hardware tier.
 - **No narrative-quality, semantic-correctness-beyond-grounding, or
   category-accuracy scoring.** Per D-032's own confirmed scoring
   boundary, the harness measures structural validity/groundedness,
@@ -474,46 +484,177 @@ where §9/§11 identify a plausible non-model-quality contributor (fixed
 `max_tokens`, markdown-fence formatting, single-dataset scope) to a
 candidate's result.
 
-## 13. Evidence still required before the human decision gate
+This narrowing was followed by a further blind qualitative comparison
+(§13) and a controlled performance/resource comparison (§14) between
+the two finalists, leading to a bounded model decision (§15).
 
-At minimum, before the runtime/model/quantization/per-hardware-tier
-decision named in `docs/decision-log.md` D-032/D-033 can be made:
+## 13. Blind qualitative comparison: Qwen3.5-4B vs Qwen3.5-9B
 
-- A second, distinct dataset, to corroborate any narrowing that treats
-  this round's results as more than dataset-specific.
-- A runtime comparison against Ollama, the still-open second finalist
-  runtime (D-007/D-030) — this round tested llama.cpp only.
-- Resource observations (peak RSS/VRAM) per candidate, which this round
-  did not measure, needed to evaluate per-hardware-tier fit.
+Following §12's narrowing, a dedicated blind evaluation round compared
+the two finalists' actual generated output (not just structural
+acceptance) on the same six fixtures. Each fixture's two outputs were
+anonymized as "Candidate A"/"Candidate B" (independently randomized per
+fixture, mapping withheld) and reviewed qualitatively before any reveal.
+
+**Validity/consistency reconfirmed:** both candidates again reached
+6/6 accepted, with identical retry behavior to the first round (exactly
+one retry, on `report_summary` only, both candidates).
+
+**De-blinded per-fixture result:**
+
+| Fixture | Result |
+|---|---|
+| `context_inference` | Qwen3.5-4B better |
+| `guided_questions` | Qwen3.5-4B slightly better |
+| `report_summary` | Qwen3.5-4B slightly better |
+| `finding_explanation` | Equivalent |
+| `remediation` | Qwen3.5-9B better |
+| `rule_description` | Qwen3.5-9B better |
+
+Qwen3.5-4B wins 3 fixtures (1 clearly, 2 slightly), Qwen3.5-9B wins 2
+(both clearly), 1 is equivalent. **This is a close, mixed result — it
+does not establish a consistent output-quality advantage for either
+candidate.**
+
+## 14. Controlled performance/resource comparison: Qwen3.5-4B vs Qwen3.5-9B
+
+A separate evaluation measured latency and peak memory under
+controlled conditions — the host machine was confirmed idle and
+reserved for the full duration before measurement began, and the same
+frozen protocol (§4) and six fixtures were used with no qualitative
+review. Two runs per candidate were captured, alternating candidate
+order to reduce warmup/order bias.
+
+**This is the only latency/resource evidence in this report that
+should be treated as decision-grade.** An earlier, uncontrolled
+measurement pass (superseded, not otherwise published here) produced
+inconsistent latency figures across runs, later attributed to
+background host load rather than genuine model behavior — a
+methodology lesson, not a model finding.
+
+**Aggregate latency (sum of all 6 fixtures per run, model already
+loaded), range across the 2 runs per candidate:**
+
+| Candidate | Range | Notes |
+|---|---|---|
+| Qwen3.5-4B | 125.6 s – 126.0 s | Tight, ~0.3% run-to-run spread |
+| Qwen3.5-9B | 166.5 s – 188.8 s | Wide, ~13% run-to-run spread |
+
+Qwen3.5-9B is roughly 30–50% slower in aggregate than Qwen3.5-4B under
+these conditions (a rough indicator from a 2-run range, not a precise
+point estimate).
+
+**Per-fixture latency ranges (ms), across the 2 runs per candidate:**
+
+| Fixture | Qwen3.5-4B | Qwen3.5-9B | Observation |
+|---|---|---|---|
+| `context_inference` | 13,917 – 13,954 | 27,042 – 30,558 | 9B consistently ~2x slower |
+| `guided_questions` | 13,819 – 13,931 | 12,750 – 15,978 | Overlapping — 9B's faster run beat both 4B runs |
+| `finding_explanation` | 14,390 – 14,545 | 19,132 – 22,575 | 9B consistently ~40–55% slower |
+| `remediation` | 17,514 – 17,703 | 30,698 – 34,402 | 9B consistently ~75–95% slower |
+| `rule_description` | 17,621 – 17,725 | 16,926 – 20,513 | Overlapping — 9B's faster run beat both 4B runs |
+| `report_summary` (incl. 1 retry) | 48,223 – 48,260 | 59,942 – 64,795 | 9B consistently ~24–34% slower |
+
+Stated plainly: on 4 of 6 fixtures Qwen3.5-9B is consistently and
+substantially slower even under controlled conditions; on the other 2,
+the two candidates' ranges overlap. Qwen3.5-9B also shows a
+substantially wider run-to-run latency spread than Qwen3.5-4B on this
+same reserved host.
+
+**Peak working-set memory, range across the 2 runs per candidate:**
+
+| Candidate | Range | Approx. |
+|---|---|---|
+| Qwen3.5-4B | 4,607,537,152 – 4,607,590,400 bytes | ~4.29 GiB, essentially identical across runs |
+| Qwen3.5-9B | 7,069,544,448 – 7,305,318,400 bytes | ~6.58–6.80 GiB |
+
+Qwen3.5-9B's peak working set is roughly 50–60% larger than
+Qwen3.5-4B's.
+
+**Sample-size caveat:** 2 runs per candidate is enough to see rough
+magnitude and to observe that Qwen3.5-4B's own run-to-run behavior is
+markedly tighter than Qwen3.5-9B's — it is not enough for tight
+statistical precision on the exact cost difference.
+
+## 15. Bounded model decision
+
+**Qwen3.5-4B-Q4_K_M is selected as the CPU-oriented/default TrustTable
+model.** Qwen3.5-9B-Q4_K_M is retained, not disqualified, as a
+documented higher-capacity reevaluation/escalation candidate, to be
+revisited only if a future, product-realistic workload demonstrates a
+concrete capability limit in Qwen3.5-4B that Qwen3.5-9B is shown to
+resolve. Full decision record: `docs/decision-log.md` D-034.
+
+**Basis:** structural reliability does not distinguish the two
+candidates (§13); the blind qualitative comparison was close and mixed
+(§13); the controlled performance/resource comparison shows Qwen3.5-9B
+costs materially more — roughly 30–50% higher aggregate latency and
+roughly 50–60% higher peak memory (§14) — without a demonstrated
+product-relevant capability advantage to justify that cost as the
+default.
+
+**This is a bounded product decision for the evaluated candidates and
+the baseline hardware profile — not a claim that Qwen3.5-4B is
+universally better than Qwen3.5-9B, and not a decision about runtime or
+the accelerated hardware profile.** See §16.
+
+## 16. Evidence still required before the human decision gate
+
+The human decision gate named in `docs/decision-log.md` D-032/D-033
+covers four items: runtime, model family/exact model, quantization, and
+per-hardware-tier default. **§15's decision resolves the model
+family/exact model and baseline-hardware-tier-default items.** Q4_K_M
+is recorded as the selected quantization because it is what the
+selected model was evaluated at throughout this investigation — no
+comparative quantization study was performed, and this should not be
+read as Q4_K_M having been shown superior to any alternative. What
+remains open:
+
+- **Runtime.** No round in this evaluation compared Ollama at all —
+  every round used a benchmark-only `llama.cpp` adapter exclusively
+  (disclosed throughout as evaluation tooling, not the production
+  provider integration). This must still be decided before the real
+  local-inference provider work can start.
+- **Accelerated/developer hardware-tier default.** Every round ran
+  under the frozen protocol's CPU-only configuration; the
+  GPU-accelerated hardware profile (`docs/decision-log.md` D-029's
+  second named profile) was never evaluated. Whether Qwen3.5-9B, a
+  different model, or the same baseline default should apply on that
+  profile is unaddressed.
+- A second, distinct dataset would still corroborate the underlying
+  first-round screening (§11) if that screening's own narrowing is ever
+  revisited, but is not required for the model decision already made in
+  §15.
 - A decision on whether Ministral-3-3B-Instruct's and Granite-4.2-3B's
-  parse-failure modes are recoverable with a harness/prompt-level
-  adjustment (e.g. explicit code-fence stripping, a higher `max_tokens`)
-  before treating their low scores as a final model-quality verdict.
-- Any additional rounds the human owner directs, consistent with
-  `docs/decision-log.md` D-032's own "not yet decided" list (exact
-  model, quantization, per-tier default all remain open).
+  parse-failure modes (from the first-round screening) are recoverable
+  with a harness/prompt-level adjustment remains open but is not a
+  blocker to this decision, since neither candidate was a finalist.
+
+**Per the human owner's explicit instruction, the model benchmark
+itself (first-round screening, blind qualitative comparison, and
+controlled performance comparison) is not to be re-run unless a
+genuinely new product requirement creates new evidence needs.**
 
 ## Provenance
 
 This report and the accompanying machine-readable artifacts under
-`results/` are sourced directly from two governed, non-work-package EDS
-evaluation activities, phase `hands-on AI-06 evaluation`:
+`results/` are sourced from four evaluation rounds:
 
-- **`AI-06-hands-on-full-set-20260915`** (2026-09-15) — the
-  Qwen3.5-4B-Q4_K_M baseline, digest
-  `6882a9f2708f7b42c9b7dfcb7de4fa85ea70ed7581eb3cd990a47bd612add8c4`.
-- **`AI-06-multi-candidate-batch-20260916`** (2026-09-16) — the
-  remaining 5 candidates, digest
-  `5547f49a18309e9e1e8f6e040156b423cac751da8be801755000c73329e4ec7f`.
+- **First-round screening** (2026-09-15, then 2026-09-16): the
+  Qwen3.5-4B-Q4_K_M baseline candidate, followed by the remaining five
+  candidates.
+- **Blind qualitative comparison** (2026-09-16): Qwen3.5-4B vs
+  Qwen3.5-9B, the two finalists (§13).
+- **Controlled performance/resource comparison** (2026-09-16):
+  Qwen3.5-4B vs Qwen3.5-9B, with the host machine confirmed idle and
+  reserved for its full duration before measurement began (§14).
 
-Both activities ran under governed EDS activity authority
-(`work_type` non-WP evaluation; `roadmap_advancement: false`;
-`return_phase: "hands-on AI-06 evaluation"`), using the merged
-`AI-06`/`WP-043` benchmark harness and `WP-044`'s benchmark-only
-`LlamaCppHttpProvider` adapter, with `WP-045`'s numeric-grounding fix
-already applied. Every candidate's served-model identity was
-independently verified against the intended candidate (via the running
-server's own reported model metadata) before its benchmark ran.
+All four rounds used the same benchmark harness (§4) and its
+`llama.cpp`-only real-runtime adapter — evaluation tooling, not the
+production AI provider integration. Every candidate's served-model
+identity was independently verified against the intended candidate
+(via the running server's own reported model metadata) before its
+benchmark ran, in every round.
 
 ## Machine-readable evidence
 
