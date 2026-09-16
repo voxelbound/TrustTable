@@ -27,7 +27,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AppEnv = Literal["development", "test", "production"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-LlmProvider = Literal["disabled", "mock", "ollama"]
+LlmProvider = Literal["disabled", "mock", "llama_cpp"]
 
 # backend/src/trusttable_backend/config.py -> repository root is four
 # levels up. In a Docker image this resolves to a path outside the
@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     # LLM provider
     llm_provider: LlmProvider = "disabled"
     llm_base_url: Annotated[str, Field(min_length=1, repr=False)] = (
-        "http://host.docker.internal:11434"
+        "http://host.docker.internal:8080"
     )
     llm_model: str = ""
     llm_temperature: Annotated[float, Field(ge=0, le=2)] = 0.0
