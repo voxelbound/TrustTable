@@ -417,7 +417,7 @@ trustworthiness beyond exactly what is described above.**
   not assume "has a rejection reason" implies "the final attempt
   parsed."
 
-## 10. EDS / host-service tooling observations
+## 10. Host-service tooling observations
 
 *(Infrastructure only — none of the following affected any model result
 above; every affected service start was independently re-verified
@@ -603,8 +603,12 @@ the accelerated hardware profile.** See §16.
 The human decision gate named in `docs/decision-log.md` D-032/D-033
 covers four items: runtime, model family/exact model, quantization, and
 per-hardware-tier default. **§15's decision resolves the model
-family/exact model, quantization, and baseline-hardware-tier-default
-items.** What remains open:
+family/exact model and baseline-hardware-tier-default items.** Q4_K_M
+is recorded as the selected quantization because it is what the
+selected model was evaluated at throughout this investigation — no
+comparative quantization study was performed, and this should not be
+read as Q4_K_M having been shown superior to any alternative. What
+remains open:
 
 - **Runtime.** No round in this evaluation compared Ollama at all —
   every round used a benchmark-only `llama.cpp` adapter exclusively
@@ -634,30 +638,23 @@ genuinely new product requirement creates new evidence needs.**
 ## Provenance
 
 This report and the accompanying machine-readable artifacts under
-`results/` are sourced directly from two governed, non-work-package EDS
-evaluation activities, phase `hands-on AI-06 evaluation`:
+`results/` are sourced from four evaluation rounds:
 
-- **`AI-06-hands-on-full-set-20260915`** (2026-09-15) — the
-  Qwen3.5-4B-Q4_K_M baseline, digest
-  `6882a9f2708f7b42c9b7dfcb7de4fa85ea70ed7581eb3cd990a47bd612add8c4`.
-- **`AI-06-multi-candidate-batch-20260916`** (2026-09-16) — the
-  remaining 5 candidates, digest
-  `5547f49a18309e9e1e8f6e040156b423cac751da8be801755000c73329e4ec7f`.
-- **`AI-06-blind-ab-qwen-4b-9b-20260916`** (2026-09-16) — the blind
-  qualitative comparison (§13) between the two finalists.
-- **`AI-06-perf-resource-qwen-4b-9b-20260916`** (2026-09-16) — the
-  controlled performance/resource comparison (§14), executed with the
-  host explicitly confirmed idle and reserved for its full duration
-  before measurement began.
+- **First-round screening** (2026-09-15, then 2026-09-16): the
+  Qwen3.5-4B-Q4_K_M baseline candidate, followed by the remaining five
+  candidates.
+- **Blind qualitative comparison** (2026-09-16): Qwen3.5-4B vs
+  Qwen3.5-9B, the two finalists (§13).
+- **Controlled performance/resource comparison** (2026-09-16):
+  Qwen3.5-4B vs Qwen3.5-9B, with the host machine confirmed idle and
+  reserved for its full duration before measurement began (§14).
 
-All four activities ran under governed EDS activity authority
-(`work_type` non-WP evaluation; `roadmap_advancement: false`;
-`return_phase: "hands-on AI-06 evaluation"`), using the merged
-`AI-06`/`WP-043` benchmark harness and `WP-044`'s benchmark-only
-`LlamaCppHttpProvider` adapter, with `WP-045`'s numeric-grounding fix
-already applied. Every candidate's served-model identity was
-independently verified against the intended candidate (via the running
-server's own reported model metadata) before its benchmark ran.
+All four rounds used the same benchmark harness (§4) and its
+`llama.cpp`-only real-runtime adapter — evaluation tooling, not the
+production AI provider integration. Every candidate's served-model
+identity was independently verified against the intended candidate
+(via the running server's own reported model metadata) before its
+benchmark ran, in every round.
 
 ## Machine-readable evidence
 
