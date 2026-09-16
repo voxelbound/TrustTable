@@ -64,6 +64,12 @@ to date used a benchmark-only `llama.cpp` adapter exclusively (never
 the production provider integration, and never Ollama at all). This
 runtime choice still must be made before `AI-03` can start.
 
+**Resolved for v0.2 baseline scope (2026-09-16, appended — see `D-035`
+for the full decision):** `llama.cpp` is selected as the v0.2 baseline
+local-inference runtime. Ollama is recorded as a future alternative/
+re-evaluation candidate, not disqualified. This is a bounded v0.2
+implementation decision, not a universal claim of superiority.
+
 ## D-008 — Public hosted demo
 
 **Decision:** Defer public hosting until after v1.
@@ -221,6 +227,8 @@ runtime choice still must be made before `AI-03` can start.
 
 **Partially resolved (2026-09-16, appended):** `D-034` resolves the model family/exact model, quantization, and baseline-hardware-tier-default portions of this gate's four named items. Runtime and the accelerated-hardware-tier default remain open. `AI-03` must still not start until both are resolved.
 
+**Complete for v0.2 baseline scope (2026-09-16, appended — see `D-035`):** the runtime item is now also resolved (`llama.cpp`). All four named items are decided for v0.2 baseline scope; `AI-03` is ready to start, scoped to the baseline/CPU-oriented profile. The accelerated/GPU hardware-tier default remains explicitly deferred by deliberate human choice — a later, non-blocking follow-on, not an unresolved gap in this gate's baseline-scope completion.
+
 ## D-034 — v0.2 baseline-profile model selection: Qwen3.5-4B-Q4_K_M
 
 **Decision:** Qwen3.5-4B-Q4_K_M is selected as the CPU-oriented/default TrustTable model (`D-029`'s baseline business/evaluator hardware profile). Qwen3.5-9B-Q4_K_M is retained, not disqualified, as a documented higher-capacity reevaluation/escalation candidate, to be revisited only if a future, product-realistic workload demonstrates a concrete capability limit in Qwen3.5-4B that Qwen3.5-9B is shown to resolve. This is a bounded product decision for the evaluated candidates and hardware profile — not a claim that Qwen3.5-4B is universally better than Qwen3.5-9B.
@@ -232,3 +240,19 @@ runtime choice still must be made before `AI-03` can start.
 **Explicit scope — not resolved:** the runtime (`D-007`; `llama.cpp` and Ollama remain finalists — every evaluation round used a benchmark-only `llama.cpp` adapter, never the production integration and never Ollama) and the accelerated/developer hardware-tier default (`D-029`'s second named profile was never evaluated — every round ran CPU-only). `AI-03` must not start until both remaining items are resolved (`D-033`).
 
 **Standing instruction:** the model benchmark (all three rounds) is not to be re-run absent a genuinely new product requirement creating new evidence needs.
+
+**Update (2026-09-16):** the runtime item this entry left "not resolved" is now decided — see `D-035`.
+
+## D-035 — v0.2 runtime selection (llama.cpp), AI-06 gate closure, AI-03 readiness
+
+**Decision:** `llama.cpp` is selected as the v0.2 baseline local-inference runtime. Ollama is recorded as a future alternative/re-evaluation candidate — not disqualified, not a co-equal blocker. This is a bounded v0.2 implementation decision, not a universal claim that `llama.cpp` is superior to Ollama.
+
+**Basis:** every hands-on evaluation round completed for this project (first-round screening, blind qualitative comparison, controlled performance/resource comparison) used `llama.cpp` successfully via its benchmark-only adapter, exercised repeatedly against the selected model (`D-034`); Ollama has not been evaluated in this project at all; a fresh runtime benchmark is not required merely to preserve an historical two-finalist framing.
+
+**Gate closure:** combined with `D-034`, this decision resolves all four items named by `docs/implementation-backlog.md`'s "Human decision gate" **for v0.2 baseline scope**: model family/exact model (Qwen3.5-4B), quantization (Q4_K_M, recorded as evaluated — not comparatively selected), runtime (`llama.cpp`), and the baseline/CPU-oriented hardware-tier default. The "hands-on AI-06 evaluation" phase closes in full.
+
+**`AI-03` is now ready to start**, scoped to: a real `llama.cpp` local-inference provider for Qwen3.5-4B-Q4_K_M on the baseline/CPU-oriented hardware profile. `AI-03` implementation itself remains a separate, later package — not started or implemented by this decision.
+
+**Explicitly deferred, non-blocking:** the accelerated/developer (GPU) hardware-tier default (`D-029`'s second named profile). This is a deliberate scoping choice, not an unresolved gap — it may be evaluated later, once the real provider path exists and there is an actual product need for a separate default.
+
+**Standing instructions (unchanged from `D-034`):** the model benchmark is not to be re-run absent a genuinely new product requirement. No runtime head-to-head benchmark and no quantization benchmark were performed or are required by this decision.

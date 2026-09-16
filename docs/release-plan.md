@@ -62,6 +62,15 @@ Deliver, in dependency order:
 > local-inference provider still must not start until both are
 > resolved.
 
+> **Annotation (2026-09-16, `docs/decision-log.md` D-035):** the human
+> decision gate above is now **complete for v0.2 baseline scope**.
+> `llama.cpp` is selected as the runtime (Ollama recorded as a future
+> alternative, not disqualified). The real local-inference provider is
+> now ready to start, scoped to the baseline/CPU-oriented profile
+> (Qwen3.5-4B-Q4_K_M on `llama.cpp`). The accelerated hardware-tier
+> default remains explicitly deferred, by deliberate choice, as a
+> later, non-blocking follow-on.
+
 This is the first promoted portfolio release.
 
 ## v0.3 — Complete manager workflow
