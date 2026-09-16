@@ -52,6 +52,14 @@ Deliver, in dependency order:
 > results"). The prior "Ollama provider" wording is preserved in this
 > repository's own git history, not silently erased.
 
+> **Annotation (2026-09-16, `docs/decision-log.md` D-034):** the human
+> decision gate above is now partially resolved — model family/exact
+> model (Qwen3.5-4B), quantization (Q4_K_M), and the baseline
+> hardware-tier default are decided. Runtime (`llama.cpp` vs. Ollama)
+> and the accelerated hardware-tier default remain open; the real
+> local-inference provider still must not start until both are
+> resolved.
+
 This is the first promoted portfolio release.
 
 ## v0.3 — Complete manager workflow
