@@ -360,9 +360,9 @@ itself) also remains a separate, later package.
 ### AI provider interface
 
 `trusttable_backend.ai_provider` (`AI-01`) implements the seam every
-future real provider (`AI-02` disabled/mock, `AI-03` the real
-local-inference provider — runtime pending the decision gate, `D-007`/
-`D-033`) plugs into, matching `docs/product-requirements.md` §12's six
+real provider (`AI-02` disabled/mock, `AI-03` the real local-inference
+provider for `llama.cpp` — runtime and baseline model selected,
+`D-034`/`D-035`) plugs into, matching `docs/product-requirements.md` §12's six
 model-call operations
 (`AIOperation`: context inference, guided questions, finding
 explanation, remediation, rule description, report summary) plus a
@@ -385,12 +385,19 @@ always unavailable, `complete()` raises `ProviderConnectionError`) and
 static or dynamic output — the dynamic `response_factory` seam is what
 makes "adversarial mock output" possible, proven end-to-end against
 `validate_model_output`'s real rejection paths), plus a small
-`create_provider(llm_provider: str)` factory that stays
-framework-independent by taking a plain string rather than `Settings`.
-No real provider (`AI-03`, pending the runtime decision gate), network
-I/O, FastAPI route, or UI exists yet — tested against stub/fake and the
-two `AI-02` providers only, the same precedent `DET-01` set ahead of
-`DET-02`'s real detectors.
+`create_provider(llm_provider: str, ...)` factory that stays
+framework-independent by taking plain arguments rather than `Settings`.
+`AI-03` adds the real provider this interface was built for:
+`LlamaCppProvider` (`llm_provider="llama_cpp"`), a real `httpx`-based
+client for `llama.cpp`'s `llama-server` OpenAI-compatible endpoint —
+reuses `build_safe_prompt` unmodified, never calls
+`validate_model_output` itself (that stays a future caller's own
+responsibility, exactly like `DisabledProvider`/`MockProvider`). No
+FastAPI route, application service, or analysis-pipeline calls any
+provider yet — tested against stub/fake and `httpx.MockTransport`
+only, no live-model execution in CI, the same precedent `DET-01` set
+ahead of `DET-02`'s real detectors and `WP-044`'s benchmark-only
+adapter already proved for this exact transport.
 
 **Forward-looking design note (2026-09-13, `CHG-002`, not yet
 implemented):** the `v0.2` design session established that the eventual
