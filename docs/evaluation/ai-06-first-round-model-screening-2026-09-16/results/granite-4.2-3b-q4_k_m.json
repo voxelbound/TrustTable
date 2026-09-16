@@ -1,0 +1,97 @@
+{
+  "aggregate": {
+    "accepted_count": 3,
+    "average_duration_ms": 12131.691218165846,
+    "average_retries_used": 0.6666666666666666,
+    "consistency_rate": 0.0,
+    "task_count": 6,
+    "validity_rate": 0.5
+  },
+  "candidate": {
+    "hardware_profile": "baseline (CPU-only, context 8192, reasoning off)",
+    "model_identifier": "Granite-4.2-3B-Q4_K_M",
+    "quantization_identifier": "Q4_K_M",
+    "runtime_identifier": "llama.cpp 0.4.0-dev build 10951 commit 093a2f86c"
+  },
+  "config": {
+    "consistency_repeats": 2,
+    "hardware_profile": "baseline",
+    "max_retries": 2,
+    "notes": "AI-06 multi-candidate comparison batch (AI-06-multi-candidate-batch-20260916): all 6 fixtures against 'Granite-4.2-3B-Q4_K_M' (server-reported identifier: redacted for publication — independently verified to match the intended candidate before benchmarking via the governed activity's fail-closed identity check), CPU-only, context 8192, reasoning off. Frozen protocol, identical to the accepted Qwen3.5-4B-Q4_K_M baseline (AI-06-hands-on-full-set-20260915). Bounded non-WP activity evidence only, no runtime/model winner selection."
+  },
+  "created_at": "2026-09-16T07:01:07.680284+00:00",
+  "fixture_set_version": "1",
+  "hardware_profile": "baseline",
+  "model_identifier": "Granite-4.2-3B-Q4_K_M",
+  "notes": "AI-06 multi-candidate comparison batch (AI-06-multi-candidate-batch-20260916): all 6 fixtures against 'Granite-4.2-3B-Q4_K_M' (server-reported identifier: redacted for publication — independently verified to match the intended candidate before benchmarking via the governed activity's fail-closed identity check), CPU-only, context 8192, reasoning off. Frozen protocol, identical to the accepted Qwen3.5-4B-Q4_K_M baseline (AI-06-hands-on-full-set-20260915). Bounded non-WP activity evidence only, no runtime/model winner selection.",
+  "provider_name": "llama_cpp_http_benchmark_only",
+  "resource_observations": null,
+  "run_id": "ai-06-multi-candidate-batch-20260916-granite-4-2-3b",
+  "schema_version": "2",
+  "task_results": [
+    {
+      "accepted": true,
+      "consistent": false,
+      "duration_ms": 10166.190545001882,
+      "operation": "context_inference",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "context_inference"
+    },
+    {
+      "accepted": false,
+      "consistent": false,
+      "duration_ms": 14787.194207994617,
+      "operation": "guided_questions",
+      "provider_error": "ProviderInvalidResponseError: benchmark-only llama-server model output was not valid JSON (JSONDecodeError): {\n  \"schema_version\": \"1\",\n  \"narrative\": \"Business analyst should confirm whether the missing value in the 'order_id' column is intentional, expected, or an error that needs correction. Also, verify if the single row with a null 'order_id' meets any business rules (e.g., is it a valid placeholder, a filtered-out case, or requires special handling).\",\n</think>\n{\n  \"schema_version\": \"1\",\n  \"narrative\": \"Business analyst should confirm whether the single row with a null 'order_id' is intentional (",
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "guided_questions"
+    },
+    {
+      "accepted": false,
+      "consistent": false,
+      "duration_ms": 7881.672677001916,
+      "operation": "finding_explanation",
+      "provider_error": null,
+      "rejection_reasons": [
+        "unknown_numeric_claim"
+      ],
+      "retries_used": 2,
+      "task_id": "finding_explanation"
+    },
+    {
+      "accepted": true,
+      "consistent": false,
+      "duration_ms": 9356.910442998924,
+      "operation": "remediation",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "remediation"
+    },
+    {
+      "accepted": true,
+      "consistent": false,
+      "duration_ms": 11634.015509000164,
+      "operation": "rule_description",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "rule_description"
+    },
+    {
+      "accepted": false,
+      "consistent": false,
+      "duration_ms": 18964.16392699757,
+      "operation": "report_summary",
+      "provider_error": "ProviderInvalidResponseError: benchmark-only llama-server model output was not valid JSON (JSONDecodeError): {\n  \"schema_version\": \"1\",\n  \"narrative\": \"The dataset shows two main issues: two rows have a line_total that does not match the recomputed quantity/unit_price/discount/tax formula (mismatch_count: 2). There is also a missing likely identifier in one row (null_count: 1). Additionally, the 'notes' column is missing in 299 out of 300 rows (missing_ratio: 0.9966666666666667). These findings indicate moderate to high data quality concerns.\",\n  \"provenance\": \"ai_interpretation\",\n  \"referenced_evidenc",
+      "rejection_reasons": [
+        "unknown_numeric_claim"
+      ],
+      "retries_used": 2,
+      "task_id": "report_summary"
+    }
+  ]
+}

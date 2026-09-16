@@ -1,0 +1,95 @@
+{
+  "aggregate": {
+    "accepted_count": 5,
+    "average_duration_ms": 22469.62876066512,
+    "average_retries_used": 0.3333333333333333,
+    "consistency_rate": 0.0,
+    "task_count": 6,
+    "validity_rate": 0.8333333333333334
+  },
+  "candidate": {
+    "hardware_profile": "baseline (CPU-only, context 8192, reasoning off)",
+    "model_identifier": "Granite-4.2-8B-Q4_K_M",
+    "quantization_identifier": "Q4_K_M",
+    "runtime_identifier": "llama.cpp 0.4.0-dev build 10951 commit 093a2f86c"
+  },
+  "config": {
+    "consistency_repeats": 2,
+    "hardware_profile": "baseline",
+    "max_retries": 2,
+    "notes": "AI-06 multi-candidate comparison batch (AI-06-multi-candidate-batch-20260916): all 6 fixtures against 'Granite-4.2-8B-Q4_K_M' (server-reported identifier: redacted for publication — independently verified to match the intended candidate before benchmarking via the governed activity's fail-closed identity check), CPU-only, context 8192, reasoning off. Frozen protocol, identical to the accepted Qwen3.5-4B-Q4_K_M baseline (AI-06-hands-on-full-set-20260915). Bounded non-WP activity evidence only, no runtime/model winner selection."
+  },
+  "created_at": "2026-09-16T07:18:24.786973+00:00",
+  "fixture_set_version": "1",
+  "hardware_profile": "baseline",
+  "model_identifier": "Granite-4.2-8B-Q4_K_M",
+  "notes": "AI-06 multi-candidate comparison batch (AI-06-multi-candidate-batch-20260916): all 6 fixtures against 'Granite-4.2-8B-Q4_K_M' (server-reported identifier: redacted for publication — independently verified to match the intended candidate before benchmarking via the governed activity's fail-closed identity check), CPU-only, context 8192, reasoning off. Frozen protocol, identical to the accepted Qwen3.5-4B-Q4_K_M baseline (AI-06-hands-on-full-set-20260915). Bounded non-WP activity evidence only, no runtime/model winner selection.",
+  "provider_name": "llama_cpp_http_benchmark_only",
+  "resource_observations": null,
+  "run_id": "ai-06-multi-candidate-batch-20260916-granite-4-2-8b",
+  "schema_version": "2",
+  "task_results": [
+    {
+      "accepted": true,
+      "consistent": false,
+      "duration_ms": 22074.454755995248,
+      "operation": "context_inference",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "context_inference"
+    },
+    {
+      "accepted": true,
+      "consistent": false,
+      "duration_ms": 19872.359000997676,
+      "operation": "guided_questions",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "guided_questions"
+    },
+    {
+      "accepted": true,
+      "consistent": false,
+      "duration_ms": 18052.98954200407,
+      "operation": "finding_explanation",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "finding_explanation"
+    },
+    {
+      "accepted": true,
+      "consistent": false,
+      "duration_ms": 25876.21450399456,
+      "operation": "remediation",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "remediation"
+    },
+    {
+      "accepted": true,
+      "consistent": false,
+      "duration_ms": 16186.609700998815,
+      "operation": "rule_description",
+      "provider_error": null,
+      "rejection_reasons": [],
+      "retries_used": 0,
+      "task_id": "rule_description"
+    },
+    {
+      "accepted": false,
+      "consistent": false,
+      "duration_ms": 32755.14506000036,
+      "operation": "report_summary",
+      "provider_error": null,
+      "rejection_reasons": [
+        "unknown_numeric_claim"
+      ],
+      "retries_used": 2,
+      "task_id": "report_summary"
+    }
+  ]
+}
