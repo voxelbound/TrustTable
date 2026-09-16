@@ -319,8 +319,18 @@ gate is complete.
 > accelerated/developer hardware-tier default (D-029's second profile
 > was never evaluated — every round ran CPU-only).** This gate is not
 > yet complete; `AI-03` must still not start.
+>
+> **Annotation (2026-09-16, `D-035`): this gate is now COMPLETE for
+> v0.2 baseline scope.** The runtime is decided (`llama.cpp`); Ollama is
+> recorded as a future alternative, not disqualified. All four named
+> items are resolved for the baseline/CPU-oriented profile. **`AI-03`
+> is ready to start**, scoped to the baseline profile only. The
+> accelerated/developer hardware-tier default remains explicitly
+> deferred by deliberate human choice — a later, non-blocking
+> follow-on, not an unresolved gap in this gate's baseline-scope
+> completion.
 
-## AI-03 — Ollama provider
+## AI-03 — Local inference provider (llama.cpp, baseline profile)
 
 Configurable local model, timeout, structured output, health and availability.
 
@@ -339,10 +349,26 @@ Configurable local model, timeout, structured output, health and availability.
 > log.md` D-034. This does not change this item's status: the runtime
 > decision this heading itself names ("Ollama") is still unresolved and
 > is not confirmed by `D-034`, so this item remains not-ready to start.
+>
+> **Correction and readiness (2026-09-16, `D-035`):** the runtime
+> decision is now made — `llama.cpp`, not Ollama. The heading above is
+> corrected accordingly (previously "AI-03 — Ollama provider"; prior
+> wording preserved in this repository's own git history, not silently
+> erased, per this project's historical-truth convention). **This item
+> is now READY to start**, scoped to: a real `llama.cpp` local-inference
+> provider for Qwen3.5-4B-Q4_K_M on the baseline/CPU-oriented hardware
+> profile only. The accelerated/GPU hardware-tier profile is explicitly
+> out of scope for this item's initial implementation — a later,
+> separate follow-on, per `D-035`.
 
-## AI-04 — Ollama documentation
+## AI-04 — Local runtime documentation (llama.cpp, baseline profile)
 
 No paid account required.
+
+> **Annotation (2026-09-16, `D-035`):** heading corrected from "AI-04 —
+> Ollama documentation" to match the runtime decision (`llama.cpp`);
+> prior wording preserved in this repository's own git history, not
+> silently erased.
 
 ## CTX-01 — Deterministic context hypotheses
 
