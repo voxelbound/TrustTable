@@ -44,7 +44,155 @@ design (`docs/decision-log.md` D-032, `project-ops/changes/CHG-002`):
 | 5 | Granite-4.2-8B-Q4_K_M |
 | 6 | Gemma-4-E4B-it-Q4_K_M |
 
-## 3. Frozen protocol
+## 3. Candidate-selection rationale and scope
+
+This section explains, from durable project records only, why these six
+candidates were chosen for the first round and what the round
+intentionally did not attempt — for an independent reader who might
+reasonably ask "why these models, and why not model X or Y?" No new
+reasoning is invented here beyond what the cited sources actually state;
+where the durable record does not explain something, this section says
+so plainly rather than supplying a plausible-sounding reason.
+
+### Selection principles
+
+1. **Local-first.** TrustTable's AI use is local-only by design intent
+   (`docs/decision-log.md` D-006 — complete AI-disabled mode, no paid
+   dependency; D-007 — the specific runtime is under review, but
+   local-only inference itself was reaffirmed for `v0.2`,
+   `project-ops/changes/CHG-002` §3 item 2). The first screening round
+   targeted models that could be evaluated fully locally rather than
+   depending on a paid or cloud inference API.
+2. **A targeted engineering screening, not an exhaustive model
+   leaderboard.** `D-032` explicitly chose a TrustTable-specific
+   benchmark — fixed fixtures built from this product's own
+   trust-boundary contract — over generic public model-quality
+   leaderboards, because those do not measure what this product
+   actually needs (structured-output validity, groundedness,
+   latency/RAM/VRAM fit). The six-candidate round is sized accordingly:
+   enough to compare real behavior differences, not an attempt to
+   survey the broader model landscape.
+3. **Sizing targeted practical deployment tiers.** `D-029` defines two
+   explicit hardware profiles — a CPU-only baseline business/evaluator
+   profile (16GB RAM minimum) and a GPU-accelerated developer profile.
+   The executed candidates (3B–9B parameters) are sized toward the
+   CPU-oriented baseline tier rather than beginning with very large,
+   accelerated-only models.
+4. **`Q4_K_M` as the common first-round quantization.** `CHG-002` §11
+   records that "recommended first-round quantizations were recorded
+   for planning purposes only" in the design session's own transcript —
+   that transcript-level detail is not itself a separately committed
+   durable artifact in this repository, so this report does not claim a
+   documented per-model quantization rationale beyond what is directly
+   observable: all six executed candidates used `Q4_K_M` uniformly,
+   giving every candidate a consistent initial quantization for
+   comparison.
+5. **Multiple families, and multiple sizes within a family, on
+   purpose.** The shortlist spans three model families (Qwen3.5,
+   Granite 4.2, Ministral 3 — `Ministral-3-3B-Instruct`) plus a
+   conditionally-included fourth (Gemma 4), and includes two sizes each
+   of Qwen3.5 (4B/9B) and Granite 4.2 (3B/8B). This is consistent with
+   `D-032`'s benchmark dimensions (structured-output validity,
+   groundedness, latency) and is borne out by the actual results (§8):
+   candidates of similar size behaved very differently (Ministral-3-3B-
+   Instruct's 0/6 vs. Granite-4.2-3B's 3/6), and the same family showed
+   a size-related quality shift (Qwen3.5-4B and -9B both reached 6/6,
+   while Granite 4.2's 3B and 8B sizes diverged in validity, 0.5 vs.
+   0.833) — the round was designed to expose exactly this kind of
+   contract/instruction-following and grounding difference, not merely
+   to rank parameter counts.
+6. **No candidate-specific special treatment.** Every candidate ran
+   under the identical frozen protocol described in §4 — no
+   candidate-specific prompt tuning, parser relaxation, or other
+   adjustment was introduced to improve any candidate's result,
+   including for candidates that ultimately performed poorly
+   (Ministral-3-3B-Instruct, Granite-4.2-3B).
+7. **Absence is not the same as rejection.** A model not included in
+   this first round is not thereby described as evaluated and rejected.
+   Where the durable record does not give a reason for a candidate's
+   absence, this section says so explicitly rather than supplying one.
+
+### Considered but not part of this first round
+
+The design record that produced this shortlist
+(`project-ops/changes/CHG-002` §11, corroborated by this project's own
+design-session record) states:
+
+> "A first-round hands-on benchmark shortlist was agreed (Qwen3.5, IBM
+> Granite 4.2, Ministral 3, Phi-4-mini-instruct as primaries; Qwen2.5
+> and Llama 3.x as optional controls; Gemma 4 conditional on
+> independently verifying the actual weight-file download, not just the
+> model card, is ungated; Qwen3.8, Ornith, and dedicated reasoning-mode
+> variants deferred to a second round)."
+
+Of the models named there, three different situations apply to what was
+actually executed:
+
+- **Explicitly deferred, not omitted without reason:** Qwen3.8, Ornith,
+  and dedicated reasoning-mode variants were durably and explicitly
+  deferred to a second round at design time. Their absence from this
+  first round is documented design intent, not an unexplained gap.
+- **Named as primaries or controls, absent without a documented
+  reason:** Phi-4-mini-instruct (named as a primary, alongside Qwen3.5,
+  Granite 4.2, and Ministral 3 — all three of which were executed),
+  Qwen2.5, and Llama 3.x (both named as optional controls). Earlier
+  shortlist work also considered these three. They were not part of the
+  executed first-round six-model batch. The durable record does not
+  establish a separate quality-based, licensing-based, availability-
+  based, or any other rejection of these three models, so this report
+  does not treat their absence as evidence against them.
+- **Conditional, and executed:** Gemma 4 was named conditionally on
+  independently verifying its weight-file download (not just its model
+  card) was ungated. It was executed in this round as
+  `Gemma-4-E4B-it-Q4_K_M`. The durable record does not separately log
+  that this verification step was performed and passed as its own
+  recorded fact; the existence of a working local `.gguf` file and a
+  completed benchmark run against it (§8) is practical evidence a usable
+  download existed, but this report does not claim the specific
+  verification the design record called for was formally carried out
+  and recorded.
+
+### Larger and accelerated-tier candidates
+
+No durable source in this repository names a specific larger
+accelerated-tier candidate (for example, a particular ~27B-parameter-
+class model) for this or any planned round. What is durably documented
+is more general: `D-029` establishes a separate accelerated hardware
+profile (RTX 3090-class, 24GB VRAM) as a real, distinct evaluation
+target, and `CHG-002` §11 defers "dedicated reasoning-mode variants" and
+larger releases in the same families (e.g. Qwen3.8) to a second round.
+This report does not go further than that — it does not assert that any
+specific larger model was considered and deferred, only that the general
+concepts of a second, larger-capacity evaluation round and a separate
+accelerated hardware profile are both durably established design
+intent.
+
+### What this round does not claim
+
+The six-candidate round does not claim to:
+
+- cover every strong local model available in 2026;
+- prove that any excluded or not-yet-run model is inferior to any
+  executed candidate;
+- establish a universal ranking of local models; or
+- close the shortlist to future reconsideration.
+
+### What would justify adding another candidate later
+
+Consistent with the round being a targeted screening rather than a
+final survey, a later round remains open to new candidates where, for
+example:
+
+- a current finalist (§12) exposes a capability gap during further
+  evaluation;
+- a materially stronger local model relevant to this product's needs
+  becomes available;
+- a different deployment tier (e.g. the accelerated hardware profile,
+  `D-029`) calls for a different model class than the CPU-oriented
+  baseline this round targeted; or
+- the human owner directs that another comparator be added.
+
+## 4. Frozen protocol
 
 Identical across all six candidates — no candidate-specific prompt
 tuning, and no model-specific special handling beyond what the frozen
@@ -70,7 +218,7 @@ harness/adapter contract already provides:
   numeric-grounding fix applied), and the same fixed JSON-output prompt
   contract.
 
-## 4. Aggregate results
+## 5. Aggregate results
 
 | Candidate | Accepted | Validity rate | Consistency rate | Avg. retries used | Avg. duration (ms) |
 |---|---|---|---|---|---|
@@ -84,16 +232,16 @@ harness/adapter contract already provides:
 Full per-candidate machine-readable records are published alongside this
 report under `results/` (see "Machine-readable evidence" below).
 
-**Read section 6 ("What `consistency_rate` measures") before interpreting
+**Read section 7 ("What `consistency_rate` measures") before interpreting
 the Consistency-rate column** — a `0.0` value does not always mean
 "measured and found inconsistent."
 
-## 5. Per-fixture outcomes
+## 6. Per-fixture outcomes
 
 Legend: **A** = accepted, **R** = rejected (validator), **E** = provider
 error (output did not parse as valid JSON, never reached the
 validator), retries = retries actually used, consistent = repeat-call
-consistency result (see section 6 for what this means).
+consistency result (see section 7 for what this means).
 
 ### Qwen3.5-4B-Q4_K_M (baseline)
 
@@ -144,24 +292,24 @@ consistency result (see section 6 for what this means).
 | Fixture | Outcome | Rejection reason(s) | Retries | Consistent |
 |---|---|---|---|---|
 | context_inference | A | — | 0 | false (measured) |
-| guided_questions | E | — (malformed JSON, see §7) | 0 | false (not evaluated) |
+| guided_questions | E | — (malformed JSON, see §8) | 0 | false (not evaluated) |
 | finding_explanation | R | unknown_numeric_claim | 2 | false (measured) |
 | remediation | A | — | 0 | false (measured) |
 | rule_description | A | — | 0 | false (measured) |
-| report_summary | R + E | unknown_numeric_claim, then malformed JSON on the final attempt (see §7) | 2 | false (not evaluated) |
+| report_summary | R + E | unknown_numeric_claim, then malformed JSON on the final attempt (see §8) | 2 | false (not evaluated) |
 
 ### Ministral-3-3B-Instruct-Q4_K_M
 
 | Fixture | Outcome | Rejection reason(s) | Retries | Consistent |
 |---|---|---|---|---|
-| context_inference | E | — (malformed JSON, see §7) | 0 | false (not evaluated) |
-| guided_questions | E | — (malformed JSON, see §7) | 0 | false (not evaluated) |
-| finding_explanation | E | — (malformed JSON, see §7) | 0 | false (not evaluated) |
-| remediation | E | — (malformed JSON, see §7) | 0 | false (not evaluated) |
-| rule_description | E | — (malformed JSON, see §7) | 0 | false (not evaluated) |
-| report_summary | E | — (malformed JSON, see §7) | 0 | false (not evaluated) |
+| context_inference | E | — (malformed JSON, see §8) | 0 | false (not evaluated) |
+| guided_questions | E | — (malformed JSON, see §8) | 0 | false (not evaluated) |
+| finding_explanation | E | — (malformed JSON, see §8) | 0 | false (not evaluated) |
+| remediation | E | — (malformed JSON, see §8) | 0 | false (not evaluated) |
+| rule_description | E | — (malformed JSON, see §8) | 0 | false (not evaluated) |
+| report_summary | E | — (malformed JSON, see §8) | 0 | false (not evaluated) |
 
-## 6. What `consistency_rate` measures
+## 7. What `consistency_rate` measures
 
 This is a precise, source-verified description of the harness's own
 consistency metric (`ai_benchmark/runner.py`), not a general claim about
@@ -219,7 +367,7 @@ Applying this to the data above:
 candidate's semantic reliability, reasoning stability, or general
 trustworthiness beyond exactly what is described above.**
 
-## 7. Model-quality / contract-behavior findings
+## 8. Model-quality / contract-behavior findings
 
 - **Ministral-3-3B-Instruct — 0/6.** Every fixture's response was
   wrapped in a ` ```json ... ``` ` markdown code fence rather than the
@@ -227,11 +375,11 @@ trustworthiness beyond exactly what is described above.**
   adapter's JSON parser to fail on every attempt. The narrative content
   visible inside those fences was substantively reasonable; the failure
   is a formatting-contract miss, not necessarily a reasoning-quality
-  one (see §8 for a related harness-observation caveat).
+  one (see §9 for a related harness-observation caveat).
 - **Granite-4.2-3B — 3/6.** `guided_questions` leaked a literal `<think>`
   block into its output despite `--reasoning off`, and both
   `guided_questions` and `report_summary` were truncated mid-string
-  (plausibly related to the fixed `max_tokens=512` ceiling — see §8).
+  (plausibly related to the fixed `max_tokens=512` ceiling — see §9).
   `finding_explanation` and `report_summary` were also rejected for
   `unknown_numeric_claim` on the JSON-parseable attempts that did occur.
 - **Granite-4.2-8B and Gemma-4-E4B-it — 5/6 each.** Both failed only on
@@ -240,9 +388,9 @@ trustworthiness beyond exactly what is described above.**
   hardest numeric-grounding case for both mid-size candidates in this
   round.
 - **Qwen3.5-4B and Qwen3.5-9B — 6/6 each,** with genuinely measured,
-  fully exact-match-repeatable output across all 6 fixtures (see §6).
+  fully exact-match-repeatable output across all 6 fixtures (see §7).
 
-## 8. Harness / validator observations
+## 9. Harness / validator observations
 
 - **Retry-policy asymmetry.** Validator-level rejections (e.g.
   `unknown_numeric_claim`) consumed configured retries with
@@ -256,7 +404,7 @@ trustworthiness beyond exactly what is described above.**
   failures should also receive a corrective retry pass is an open
   question for future harness work, not decided here.
 - **Fixed `max_tokens=512`.** This is a frozen adapter default applied
-  identically to every candidate (§3), not a per-candidate choice. It is
+  identically to every candidate (§4), not a per-candidate choice. It is
   a plausible contributor to the truncated/malformed output observed for
   more verbose candidates (Granite-4.2-3B in particular) — disclosed as
   a protocol characteristic, not attributed solely to model quality.
@@ -270,7 +418,7 @@ trustworthiness beyond exactly what is described above.**
   not assume "has a rejection reason" implies "the final attempt
   parsed."
 
-## 9. EDS / host-service tooling observations
+## 10. EDS / host-service tooling observations
 
 *(Infrastructure only — none of the following affected any model result
 above; every affected service start was independently re-verified
@@ -287,7 +435,7 @@ health/identity checks, before its benchmark ran.)*
   with the underlying host-resident process confirmed continuously
   alive throughout.
 
-## 10. Explicit limitations of this screening round
+## 11. Explicit limitations of this screening round
 
 - **Single dataset.** All fixtures are grounded in one dataset
   (`demo-data/sales_demo.csv`), per `docs/decision-log.md` D-032's own
@@ -305,14 +453,14 @@ health/identity checks, before its benchmark ran.)*
   decisions** for any of these metrics — nothing here should be read as
   passing or failing an as-yet-undefined bar.
 - **`consistency_repeats=2` is a small sample** for any consistency-rate
-  claim, and (per §6) is not evaluated at all for several fixtures in
+  claim, and (per §7) is not evaluated at all for several fixtures in
   this round.
 - **Formatting-contract failures are not yet distinguished from
   reasoning failures** in the harness's own scoring — Ministral's 0/6 in
   particular may be recoverable with a prompt or parser adjustment not
-  attempted in this round (see §8).
+  attempted in this round (see §9).
 
-## 11. Evidence-based narrowing (not a decision)
+## 12. Evidence-based narrowing (not a decision)
 
 Based on the data above, **Qwen3.5-4B-Q4_K_M and Qwen3.5-9B-Q4_K_M are
 finalists for the next evaluation round** — both reached 6/6 accepted
@@ -323,11 +471,11 @@ two candidates in this screening to do so.
 runtime selection, a quantization decision, a ranking of all six
 candidates, or a closure of the "hands-on AI-06 evaluation" phase.** No
 other candidate is disqualified from future re-testing, particularly
-where §8/§10 identify a plausible non-model-quality contributor (fixed
+where §9/§11 identify a plausible non-model-quality contributor (fixed
 `max_tokens`, markdown-fence formatting, single-dataset scope) to a
 candidate's result.
 
-## 12. Evidence still required before the human decision gate
+## 13. Evidence still required before the human decision gate
 
 At minimum, before the runtime/model/quantization/per-hardware-tier
 decision named in `docs/decision-log.md` D-032/D-033 can be made:
