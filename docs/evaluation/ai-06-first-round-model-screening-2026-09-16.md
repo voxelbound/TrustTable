@@ -33,7 +33,7 @@ step — it is a screening round, not the decision itself.
 ## 2. Candidates
 
 Six candidates, drawn from the first-round shortlist agreed during
-design (`docs/decision-log.md` D-032, `project-ops/changes/CHG-002`):
+design (`docs/decision-log.md` D-032):
 
 | # | Candidate |
 |---|---|
@@ -59,8 +59,8 @@ so plainly rather than supplying a plausible-sounding reason.
 1. **Local-first.** TrustTable's AI use is local-only by design intent
    (`docs/decision-log.md` D-006 — complete AI-disabled mode, no paid
    dependency; D-007 — the specific runtime is under review, but
-   local-only inference itself was reaffirmed for `v0.2`,
-   `project-ops/changes/CHG-002` §3 item 2). The first screening round
+   local-only inference itself was reaffirmed for `v0.2`, per D-007's
+   own appended review note). The first screening round
    targeted models that could be evaluated fully locally rather than
    depending on a paid or cloud inference API.
 2. **A targeted engineering screening, not an exhaustive model
@@ -78,11 +78,10 @@ so plainly rather than supplying a plausible-sounding reason.
    The executed candidates (3B–9B parameters) are sized toward the
    CPU-oriented baseline tier rather than beginning with very large,
    accelerated-only models.
-4. **`Q4_K_M` as the common first-round quantization.** `CHG-002` §11
-   records that "recommended first-round quantizations were recorded
-   for planning purposes only" in the design session's own transcript —
-   that transcript-level detail is not itself a separately committed
-   durable artifact in this repository, so this report does not claim a
+4. **`Q4_K_M` as the common first-round quantization.** Earlier design
+   work recorded that recommended first-round quantizations were noted
+   for planning purposes only, in materials not committed as a
+   separate durable artifact in this repository, so this report does not claim a
    documented per-model quantization rationale beyond what is directly
    observable: all six executed candidates used `Q4_K_M` uniformly,
    giving every candidate a consistent initial quantization for
@@ -114,9 +113,8 @@ so plainly rather than supplying a plausible-sounding reason.
 
 ### Considered but not part of this first round
 
-The design record that produced this shortlist
-(`project-ops/changes/CHG-002` §11, corroborated by this project's own
-design-session record) states:
+Earlier internal design work that produced this shortlist recorded the
+following:
 
 > "A first-round hands-on benchmark shortlist was agreed (Qwen3.5, IBM
 > Granite 4.2, Ministral 3, Phi-4-mini-instruct as primaries; Qwen2.5
@@ -159,8 +157,9 @@ accelerated-tier candidate (for example, a particular ~27B-parameter-
 class model) for this or any planned round. What is durably documented
 is more general: `D-029` establishes a separate accelerated hardware
 profile (RTX 3090-class, 24GB VRAM) as a real, distinct evaluation
-target, and `CHG-002` §11 defers "dedicated reasoning-mode variants" and
-larger releases in the same families (e.g. Qwen3.8) to a second round.
+target, and earlier design work defers "dedicated reasoning-mode
+variants" and larger releases in the same families (e.g. Qwen3.8) to a
+second round.
 This report does not go further than that — it does not assert that any
 specific larger model was considered and deferred, only that the general
 concepts of a second, larger-capacity evaluation round and a separate
