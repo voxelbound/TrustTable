@@ -10,7 +10,7 @@ It combines deterministic profiling and rule-based detection with evidence-groun
 
 **Current milestone: v0.1.1 — Investigation UX.** `FIND-01` (row context for row-anchored findings) — this milestone's sole planned deliverable — is implemented in full: the row-context API endpoint, and a Finding Detail UI section with expand and Prev/Next navigation across a finding's own affected rows (see "Delivered work" below).
 
-Local AI beta (v0.2) work is well underway. The AI provider interface, its two non-real providers (disabled, mock), a local-AI benchmark harness, and the hands-on multi-round evaluation it enabled are all complete. Qwen3.5-4B-Q4_K_M and `llama.cpp` are the selected baseline model and runtime (`docs/decision-log.md` D-034/D-035); the real local-inference provider (`AI-03`, `ai_provider/llama_cpp.py`) is now implemented and registered (`llm_provider="llama_cpp"`), though `Settings.llm_provider` still defaults to `"disabled"` and no FastAPI route or analysis feature calls it yet. The accelerated/GPU hardware-tier default remains explicitly deferred, non-blocking. `AI-04` (documentation) and `CTX-01`/`CTX-02`/`CTX-03` (the features that will first consume the provider) remain open.
+Local AI beta (v0.2) work is well underway. The AI provider interface, its two non-real providers (disabled, mock), a local-AI benchmark harness, and the hands-on multi-round evaluation it enabled are all complete. Qwen3.5-4B-Q4_K_M and `llama.cpp` are the selected baseline model and runtime (`docs/decision-log.md` D-034/D-035); the real local-inference provider (`AI-03`, `ai_provider/llama_cpp.py`) is now implemented and registered (`llm_provider="llama_cpp"`), though `Settings.llm_provider` still defaults to `"disabled"` and no FastAPI route or analysis feature calls it yet. A hands-on setup guide for running the runtime and baseline model (`AI-04`, see [`docs/local-development.md`](docs/local-development.md)) is also complete. The accelerated/GPU hardware-tier default remains explicitly deferred, non-blocking. `CTX-01`/`CTX-02`/`CTX-03` (the features that will first consume the provider) remain open.
 
 The product, domain model, API boundaries, detector framework, frontend architecture, testing strategy, threat model, release plan, and implementation backlog were all defined before production implementation began (see `docs/`).
 
@@ -54,13 +54,14 @@ The product, domain model, API boundaries, detector framework, frontend architec
 - **AI-02** — the two non-real providers required by `docs/product-requirements.md` §12: `DisabledProvider` (`llm_provider=disabled`, `D-006`'s "complete AI-disabled mode") and `MockProvider` (`llm_provider=mock`, configurable static or dynamic output, proven capable of producing and having rejected genuinely adversarial "attempt to follow the injected instruction" output against the real `validate_model_output`), plus a small `create_provider` factory.
 - **AI-03** — the real local-inference provider: `LlamaCppProvider` (`llm_provider=llama_cpp`), a real `httpx`-based client for `llama.cpp`'s `llama-server`, reusing `build_safe_prompt` unmodified and never calling `validate_model_output` itself. Registered in the provider factory; `Settings.llm_provider`'s default remains `disabled`. No FastAPI route, application service, or analysis-pipeline calls it yet (`CTX-01`/`CTX-02`/`CTX-03`, later packages); no live-model test runs in CI (deterministic `httpx.MockTransport` tests only, matching the benchmark-only adapter's own precedent).
 - **AI-06** (harness plus completed hands-on evaluation) — a persistent, config-driven local-AI benchmark harness: six fixed, versioned task fixtures (one per `AIOperation`) grounded in real demo-dataset evidence, and a runner scoring structured-output validity/groundedness, latency, bounded retry rate, and repeated-call consistency for any `AIProvider`. The full hands-on evaluation (six-candidate first-round screening, a blind qualitative comparison, and a controlled performance/resource comparison between the two finalists) is complete and published (`docs/evaluation/ai-06-first-round-model-screening-2026-09-16.md`); the resulting model and runtime decision is recorded in `docs/decision-log.md` D-034/D-035.
+- **AI-04** — local runtime documentation: a hands-on setup guide (`docs/local-development.md`) for installing `llama.cpp`'s `llama-server`, manually obtaining and verifying the baseline model (Qwen3.5-4B-Q4_K_M), starting it on the baseline/CPU-oriented profile, and configuring TrustTable's `LLM_PROVIDER`/`LLM_BASE_URL`/`LLM_MODEL` settings to reach it — no paid account required. No product feature calls the provider yet (`CTX-01`/`CTX-02`/`CTX-03`, still open).
 
 The first production target is a local, single-instance application that:
 
 - runs through Docker
 - analyzes CSV and Excel files
 - remains useful without an LLM
-- optionally uses a locally downloaded model through Ollama
+- optionally uses a locally downloaded model through `llama.cpp`
 - requires no paid inference API
 - treats uploaded values as untrusted data
 - detects and reports possible prompt-injection content
@@ -119,7 +120,7 @@ Upload → Understand → Analyze → Review → Export
 - Uploaded values, column names, worksheet names, and model responses are untrusted.
 - Model responses are schema-validated before use.
 - The complete application works with AI disabled.
-- Local Ollama integration must not require an API key.
+- Local `llama.cpp` integration must not require an API key.
 - Version 1 avoids unnecessary distributed infrastructure.
 
 ## Documentation map
@@ -185,7 +186,7 @@ Upload → Understand → Analyze → Review → Export
 - pandas and NumPy
 - openpyxl
 - bounded in-process background work
-- Ollama, disabled, and mock model providers
+- `llama.cpp`, disabled, and mock model providers
 
 ## Supported production boundary
 
