@@ -1444,3 +1444,82 @@ def test_no_ai_boundary_or_ai_provider_import_in_service_module() -> None:
     ]
     assert not any("ai_boundary" in line for line in import_lines)
     assert not any("ai_provider" in line for line in import_lines)
+
+
+# ---------------------------------------------------------------------------
+# API-02 (WP-059): a real subprocess uvicorn boot, mirroring the
+# Dockerfile's exact CMD (`uvicorn trusttable_backend.main:app`), added
+# after a CI-reported "Docker Compose integration smoke tests" failure
+# on this package's own branch was investigated. Existing tests only
+# ever exercise `create_app()` in-process via `TestClient`/direct calls
+# (`conftest.py`, `test_analyses.py`); none previously proved the app
+# can actually boot as a genuinely separate OS process and serve
+# `/health/live` — a real, previously-uncovered gap this investigation
+# surfaced, kept here permanently rather than discarded after diagnosis.
+# ---------------------------------------------------------------------------
+
+
+def test_real_uvicorn_subprocess_boots_and_serves_health_live() -> None:
+    import socket
+    import subprocess
+    import sys
+    import time
+    import urllib.request
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "trusttable_backend.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        deadline = time.monotonic() + 20.0
+        last_error: Exception | None = None
+        healthy = False
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                break
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/api/v1/health/live", timeout=1
+                ) as response:
+                    if response.status == 200:
+                        healthy = True
+                        break
+            except Exception as exc:  # noqa: BLE001 - diagnostic probe, retried in a loop
+                last_error = exc
+            time.sleep(0.25)
+
+        if not healthy:
+            process.terminate()
+            try:
+                stdout, stderr = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout, stderr = process.communicate()
+            pytest.fail(
+                f"uvicorn subprocess never became healthy "
+                f"(exit_code={process.poll()}, last_probe_error={last_error!r}).\n"
+                f"--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}"
+            )
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
