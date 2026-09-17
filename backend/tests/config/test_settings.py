@@ -65,7 +65,7 @@ EXPECTED_DEFAULTS = {
     "analysis_retention_hours": 0,
     "background_worker_count": 2,
     "llm_provider": "disabled",
-    "llm_base_url": "http://host.docker.internal:8080",
+    "llm_base_url": "http://host.docker.internal:8081",
     "llm_model": "",
     "llm_temperature": 0.0,
     "llm_context_window": 8192,

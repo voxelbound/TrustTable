@@ -251,26 +251,38 @@ model file directly, only `llama-server`'s HTTP endpoint.
 
 ### 3. Start `llama-server`
 
+**`llama-server` is inference infrastructure only, never a user-facing
+application.** TrustTable is the sole user-facing application in this
+project — you and your users are never directed to, or expected to
+interact with, `llama-server`'s own UI. `llama-server` ships a built-in
+Web UI enabled by default; the documented and supported TrustTable
+runtime profile disables it (`--no-webui`), and runs `llama-server` on
+a dedicated port (`8081`) distinct from TrustTable's own frontend port
+(`8080`, `docker-compose.yml`) to avoid a host-port collision when both
+run locally at the same time (`docs/decision-log.md` D-036):
+
 ```sh
 llama-server \
   --model /path/to/Qwen3.5-4B-Q4_K_M.gguf \
   --host 127.0.0.1 \
-  --port 8080 \
+  --port 8081 \
   --ctx-size 8192 \
-  --n-gpu-layers 0
+  --n-gpu-layers 0 \
+  --no-webui
 ```
 
 `--n-gpu-layers 0` matches the baseline/CPU-oriented hardware profile
 (D-029) this provider is proven against. The accelerated/GPU
 hardware-tier profile remains a separate, explicitly deferred item
 (D-035) — raising `--n-gpu-layers` is a `llama.cpp`-level tuning choice
-outside this guide's scope.
+outside this guide's scope. `--no-webui` and the `8081` port are a
+runtime-hardening decision (D-036), not a model/runtime change.
 
 Confirm it is serving:
 
 ```sh
-curl -s http://127.0.0.1:8080/health
-curl -s http://127.0.0.1:8080/v1/models
+curl -s http://127.0.0.1:8081/health
+curl -s http://127.0.0.1:8081/v1/models
 ```
 
 The second command's response includes the exact model identifier
@@ -284,13 +296,15 @@ variables — see "How configuration is loaded" in
 
 ```sh
 LLM_PROVIDER=llama_cpp
-LLM_BASE_URL=http://127.0.0.1:8080
+LLM_BASE_URL=http://127.0.0.1:8081
 LLM_MODEL=<the exact model identifier llama-server reported above>
 ```
 
 From inside the Docker Compose stack, use
-`http://host.docker.internal:8080` (llama-server's own default port)
-for `LLM_BASE_URL` instead, since the backend container cannot reach
+`http://host.docker.internal:8081` (the dedicated `llama-server` port
+this guide's start command uses, `D-036` — not `llama-server`'s own
+default port, and not TrustTable's own frontend port `8080`) for
+`LLM_BASE_URL` instead, since the backend container cannot reach
 `127.0.0.1` on the host directly.
 
 `Settings.llm_provider` defaults to `disabled`; setting it to
