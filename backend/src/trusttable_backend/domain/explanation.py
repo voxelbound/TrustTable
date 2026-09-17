@@ -19,6 +19,16 @@ finding's own already-computed facts, not a narrative built over them);
 `USER_CONFIRMED`/`USER_CORRECTED` describe user-edited context fields
 (`docs/domain-model.md` §8), not explanations.
 
+`provider_name`/`model_identifier` (`UI-02` slice 1, `WP-063`) are a
+disclosed, additive, backward-compatible step toward
+`docs/domain-model.md` §14's fuller `AIInterpretation` shape
+(`docs/decision-log.md` D-037's reconciliation requirement) — both
+`None` for a deterministic-fallback explanation (no provider was used)
+and populated from the real `ProviderResponse` for an accepted
+AI-interpretation explanation. Timing/validation-result/rejection-audit
+fields `AIInterpretation` also specifies remain a further, undone
+convergence step.
+
 Framework-independent: no FastAPI/SQLAlchemy/pydantic/ai_boundary/
 ai_provider import. Stdlib only.
 """
@@ -56,6 +66,8 @@ class FindingExplanation:
     provenance: Provenance
     referenced_evidence_ids: tuple[str, ...]
     referenced_columns: tuple[ColumnReference, ...]
+    provider_name: str | None = None
+    model_identifier: str | None = None
 
     def __post_init__(self) -> None:
         if not self.narrative:

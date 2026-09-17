@@ -158,12 +158,20 @@ def _grounded_columns(evidence: tuple[Evidence, ...]) -> tuple[ColumnReference, 
     return tuple(seen.values())
 
 
-def _build_explanation(narrative: str, evidence: tuple[Evidence, ...]) -> FindingExplanation:
+def _build_explanation(
+    narrative: str,
+    evidence: tuple[Evidence, ...],
+    *,
+    provider_name: str,
+    model_identifier: str,
+) -> FindingExplanation:
     return FindingExplanation(
         narrative=narrative,
         provenance=Provenance.AI_INTERPRETATION,
         referenced_evidence_ids=tuple(item.evidence_id for item in evidence),
         referenced_columns=_grounded_columns(evidence),
+        provider_name=provider_name,
+        model_identifier=model_identifier,
     )
 
 
@@ -211,7 +219,12 @@ def run_finding_explanation(
         if outcome.accepted:
             narrative = response.raw_output.get("narrative")
             assert isinstance(narrative, str)  # guaranteed by validate_model_output acceptance
-            explanation = _build_explanation(narrative, evidence)
+            explanation = _build_explanation(
+                narrative,
+                evidence,
+                provider_name=response.provider_name,
+                model_identifier=response.model_identifier,
+            )
             return FindingExplanationResult(
                 accepted=True,
                 explanation=explanation,

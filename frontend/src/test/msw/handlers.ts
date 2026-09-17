@@ -5,6 +5,7 @@ import type {
   DemoAnalysisResponse,
   FindingDetailResponse,
   FindingEvidenceListResponse,
+  FindingExplanationResponse,
   FindingsListResponse,
   RowContextResponse,
   UploadAnalysisResponse,
@@ -193,6 +194,23 @@ export function makeFindingEvidenceListResponse(
   return { total_items: items.length, ...overrides, items }
 }
 
+export function makeFindingExplanationResponse(
+  overrides: Partial<FindingExplanationResponse> = {},
+): FindingExplanationResponse {
+  return {
+    finding_id: '0',
+    narrative: 'This is a medium-severity finding worth reviewing.',
+    provenance: 'deterministic_fallback',
+    provider_name: null,
+    model_identifier: null,
+    referenced_evidence_ids: ['validity.future_dates.evidence.order_date'],
+    referenced_columns: [
+      { original_name: 'order_date', internal_key: 'order_date', ordinal: 3 },
+    ],
+    ...overrides,
+  }
+}
+
 export function makeStatusResponse(
   overrides: Partial<AnalysisStatusResponse> = {},
 ): AnalysisStatusResponse {
@@ -269,6 +287,12 @@ export const handlers = [
   http.get(`${BASE}/analyses/:analysisId/findings/:findingId/evidence`, () => {
     return HttpResponse.json(makeFindingEvidenceListResponse())
   }),
+  http.get(
+    `${BASE}/analyses/:analysisId/findings/:findingId/explanation`,
+    () => {
+      return HttpResponse.json(makeFindingExplanationResponse())
+    },
+  ),
   http.get(
     `${BASE}/analyses/:analysisId/findings/:findingId/row-context`,
     () => {

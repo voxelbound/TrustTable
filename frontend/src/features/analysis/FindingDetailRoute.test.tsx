@@ -8,6 +8,7 @@ import {
   apiErrorBody,
   makeFindingDetailResponse,
   makeFindingEvidenceListResponse,
+  makeFindingExplanationResponse,
   makeRowContextResponse,
 } from '../../test/msw/handlers'
 import { server } from '../../test/msw/server'
@@ -211,6 +212,44 @@ describe('FindingDetailRoute', () => {
     expect(
       screen.getByRole('link', { name: 'Back to findings' }),
     ).toHaveAttribute('href', `/analyses/${ANALYSIS_ID}/findings`)
+  })
+
+  it('UI-02 slice 1 (WP-063): renders the deterministic Explanation section with no model-location text', async () => {
+    renderDetail()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Explanation' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('This is a medium-severity finding worth reviewing.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Deterministic (no AI)')).toBeInTheDocument()
+  })
+
+  it('UI-02 slice 1 (WP-063): renders AI interpretation with model-location text when a provider produced the explanation', async () => {
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/explanation',
+        () =>
+          HttpResponse.json(
+            makeFindingExplanationResponse({
+              narrative: 'An AI-grounded narrative.',
+              provenance: 'ai_interpretation',
+              provider_name: 'mock',
+              model_identifier: 'mock-v1',
+            }),
+          ),
+      ),
+    )
+
+    renderDetail()
+
+    expect(
+      await screen.findByText('An AI-grounded narrative.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('AI interpretation — mock (mock-v1)'),
+    ).toBeInTheDocument()
   })
 
   it('WP-038 (FIND-01): renders the Row context section with the anchor row highlighted', async () => {

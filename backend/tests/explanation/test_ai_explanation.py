@@ -123,6 +123,24 @@ def test_run_finding_explanation_accepts_default_mock_output() -> None:
     assert result.explanation.referenced_evidence_ids == ("ev-1",)
     assert result.retries_used == 0
     assert result.provider_error is None
+
+
+# ---------------------------------------------------------------------------
+# UI-02 slice 1 (WP-063): provider identity threaded from a real response
+# ---------------------------------------------------------------------------
+
+
+def test_accepted_explanation_carries_real_provider_identity() -> None:
+    evidence = (make_evidence(),)
+    envelope = build_finding_explanation_envelope(make_finding(), evidence)
+    provider = MockProvider()
+
+    result = run_finding_explanation(provider, envelope, evidence)
+
+    assert result.accepted is True
+    assert result.explanation is not None
+    assert result.explanation.provider_name == provider.provider_name
+    assert result.explanation.model_identifier == "mock-v1"
     assert result.rejection_reasons == ()
 
 

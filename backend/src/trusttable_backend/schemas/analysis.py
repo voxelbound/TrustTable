@@ -359,3 +359,24 @@ class RowContextResponse(BaseModel):
     truncated_at_end: bool
     max_window: int
     rows: list[RowContextEntryResponse]
+
+
+class FindingExplanationResponse(BaseModel):
+    """Body for `GET /analyses/{analysis_id}/findings/{finding_id}/explanation`
+    (`UI-02` slice 1, `WP-063`). Mirrors `domain.explanation.
+    FindingExplanation` exactly. `provenance` is the `Provenance` enum's
+    string value (`"deterministic_fallback"` or `"ai_interpretation"`
+    only — `FindingExplanation`'s own closed set, `AI-05`).
+    `provider_name`/`model_identifier` are both `null` for a
+    deterministic-fallback explanation (no provider was used — the
+    default, AI-disabled behavior) and populated for an accepted
+    AI-interpretation explanation.
+    """
+
+    finding_id: str
+    narrative: str
+    provenance: str
+    provider_name: str | None
+    model_identifier: str | None
+    referenced_evidence_ids: list[str]
+    referenced_columns: list[ColumnReferenceResponse]
