@@ -66,6 +66,13 @@ def test_deterministic_explanation_provenance_is_deterministic_fallback() -> Non
     assert explanation.provenance is Provenance.DETERMINISTIC_FALLBACK
 
 
+def test_deterministic_explanation_provider_fields_are_none() -> None:
+    explanation = build_deterministic_explanation(make_finding())
+
+    assert explanation.provider_name is None
+    assert explanation.model_identifier is None
+
+
 def test_deterministic_explanation_grounding_mirrors_finding_exactly() -> None:
     column = ColumnReference(original_name="order_id", internal_key="order_id", ordinal=0)
     finding = make_finding(affected_columns=(column,), evidence_ids=("ev-1", "ev-2"))

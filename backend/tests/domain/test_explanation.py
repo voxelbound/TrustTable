@@ -46,6 +46,18 @@ def test_finding_explanation_rejects_disallowed_provenance(provenance: Provenanc
         make_explanation(provenance=provenance)
 
 
+def test_finding_explanation_provider_fields_default_to_none() -> None:
+    explanation = make_explanation()
+    assert explanation.provider_name is None
+    assert explanation.model_identifier is None
+
+
+def test_finding_explanation_provider_fields_carry_supplied_values() -> None:
+    explanation = make_explanation(provider_name="mock", model_identifier="mock-v1")
+    assert explanation.provider_name == "mock"
+    assert explanation.model_identifier == "mock-v1"
+
+
 def test_finding_explanation_carries_referenced_evidence_and_columns() -> None:
     column = ColumnReference(original_name="qty", internal_key="qty", ordinal=0)
     explanation = make_explanation(
