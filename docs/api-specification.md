@@ -280,12 +280,22 @@ Stores an answer and resulting context updates.
 
 Valid when context is sufficiently confirmed or explicitly left unknown.
 
-Triggers context-dependent analysis and optional AI interpretation.
+**Clarified (`docs/decision-log.md` D-037, `v0.2`):** "finalize" ends
+the context-confirmation sub-flow and triggers **enrichment** —
+validated AI interpretation/explanations grounded in the confirmed
+context and the existing deterministic evidence. This is additive: it
+never re-runs or gates deterministic detection, and it never changes
+the underlying analysis's own state (which is already `completed`
+before finalize can be called — see `docs/architecture.md` §6's
+two-phase model). A future pre-analysis-gating architecture, where
+finalize instead triggers detection itself, remains possible but is
+not what `v0.2` implements.
 
 Returns:
 
 - `202 Accepted`
-- updated status resource
+- updated resource (the enrichment result, layered over the unchanged,
+  already-`completed` deterministic analysis)
 
 ## 10. Findings
 

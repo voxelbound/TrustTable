@@ -734,7 +734,15 @@ exception text or a stack trace in the response body (`docs/api-specification.md
 
 ## 6. Analysis pipeline
 
+**Two-phase model (`docs/decision-log.md` D-037, `v0.2`):** the
+deterministic pipeline (Phase 1) runs to completion unattended, with no
+pause. Context confirmation and AI interpretation (Phase 2) are a
+second, optional, additive pass over that already-completed analysis —
+never a gate on it. This is the shipped `v0.2` shape.
+
 ```text
+Phase 1 — deterministic baseline (blocking within itself, unattended)
+
 Validate file
    ↓
 Parse
@@ -749,17 +757,38 @@ Calculate risk score
    ↓
 Build deterministic context hypotheses
    ↓
+COMPLETED  ←  fully valid, reviewable, and exportable with zero
+              enrichment (docs/domain-model.md §8's "context does not
+              alter historic deterministic profile facts" invariant)
+
+Phase 2 — optional enrichment (additive, does not alter Phase 1 output)
+
 Optional validated AI context inference
    ↓
-User confirmation
+User confirmation (context fields / guided questions)
    ↓
-Run contextual detectors
+Optional validated explanations, remediation, and other AI interpretation
    ↓
-Optional validated explanations and remediation
-   ↓
-Generate and execute validation rules
-   ↓
-Review and export
+(review and export apply to the Phase 1 baseline, enriched where
+ Phase 2 was performed)
+```
+
+**Preserved future option, not implemented by `v0.2` (`D-037`):** the
+original, single-pipeline architecture below — where user confirmation
+blocks and gates a subsequent "run contextual detectors" step —
+remains a legitimate future direction (for example, if a later
+detector or `v0.3`'s rule engine genuinely requires confirmed context
+before it can run safely). Adopting it would be its own human-owned
+architecture decision, not something `D-037` forecloses. It is kept
+here as the reserved shape, not deleted:
+
+```text
+Validate file → Parse → Infer types → Profile → Run deterministic
+detectors → Calculate risk score → Build deterministic context
+hypotheses → Optional validated AI context inference → User
+confirmation → Run contextual detectors → Optional validated
+explanations and remediation → Generate and execute validation rules
+→ Review and export
 ```
 
 ## 7. LLM trust boundary
