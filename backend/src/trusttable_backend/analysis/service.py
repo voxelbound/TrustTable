@@ -1,5 +1,6 @@
 """In-memory analysis orchestration (`API-01`, enabling slice, `WP-023`;
-generalized to generic uploads, `WP-029`).
+generalized to generic uploads, `WP-029`; extended with a context-
+confirmation layer, `API-02` enabling slice, `WP-059`).
 
 A pure-Python, framework-independent orchestration engine wiring together
 every already-delivered package (`ING-02` CSV parsing, `PROF-03`
@@ -7,8 +8,8 @@ profiling, `DET-01`/`DET-02`/`DET-SEC-01` detectors via `run_detectors()`,
 `RISK-01` scoring) into one deterministic create-then-run pipeline over
 either the bundled demo dataset (`DEMO-01`, `create_analysis`) or an
 uploaded CSV file (`create_analysis_from_upload`, `WP-029`). No
-persistence, no AI provider, and no context inference exist yet — this
-module is the "Application services"-layer engine `API-01`'s HTTP routes
+persistence or AI provider call exist yet — this module is the
+"Application services"-layer engine `API-01`'s HTTP routes
 (`api/v1/analyses.py`) expose (`docs/architecture.md` §3).
 
 `run_analysis` is source-agnostic: it reads the bytes an analysis was
@@ -17,11 +18,24 @@ itself (a `WP-029` refactor — previously it always regenerated the
 bundled demo dataset internally, which happened to be correct only
 because no other content source existed yet).
 
-`AnalysisState` is a documented 8-value subset of `docs/domain-model.md`
-§5's 11-value `States` list (`inferring_context`/`awaiting_confirmation`/
-`finalizing`/`deleted` excluded — those require packages that do not
-exist yet). "State" and "current stage" are merged into this one field,
-a disclosed, reversible simplification.
+`AnalysisState` remains an 8-value documented subset of `docs/domain-
+model.md` §5's 11-value `States` list (`inferring_context`/
+`awaiting_confirmation`/`finalizing`/`deleted` still excluded) — a
+**deliberate scoping decision, not an oversight**: `CTX-01`/`CTX-02`/
+`CTX-03` now exist, but wiring `run_analysis` itself to pause at a new
+confirmation gate before `COMPLETED` would regress the already-shipped,
+milestone-complete `v0.1`/`v0.1.1` UI's poll-until-`COMPLETED` behavior,
+which has no confirmation-gate UI to recover from a new pause. `API-02`
+(`WP-059`) instead adds `get_or_infer_context`/`get_guided_questions`/
+`confirm_context_fields`/`answer_guided_question`/`finalize_context` as
+a strictly additive layer over an already-`COMPLETED` analysis —
+`context`/`guided_questions`/`context_version`/`context_finalized` are
+computed and mutated entirely independently of `state`, which continues
+to reach `COMPLETED` exactly as it always has. Whether the pipeline
+should ever actually pause for confirmation remains an open, later,
+human-directed product decision. "State" and "current stage" remain
+merged into one field, the same disclosed, reversible simplification as
+before.
 
 `cancel_analysis` is only effective while an analysis is `QUEUED`: true
 mid-pipeline cancellation requires real bounded background execution
@@ -30,14 +44,19 @@ completion within one call, so no "active and cancellable" window exists
 yet.
 
 Every `Analysis.security_exposure` is fixed to the disabled/
-no-transmission `SecurityExposureState` — no `AI-01`/`AI-02` provider
-exists yet, matching `docs/product-requirements.md` §5.7's "graceful
-AI-disabled operation" requirement structurally.
+no-transmission `SecurityExposureState` — no route or service function
+in this module (including the new `API-02` context functions, which
+deliberately never call `CTX-02`'s AI augmentation) actually invokes an
+`AI-01`/`AI-02`/`AI-03` provider, matching `docs/product-requirements.md`
+§5.7's "graceful AI-disabled operation" requirement structurally.
 
-Framework-independent: no FastAPI/SQLAlchemy/pydantic import (this module
-deliberately also avoids `version_info`/`config`, which would transitively
-pull in pydantic `Settings` — a disclosed, conservative choice). Stdlib
-only (`dataclasses`, `enum`, `datetime`, `uuid`, `hashlib`). No
+Framework-independent besides its `context_inference` seam (`CTX-01`'s
+`infer_dataset_context`, `CTX-03`'s `generate_guided_questions` — both
+themselves deterministic, no `ai_boundary`/`ai_provider` import in
+either): no FastAPI/SQLAlchemy/pydantic import (this module deliberately
+also avoids `version_info`/`config`, which would transitively pull in
+pydantic `Settings` — a disclosed, conservative choice). Stdlib
+otherwise (`dataclasses`, `enum`, `datetime`, `uuid`, `hashlib`). No
 `eval`/`exec` anywhere in this module.
 """
 
@@ -45,18 +64,27 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 
+from ..context_inference.guided_questions import generate_guided_questions
+from ..context_inference.heuristics import infer_dataset_context
 from ..demo_data import SEED, generate
 from ..detectors.catalogue import DETECTORS
 from ..detectors.contract import FindingCandidate, SecurityExposureState
 from ..detectors.engine import run_detectors
+from ..domain.clarification import (
+    ClarificationAnswer,
+    ClarificationQuestion,
+    QuestionAnsweredState,
+)
+from ..domain.context import ConfirmationState, ContextField, ContextFieldValue, DatasetContext
 from ..domain.evidence import Evidence
 from ..domain.parsing import Dataset, DatasetFormat, DatasetSourceType
 from ..domain.row_context import RowContextEntry, RowContextWindow
-from ..domain.value_objects import RowReference
+from ..domain.value_objects import Provenance, RowReference
 from ..parsers.csv_parser import parse_csv
 from ..profiling.metrics import compute_dataset_profile
 from ..profiling.schemas import DatasetProfile
@@ -95,14 +123,33 @@ _FAILURE_MESSAGE = "Analysis pipeline raised an exception during execution"
 exception text, matching `DET-01` `engine.py`'s own safe-failure
 precedent one layer more conservatively (no exception type name either)."""
 
+_EDITABLE_CONTEXT_FIELDS = frozenset(
+    {
+        ContextField.PROBABLE_DOMAIN,
+        ContextField.ROW_GRAIN,
+        ContextField.PRIMARY_ENTITY,
+        ContextField.CURRENCY_BEHAVIOR,
+        ContextField.EXPECTED_BUSINESS_RULES,
+    }
+)
+"""The five single-value `ContextField`s `confirm_context_fields`/
+`answer_guided_question` (`API-02`) may write to — mirrors
+`context_inference.guided_questions`'s own eligible-field set exactly
+(the four "role" fields remain read-only in this package, a disclosed
+limitation)."""
+
 
 class AnalysisState(StrEnum):
     """An 8-value documented subset of `docs/domain-model.md` §5's
     11-value `States` list. `inferring_context`, `awaiting_confirmation`,
-    `finalizing`, and `deleted` are excluded — they require packages that
-    do not exist yet (`CTX-01`'s context inference; a deletion package,
-    `DEL-01`). This package's pipeline goes directly from `DETECTING` to
-    `COMPLETED`.
+    and `finalizing` are deliberately excluded — see this module's own
+    docstring for the full disclosed reasoning (`API-02`, `WP-059`:
+    wiring the pipeline itself to pause for confirmation would regress
+    the already-shipped `v0.1`/`v0.1.1` UI). `deleted` is excluded
+    because no deletion package (`DEL-01`) exists yet. This module's own
+    pipeline (`run_analysis`) goes directly from `DETECTING` to
+    `COMPLETED`, unchanged by `API-02`'s additive context-confirmation
+    layer.
     """
 
     QUEUED = "queued"
@@ -156,6 +203,20 @@ class Analysis:
     yet, the same disclosed non-goal `AnalysisStore` itself already
     carries one layer up). Declared `repr=False` so it can never appear
     in an accidental log/repr of an `Analysis` instance.
+
+    `context`/`guided_questions`/`context_version`/`context_finalized`
+    (`API-02`, `WP-059`) are a strictly additive layer over an already-
+    `COMPLETED` analysis: `context` and `guided_questions` are computed
+    once, lazily, by `get_or_infer_context` (`CTX-01`'s
+    `infer_dataset_context`/`CTX-03`'s `generate_guided_questions`, both
+    deterministic — `CTX-02`'s AI augmentation is deliberately not
+    invoked here, see this module's own scoping note above);
+    `context_version` implements `docs/api-specification.md` §9's "PUT
+    context... requires resource version" optimistic-concurrency check,
+    starting at `0` (context not yet inferred) and incremented by every
+    mutating function below. None of these four fields participate in
+    `run_analysis`'s own state machine — they exist only once `state is
+    COMPLETED`, exactly like `dataset_profile`/`findings`.
     """
 
     analysis_id: str
@@ -174,6 +235,10 @@ class Analysis:
     completed_at: datetime | None
     failed_at: datetime | None
     cancelled_at: datetime | None
+    context: DatasetContext | None = None
+    guided_questions: tuple[ClarificationQuestion, ...] = ()
+    context_version: int = 0
+    context_finalized: bool = False
 
     def __post_init__(self) -> None:
         if not self.analysis_id:
@@ -200,8 +265,27 @@ class Analysis:
                 raise ValueError(
                     "Analysis: trust_assessment must be None unless state is COMPLETED"
                 )
+            if self.context is not None:
+                raise ValueError("Analysis: context must be None unless state is COMPLETED")
+            if self.guided_questions:
+                raise ValueError(
+                    "Analysis: guided_questions must be empty unless state is COMPLETED"
+                )
+            if self.context_version != 0:
+                raise ValueError("Analysis: context_version must be 0 unless state is COMPLETED")
+            if self.context_finalized:
+                raise ValueError(
+                    "Analysis: context_finalized must be False unless state is COMPLETED"
+                )
         if (self.completed_at is not None) != is_completed:
             raise ValueError("Analysis.completed_at must be set if and only if state is COMPLETED")
+
+        if (self.context is None) != (self.context_version == 0):
+            raise ValueError(
+                "Analysis.context_version must be 0 if and only if context has not been inferred"
+            )
+        if self.context_finalized and self.context is None:
+            raise ValueError("Analysis.context_finalized requires context to be inferred first")
 
         is_failed = self.state is AnalysisState.FAILED
         if (self.failure is not None) != is_failed:
@@ -256,6 +340,62 @@ class RowNotInFindingError(Exception):
         self.analysis_id = analysis_id
         self.finding_id = finding_id
         self.anchor_row = anchor_row
+
+
+class AnalysisNotReadyError(Exception):
+    """Raised by every context-confirmation function below (`API-02`,
+    `WP-059`) for a known but not-yet-`COMPLETED` analysis — context can
+    only be inferred/confirmed/answered/finalized once the deterministic
+    pipeline itself has produced a `DatasetProfile` to build it from.
+    """
+
+    def __init__(self, analysis_id: str) -> None:
+        super().__init__(f"Analysis not ready for context confirmation: {analysis_id}")
+        self.analysis_id = analysis_id
+
+
+class ContextVersionConflictError(Exception):
+    """Raised by every context-mutating function below (`API-02`) when
+    the caller's `expected_version` does not match
+    `Analysis.context_version` — implements `docs/api-specification.md`
+    §9's "PUT context... requires resource version" optimistic-
+    concurrency check.
+    """
+
+    def __init__(self, analysis_id: str, expected_version: int, actual_version: int) -> None:
+        super().__init__(
+            f"Context version conflict for analysis {analysis_id}: "
+            f"expected {expected_version}, actual {actual_version}"
+        )
+        self.analysis_id = analysis_id
+        self.expected_version = expected_version
+        self.actual_version = actual_version
+
+
+class ContextFieldNotEditableError(Exception):
+    """Raised by `confirm_context_fields` (`API-02`) for any of the four
+    "role" `ContextField`s (`candidate_keys`/`business_dates`/
+    `measure_roles`/`dimensions`) — a disclosed, reversible scoping
+    limitation mirroring `CTX-03`'s own eligible-field set exactly.
+    """
+
+    def __init__(self, analysis_id: str, context_field: ContextField) -> None:
+        super().__init__(
+            f"Context field is not editable: {context_field.value} (analysis {analysis_id})"
+        )
+        self.analysis_id = analysis_id
+        self.context_field = context_field
+
+
+class QuestionNotFoundError(Exception):
+    """Raised by `answer_guided_question` (`API-02`) for a `question_id`
+    that does not match any of the analysis's own `guided_questions`.
+    """
+
+    def __init__(self, analysis_id: str, question_id: str) -> None:
+        super().__init__(f"Guided question not found: {question_id} (analysis {analysis_id})")
+        self.analysis_id = analysis_id
+        self.question_id = question_id
 
 
 class AnalysisStore:
@@ -650,3 +790,218 @@ def cancel_analysis(store: AnalysisStore, analysis_id: str) -> Analysis:
     cancelled = replace(analysis, state=AnalysisState.CANCELLED, cancelled_at=cancelled_at)
     store.replace(cancelled)
     return cancelled
+
+
+def _require_completed(store: AnalysisStore, analysis_id: str) -> Analysis:
+    analysis = get_status(store, analysis_id)
+    if analysis.state is not AnalysisState.COMPLETED:
+        raise AnalysisNotReadyError(analysis_id)
+    return analysis
+
+
+def get_or_infer_context(store: AnalysisStore, analysis_id: str) -> DatasetContext:
+    """Return `analysis_id`'s `DatasetContext`, computing and caching it
+    on first call for a `COMPLETED` analysis (`API-02`, `WP-059`).
+
+    Deterministic only — uses `CTX-01`'s `infer_dataset_context` over the
+    analysis's already-computed `dataset_profile` and `CTX-03`'s
+    `generate_guided_questions`. `CTX-02`'s AI augmentation is
+    deliberately not invoked (see this module's own docstring). Returns
+    the same cached `DatasetContext` on every subsequent call without
+    recomputing.
+
+    Raises `AnalysisNotFoundError` for an unknown ID and
+    `AnalysisNotReadyError` for a known but not-yet-`COMPLETED` analysis.
+    """
+    analysis = _require_completed(store, analysis_id)
+    if analysis.context is not None:
+        return analysis.context
+
+    assert analysis.dataset_profile is not None  # guaranteed by COMPLETED invariant
+    context = infer_dataset_context(analysis.dataset_profile)
+    questions = generate_guided_questions(context)
+    updated = replace(analysis, context=context, guided_questions=questions, context_version=1)
+    store.replace(updated)
+    return context
+
+
+def get_guided_questions(
+    store: AnalysisStore, analysis_id: str
+) -> tuple[ClarificationQuestion, ...]:
+    """Return `analysis_id`'s guided questions, inferring context first
+    if not yet done (`API-02`, `WP-059`).
+
+    Raises the same errors as `get_or_infer_context`.
+    """
+    get_or_infer_context(store, analysis_id)
+    analysis = get_status(store, analysis_id)
+    return analysis.guided_questions
+
+
+def _confirmed_or_corrected(current_value: str, new_value: str) -> Provenance:
+    return Provenance.USER_CONFIRMED if current_value == new_value else Provenance.USER_CORRECTED
+
+
+def confirm_context_fields(
+    store: AnalysisStore,
+    analysis_id: str,
+    edits: Mapping[ContextField, str],
+    *,
+    expected_version: int,
+) -> DatasetContext:
+    """Replace one or more editable `ContextField` values with
+    user-supplied values in one version-checked call (`API-02`,
+    `WP-059`, `docs/api-specification.md` §9's "PUT context").
+
+    Only the five single-value fields in `_EDITABLE_CONTEXT_FIELDS` may
+    be edited — the four "role" fields raise
+    `ContextFieldNotEditableError`. Each edited field's `Provenance`/
+    `ConfirmationState` become `USER_CONFIRMED`/`CONFIRMED` when the
+    supplied value matches the field's current value, or
+    `USER_CORRECTED`/`CORRECTED` otherwise. `context_version` is
+    incremented by exactly `1` regardless of how many fields were
+    edited.
+
+    Raises `AnalysisNotFoundError`/`AnalysisNotReadyError` (via
+    `get_or_infer_context`), `ContextVersionConflictError` when
+    `expected_version` does not match the analysis's current
+    `context_version`, and `ContextFieldNotEditableError` for a role
+    field.
+    """
+    if not edits:
+        raise ValueError("confirm_context_fields: edits must not be empty")
+
+    get_or_infer_context(store, analysis_id)
+    analysis = get_status(store, analysis_id)
+    if analysis.context_version != expected_version:
+        raise ContextVersionConflictError(analysis_id, expected_version, analysis.context_version)
+
+    assert analysis.context is not None  # guaranteed by get_or_infer_context above
+    context = analysis.context
+    field_updates: dict[str, ContextFieldValue] = {}
+    for context_field, new_value in edits.items():
+        if context_field not in _EDITABLE_CONTEXT_FIELDS:
+            raise ContextFieldNotEditableError(analysis_id, context_field)
+        current = getattr(context, context_field.value)
+        provenance = _confirmed_or_corrected(current.value, new_value)
+        confirmation_state = (
+            ConfirmationState.CONFIRMED
+            if provenance is Provenance.USER_CONFIRMED
+            else ConfirmationState.CORRECTED
+        )
+        field_updates[context_field.value] = ContextFieldValue(
+            value=new_value,
+            confidence=1.0,
+            inference_source=provenance,
+            confirmation_state=confirmation_state,
+            evidence_ids=current.evidence_ids,
+        )
+
+    updated_context = replace(context, **field_updates)  # type: ignore[arg-type]
+    updated_analysis = replace(
+        analysis, context=updated_context, context_version=analysis.context_version + 1
+    )
+    store.replace(updated_analysis)
+    return updated_context
+
+
+def answer_guided_question(
+    store: AnalysisStore,
+    analysis_id: str,
+    question_id: str,
+    *,
+    answer_text: str,
+    expected_version: int,
+) -> tuple[DatasetContext, ClarificationQuestion, ClarificationAnswer]:
+    """Store an answer to one guided question and update the
+    corresponding `ContextField` (`API-02`, `WP-059`,
+    `docs/api-specification.md` §9's "stores an answer and resulting
+    context updates").
+
+    `answer_text` matching one of the question's own `suggested_answers`
+    is recorded as `Provenance.USER_CONFIRMED`; any other value
+    (including free text) is recorded as `Provenance.USER_CORRECTED`.
+    Marks the question `answered_state = ANSWERED` and increments
+    `context_version` by `1`.
+
+    Raises `AnalysisNotFoundError`/`AnalysisNotReadyError` (via
+    `get_or_infer_context`), `ContextVersionConflictError` on a version
+    mismatch, and `QuestionNotFoundError` for an unknown `question_id`.
+    """
+    get_or_infer_context(store, analysis_id)
+    analysis = get_status(store, analysis_id)
+    if analysis.context_version != expected_version:
+        raise ContextVersionConflictError(analysis_id, expected_version, analysis.context_version)
+
+    question = next((q for q in analysis.guided_questions if q.question_id == question_id), None)
+    if question is None:
+        raise QuestionNotFoundError(analysis_id, question_id)
+
+    assert analysis.context is not None  # guaranteed by get_or_infer_context above
+    context = analysis.context
+    current = getattr(context, question.context_field.value)
+    provenance = (
+        Provenance.USER_CONFIRMED
+        if answer_text in question.suggested_answers
+        else Provenance.USER_CORRECTED
+    )
+    confirmation_state = (
+        ConfirmationState.CONFIRMED
+        if provenance is Provenance.USER_CONFIRMED
+        else ConfirmationState.CORRECTED
+    )
+    new_field_value = ContextFieldValue(
+        value=answer_text,
+        confidence=1.0,
+        inference_source=provenance,
+        confirmation_state=confirmation_state,
+        evidence_ids=current.evidence_ids,
+    )
+    updated_context = replace(context, **{question.context_field.value: new_field_value})  # type: ignore[arg-type]
+
+    updated_question = replace(question, answered_state=QuestionAnsweredState.ANSWERED)
+    updated_questions = tuple(
+        updated_question if q.question_id == question_id else q for q in analysis.guided_questions
+    )
+
+    answer = ClarificationAnswer(
+        question_id=question_id,
+        selected_answer_or_free_text=answer_text,
+        answered_timestamp=datetime.now(UTC),
+        resulting_context_changes=(question.context_field,),
+        provenance=provenance,
+    )
+
+    updated_analysis = replace(
+        analysis,
+        context=updated_context,
+        guided_questions=updated_questions,
+        context_version=analysis.context_version + 1,
+    )
+    store.replace(updated_analysis)
+    return updated_context, updated_question, answer
+
+
+def finalize_context(store: AnalysisStore, analysis_id: str, *, expected_version: int) -> Analysis:
+    """Mark `analysis_id`'s context finalized (`API-02`, `WP-059`,
+    `docs/api-specification.md` §9's `POST .../finalize`).
+
+    Honestly does not "trigger context-dependent analysis and optional
+    AI interpretation" beyond setting `context_finalized = True` — no
+    context-dependent detector exists anywhere in this codebase yet, and
+    `CTX-02`'s AI augmentation is deliberately not invoked here (see this
+    module's own docstring). Does not change `context`/
+    `guided_questions`/`context_version`.
+
+    Raises `AnalysisNotFoundError`/`AnalysisNotReadyError` (via
+    `get_or_infer_context`) and `ContextVersionConflictError` on a
+    version mismatch.
+    """
+    get_or_infer_context(store, analysis_id)
+    analysis = get_status(store, analysis_id)
+    if analysis.context_version != expected_version:
+        raise ContextVersionConflictError(analysis_id, expected_version, analysis.context_version)
+
+    finalized = replace(analysis, context_finalized=True)
+    store.replace(finalized)
+    return finalized
