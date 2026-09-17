@@ -4,7 +4,7 @@
 
 This document defines the business concepts used across the backend, frontend, persistence, tests, reports, and AI workflows.
 
-It is intentionally independent of SQLAlchemy, FastAPI, React, and Ollama.
+It is intentionally independent of SQLAlchemy, FastAPI, React, and `llama.cpp`.
 
 ## 2. Aggregate overview
 

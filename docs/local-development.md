@@ -205,6 +205,109 @@ Both services restart automatically after an unexpected exit
 (`restart: unless-stopped`, `REL-01`). SBOM generation and container
 image scanning are `SEC-01` scope, not `REL-01`.
 
+## Running a local AI runtime (llama.cpp, baseline profile)
+
+As of `AI-03`, TrustTable includes a real AI provider
+(`LlamaCppProvider`, `backend/src/trusttable_backend/ai_provider/
+llama_cpp.py`) for `llama.cpp`'s `llama-server`, selectable via
+`LLM_PROVIDER=llama_cpp` (see "LLM provider" in
+[`docs/configuration.md`](configuration.md)). **No product route or
+analysis feature calls it yet** (`CTX-01`/`CTX-02`/`CTX-03`, later
+backlog items) — this section is a hands-on setup guide for running
+and verifying the runtime itself ahead of that wiring, useful both for
+manual verification and for developing those later features. **No paid
+account, hosted API key, or inference API is required** — everything
+below runs entirely on your own machine.
+
+### 1. Install `llama.cpp`'s `llama-server`
+
+Follow the official `llama.cpp` build/install instructions for your
+platform at <https://github.com/ggml-org/llama.cpp> (source build, or a
+packaged release/binary distribution). TrustTable does not bundle or
+install `llama.cpp` itself. Verify the binary runs:
+
+```sh
+llama-server --version
+```
+
+### 2. Obtain the baseline model (Qwen3.5-4B-Q4_K_M)
+
+`docs/decision-log.md` D-034 selects **Qwen3.5-4B-Q4_K_M** as the
+baseline/CPU-oriented default model. TrustTable does not download,
+redistribute, or bundle model weights, and automatic model acquisition
+is not implemented (D-031 requires a `docs/security-threat-model.md`
+update before that feature is built). Obtain the GGUF file yourself,
+for example from the model publisher's Hugging Face repository, and
+before use:
+
+- verify the downloaded file's checksum/revision against the source
+  you obtained it from;
+- review the model's license terms for your intended use (local use,
+  commercial use, redistribution, attribution requirements) — this is
+  your own responsibility, not something TrustTable checks for you.
+
+Store the file anywhere on your own machine; TrustTable never reads a
+model file directly, only `llama-server`'s HTTP endpoint.
+
+### 3. Start `llama-server`
+
+```sh
+llama-server \
+  --model /path/to/Qwen3.5-4B-Q4_K_M.gguf \
+  --host 127.0.0.1 \
+  --port 8080 \
+  --ctx-size 8192 \
+  --n-gpu-layers 0
+```
+
+`--n-gpu-layers 0` matches the baseline/CPU-oriented hardware profile
+(D-029) this provider is proven against. The accelerated/GPU
+hardware-tier profile remains a separate, explicitly deferred item
+(D-035) — raising `--n-gpu-layers` is a `llama.cpp`-level tuning choice
+outside this guide's scope.
+
+Confirm it is serving:
+
+```sh
+curl -s http://127.0.0.1:8080/health
+curl -s http://127.0.0.1:8080/v1/models
+```
+
+The second command's response includes the exact model identifier
+`llama-server` reports — you will need it in the next step.
+
+### 4. Point TrustTable at it
+
+Set the following (repository-root `.env`, or exported environment
+variables — see "How configuration is loaded" in
+[`docs/configuration.md`](configuration.md)):
+
+```sh
+LLM_PROVIDER=llama_cpp
+LLM_BASE_URL=http://127.0.0.1:8080
+LLM_MODEL=<the exact model identifier llama-server reported above>
+```
+
+From inside the Docker Compose stack, use
+`http://host.docker.internal:8080` (llama-server's own default port)
+for `LLM_BASE_URL` instead, since the backend container cannot reach
+`127.0.0.1` on the host directly.
+
+`Settings.llm_provider` defaults to `disabled`; setting it to
+`llama_cpp` only activates the provider class itself. No backend route
+or analysis feature currently calls it, so this is preparatory setup,
+not yet an end-to-end AI-assisted analysis flow.
+
+### What this does not cover
+
+- Automatic model acquisition — not implemented; the manual workflow
+  above (step 2) remains the only supported path until D-031's
+  prerequisite threat-model update and that feature both exist.
+- The accelerated/GPU hardware-tier default — explicitly deferred
+  (D-035), not evaluated by this project.
+- Any product feature that actually calls this provider during an
+  analysis — that begins with `CTX-01`.
+
 ## Running the tests
 
 | Suite | Command | Notes |
