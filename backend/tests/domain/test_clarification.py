@@ -1,19 +1,26 @@
-"""Tests for the guided-question contracts (CTX-03).
+"""Tests for the guided-question and answer contracts (CTX-03/API-02).
 
-Covers this package's acceptance criterion AC-01: `QuestionAnsweredState`'s
-closed enumeration and `ClarificationQuestion`'s positive, negative, and
-boundary cases.
+Covers `CTX-03`'s AC-01: `QuestionAnsweredState`'s closed enumeration
+and `ClarificationQuestion`'s positive, negative, and boundary cases.
+Also covers `API-02`'s (`WP-059`) AC-01: `ClarificationAnswer`'s
+positive, negative, and boundary cases.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from trusttable_backend.domain.clarification import (
+    ClarificationAnswer,
     ClarificationQuestion,
     QuestionAnsweredState,
 )
 from trusttable_backend.domain.context import ContextField
+from trusttable_backend.domain.value_objects import Provenance
+
+FIXED_NOW = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 
 
 def make_question(**overrides: object) -> ClarificationQuestion:
@@ -94,3 +101,74 @@ def test_clarification_question_supports_every_context_field() -> None:
     for field in ContextField:
         question = make_question(context_field=field)
         assert question.context_field is field
+
+
+# ---------------------------------------------------------------------------
+# ClarificationAnswer (API-02, WP-059)
+# ---------------------------------------------------------------------------
+
+
+def make_answer(**overrides: object) -> ClarificationAnswer:
+    fields: dict[str, object] = {
+        "question_id": "cq-1",
+        "selected_answer_or_free_text": "Sales / order transactions",
+        "answered_timestamp": FIXED_NOW,
+        "resulting_context_changes": (ContextField.PROBABLE_DOMAIN,),
+        "provenance": Provenance.USER_CONFIRMED,
+    }
+    fields.update(overrides)
+    return ClarificationAnswer(**fields)  # type: ignore[arg-type]
+
+
+def test_clarification_answer_constructs_with_valid_fields() -> None:
+    answer = make_answer()
+
+    assert answer.question_id == "cq-1"
+    assert answer.provenance is Provenance.USER_CONFIRMED
+    assert answer.resulting_context_changes == (ContextField.PROBABLE_DOMAIN,)
+
+
+def test_clarification_answer_is_immutable() -> None:
+    answer = make_answer()
+
+    with pytest.raises(AttributeError):
+        answer.selected_answer_or_free_text = "other"  # type: ignore[misc]
+
+
+def test_clarification_answer_rejects_empty_question_id() -> None:
+    with pytest.raises(ValueError, match="question_id"):
+        make_answer(question_id="")
+
+
+def test_clarification_answer_rejects_empty_selected_answer_or_free_text() -> None:
+    with pytest.raises(ValueError, match="selected_answer_or_free_text"):
+        make_answer(selected_answer_or_free_text="")
+
+
+def test_clarification_answer_rejects_empty_resulting_context_changes() -> None:
+    with pytest.raises(ValueError, match="resulting_context_changes"):
+        make_answer(resulting_context_changes=())
+
+
+@pytest.mark.parametrize(
+    "provenance",
+    [Provenance.CALCULATED, Provenance.AI_INTERPRETATION, Provenance.DETERMINISTIC_FALLBACK],
+)
+def test_clarification_answer_rejects_non_user_provenance(provenance: Provenance) -> None:
+    with pytest.raises(ValueError, match="provenance"):
+        make_answer(provenance=provenance)
+
+
+def test_clarification_answer_accepts_user_corrected_provenance() -> None:
+    answer = make_answer(provenance=Provenance.USER_CORRECTED)
+    assert answer.provenance is Provenance.USER_CORRECTED
+
+
+def test_clarification_answer_supports_multiple_resulting_context_changes() -> None:
+    answer = make_answer(
+        resulting_context_changes=(ContextField.PROBABLE_DOMAIN, ContextField.ROW_GRAIN)
+    )
+    assert answer.resulting_context_changes == (
+        ContextField.PROBABLE_DOMAIN,
+        ContextField.ROW_GRAIN,
+    )

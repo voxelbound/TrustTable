@@ -1,5 +1,6 @@
 """Tests for in-memory analysis orchestration (`API-01` enabling slice,
-`WP-023`).
+`WP-023`; extended with a context-confirmation layer, `API-02` enabling
+slice, `WP-059`).
 
 Covers AC-01..AC-22: `AnalysisState`/`Analysis` construction invariants,
 `create_analysis` correctness including the real-bytes demo-CSV identity
@@ -15,6 +16,12 @@ no-`eval`/`exec` and no-FastAPI/SQLAlchemy-import proofs (AC-19/AC-20),
 and a two-independent-run determinism proof (AC-22). AC-21 (format/
 lint/mypy/full-suite) and AC-23 (documentation updates) are evidenced
 outside this file.
+
+Extended (`API-02`, `WP-059`) with AC-02..AC-10: `Analysis`'s four new
+context fields' invariants, `get_or_infer_context`/
+`get_guided_questions`/`confirm_context_fields`/
+`answer_guided_question`/`finalize_context`, and a real end-to-end
+sequence against the committed demo dataset.
 """
 
 from __future__ import annotations
@@ -29,17 +36,26 @@ from trusttable_backend.analysis.service import (
     Analysis,
     AnalysisFailure,
     AnalysisNotFoundError,
+    AnalysisNotReadyError,
     AnalysisState,
     AnalysisStore,
+    ContextFieldNotEditableError,
+    ContextVersionConflictError,
     FindingNotFoundError,
+    QuestionNotFoundError,
     RowNotInFindingError,
+    answer_guided_question,
     cancel_analysis,
+    confirm_context_fields,
     create_analysis,
     create_analysis_from_upload,
+    finalize_context,
     get_finding,
     get_finding_evidence,
     get_finding_row_context,
     get_findings,
+    get_guided_questions,
+    get_or_infer_context,
     get_profile,
     get_status,
     run_analysis,
@@ -52,6 +68,8 @@ from trusttable_backend.detectors.contract import (
     SecurityExposureState,
 )
 from trusttable_backend.detectors.engine import run_detectors
+from trusttable_backend.domain.clarification import ClarificationAnswer, ClarificationQuestion
+from trusttable_backend.domain.context import ConfirmationState, ContextField
 from trusttable_backend.domain.evidence import Evidence, EvidenceType
 from trusttable_backend.domain.parsing import (
     Dataset,
@@ -60,7 +78,12 @@ from trusttable_backend.domain.parsing import (
     SampleMetadata,
     SamplingScope,
 )
-from trusttable_backend.domain.value_objects import ColumnReference, RowReference, Severity
+from trusttable_backend.domain.value_objects import (
+    ColumnReference,
+    Provenance,
+    RowReference,
+    Severity,
+)
 from trusttable_backend.parsers.csv_parser import parse_csv
 from trusttable_backend.profiling.metrics import compute_dataset_profile
 from trusttable_backend.profiling.schemas import DatasetProfile
@@ -1056,3 +1079,447 @@ def test_two_independent_round_trips_are_deterministic() -> None:
     assert completed_one.findings == completed_two.findings
     assert completed_one.priority_scores == completed_two.priority_scores
     assert completed_one.trust_assessment == completed_two.trust_assessment
+
+
+# ---------------------------------------------------------------------------
+# API-02 (WP-059): Analysis context-field invariants (AC-02)
+# ---------------------------------------------------------------------------
+
+
+def test_analysis_context_fields_default_to_unset() -> None:
+    completed = _make_completed_analysis()
+
+    assert completed.context is None
+    assert completed.guided_questions == ()
+    assert completed.context_version == 0
+    assert completed.context_finalized is False
+
+
+def test_analysis_non_completed_rejects_context_finalized() -> None:
+    with pytest.raises(ValueError, match="context_finalized"):
+        _make_analysis(context_finalized=True)
+
+
+def test_analysis_non_completed_rejects_nonzero_context_version() -> None:
+    with pytest.raises(ValueError, match="context_version"):
+        _make_analysis(context_version=1)
+
+
+def test_analysis_context_version_zero_iff_context_none() -> None:
+    with pytest.raises(ValueError, match="context_version"):
+        _make_completed_analysis(context_version=1)
+
+
+def test_analysis_context_finalized_requires_context() -> None:
+    with pytest.raises(ValueError, match="context_finalized"):
+        _make_completed_analysis(context_finalized=True)
+
+
+# ---------------------------------------------------------------------------
+# API-02 (WP-059): get_or_infer_context / get_guided_questions (AC-03/AC-04)
+# ---------------------------------------------------------------------------
+
+
+def _run_demo_to_completed() -> tuple[AnalysisStore, Analysis]:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+    return store, completed
+
+
+def test_get_or_infer_context_computes_and_caches() -> None:
+    store, completed = _run_demo_to_completed()
+
+    context = get_or_infer_context(store, completed.analysis_id)
+
+    assert context.probable_domain.value == "Sales / order transactions"
+    stored = get_status(store, completed.analysis_id)
+    assert stored.context_version == 1
+    assert stored.context is context
+
+    # Repeat call returns the cached value without recomputing (version unchanged).
+    second_context = get_or_infer_context(store, completed.analysis_id)
+    assert second_context is context
+    assert get_status(store, completed.analysis_id).context_version == 1
+
+
+def test_get_or_infer_context_raises_not_ready_for_queued_analysis() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+
+    with pytest.raises(AnalysisNotReadyError):
+        get_or_infer_context(store, created.analysis_id)
+
+
+def test_get_or_infer_context_raises_analysis_not_found_for_unknown_id() -> None:
+    store = AnalysisStore()
+
+    with pytest.raises(AnalysisNotFoundError):
+        get_or_infer_context(store, "missing-id")
+
+
+def test_get_guided_questions_matches_real_demo_dataset_facts() -> None:
+    store, completed = _run_demo_to_completed()
+
+    questions = get_guided_questions(store, completed.analysis_id)
+
+    assert {q.context_field for q in questions} == {
+        ContextField.CURRENCY_BEHAVIOR,
+        ContextField.EXPECTED_BUSINESS_RULES,
+    }
+
+
+# ---------------------------------------------------------------------------
+# API-02 (WP-059): confirm_context_fields (AC-05)
+# ---------------------------------------------------------------------------
+
+
+def test_confirm_context_fields_records_confirmed_when_value_matches() -> None:
+    store, completed = _run_demo_to_completed()
+    context = get_or_infer_context(store, completed.analysis_id)
+    current_value = context.probable_domain.value
+    assert isinstance(current_value, str)
+
+    updated = confirm_context_fields(
+        store,
+        completed.analysis_id,
+        {ContextField.PROBABLE_DOMAIN: current_value},
+        expected_version=1,
+    )
+
+    assert updated.probable_domain.value == current_value
+    assert updated.probable_domain.inference_source is Provenance.USER_CONFIRMED
+    assert updated.probable_domain.confirmation_state is ConfirmationState.CONFIRMED
+    assert get_status(store, completed.analysis_id).context_version == 2
+
+
+def test_confirm_context_fields_records_corrected_when_value_differs() -> None:
+    store, completed = _run_demo_to_completed()
+    get_or_infer_context(store, completed.analysis_id)
+
+    updated = confirm_context_fields(
+        store,
+        completed.analysis_id,
+        {ContextField.PROBABLE_DOMAIN: "Inventory / stock records"},
+        expected_version=1,
+    )
+
+    assert updated.probable_domain.value == "Inventory / stock records"
+    assert updated.probable_domain.inference_source is Provenance.USER_CORRECTED
+    assert updated.probable_domain.confirmation_state is ConfirmationState.CORRECTED
+
+
+def test_confirm_context_fields_increments_version_once_for_multiple_edits() -> None:
+    store, completed = _run_demo_to_completed()
+    get_or_infer_context(store, completed.analysis_id)
+
+    confirm_context_fields(
+        store,
+        completed.analysis_id,
+        {
+            ContextField.CURRENCY_BEHAVIOR: "Single currency throughout",
+            ContextField.EXPECTED_BUSINESS_RULES: "line_total = quantity * unit_price",
+        },
+        expected_version=1,
+    )
+
+    assert get_status(store, completed.analysis_id).context_version == 2
+
+
+def test_confirm_context_fields_rejects_empty_edits() -> None:
+    store, completed = _run_demo_to_completed()
+    get_or_infer_context(store, completed.analysis_id)
+
+    with pytest.raises(ValueError, match="edits"):
+        confirm_context_fields(store, completed.analysis_id, {}, expected_version=1)
+
+
+def test_confirm_context_fields_raises_not_editable_for_role_field() -> None:
+    store, completed = _run_demo_to_completed()
+    get_or_infer_context(store, completed.analysis_id)
+
+    with pytest.raises(ContextFieldNotEditableError):
+        confirm_context_fields(
+            store,
+            completed.analysis_id,
+            {ContextField.CANDIDATE_KEYS: "order_id"},
+            expected_version=1,
+        )
+
+
+def test_confirm_context_fields_raises_version_conflict_on_stale_version() -> None:
+    store, completed = _run_demo_to_completed()
+    get_or_infer_context(store, completed.analysis_id)
+
+    with pytest.raises(ContextVersionConflictError):
+        confirm_context_fields(
+            store,
+            completed.analysis_id,
+            {ContextField.PROBABLE_DOMAIN: "Other"},
+            expected_version=99,
+        )
+
+
+# ---------------------------------------------------------------------------
+# API-02 (WP-059): answer_guided_question (AC-06)
+# ---------------------------------------------------------------------------
+
+
+def _currency_question_id(store: AnalysisStore, analysis_id: str) -> ClarificationQuestion:
+    questions = get_guided_questions(store, analysis_id)
+    return next(q for q in questions if q.context_field is ContextField.CURRENCY_BEHAVIOR)
+
+
+def test_answer_guided_question_confirms_when_answer_matches_suggestion() -> None:
+    store, completed = _run_demo_to_completed()
+    question = _currency_question_id(store, completed.analysis_id)
+    suggested = question.suggested_answers[0]
+
+    updated_context, updated_question, answer = answer_guided_question(
+        store,
+        completed.analysis_id,
+        question.question_id,
+        answer_text=suggested,
+        expected_version=1,
+    )
+
+    assert updated_context.currency_behavior.value == suggested
+    assert updated_context.currency_behavior.inference_source is Provenance.USER_CONFIRMED
+    assert updated_question.answered_state.value == "answered"
+    assert isinstance(answer, ClarificationAnswer)
+    assert answer.provenance is Provenance.USER_CONFIRMED
+    assert answer.resulting_context_changes == (ContextField.CURRENCY_BEHAVIOR,)
+    assert get_status(store, completed.analysis_id).context_version == 2
+
+
+def test_answer_guided_question_corrects_when_no_suggestions_exist() -> None:
+    store, completed = _run_demo_to_completed()
+    questions = get_guided_questions(store, completed.analysis_id)
+    question = next(q for q in questions if q.context_field is ContextField.EXPECTED_BUSINESS_RULES)
+    assert question.suggested_answers == ()
+
+    _, _, answer = answer_guided_question(
+        store,
+        completed.analysis_id,
+        question.question_id,
+        answer_text="line_total = quantity * unit_price",
+        expected_version=1,
+    )
+
+    assert answer.provenance is Provenance.USER_CORRECTED
+
+
+def test_answer_guided_question_raises_question_not_found() -> None:
+    store, completed = _run_demo_to_completed()
+    get_or_infer_context(store, completed.analysis_id)
+
+    with pytest.raises(QuestionNotFoundError):
+        answer_guided_question(
+            store,
+            completed.analysis_id,
+            "cq-unknown",
+            answer_text="anything",
+            expected_version=1,
+        )
+
+
+def test_answer_guided_question_raises_version_conflict() -> None:
+    store, completed = _run_demo_to_completed()
+    question = _currency_question_id(store, completed.analysis_id)
+
+    with pytest.raises(ContextVersionConflictError):
+        answer_guided_question(
+            store,
+            completed.analysis_id,
+            question.question_id,
+            answer_text="Single currency throughout",
+            expected_version=99,
+        )
+
+
+# ---------------------------------------------------------------------------
+# API-02 (WP-059): finalize_context (AC-07)
+# ---------------------------------------------------------------------------
+
+
+def test_finalize_context_sets_finalized_without_changing_context() -> None:
+    store, completed = _run_demo_to_completed()
+    context = get_or_infer_context(store, completed.analysis_id)
+
+    finalized = finalize_context(store, completed.analysis_id, expected_version=1)
+
+    assert finalized.context_finalized is True
+    assert finalized.context == context
+    assert finalized.context_version == 1
+
+
+def test_finalize_context_raises_version_conflict() -> None:
+    store, completed = _run_demo_to_completed()
+    get_or_infer_context(store, completed.analysis_id)
+
+    with pytest.raises(ContextVersionConflictError):
+        finalize_context(store, completed.analysis_id, expected_version=99)
+
+
+def test_finalize_context_raises_not_ready_for_queued_analysis() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+
+    with pytest.raises(AnalysisNotReadyError):
+        finalize_context(store, created.analysis_id, expected_version=0)
+
+
+# ---------------------------------------------------------------------------
+# API-02 (WP-059): error carried-field proofs
+# ---------------------------------------------------------------------------
+
+
+def test_analysis_not_ready_error_carries_id() -> None:
+    error = AnalysisNotReadyError("missing-id")
+    assert error.analysis_id == "missing-id"
+
+
+def test_context_version_conflict_error_carries_versions() -> None:
+    error = ContextVersionConflictError("analysis-1", 1, 2)
+    assert error.analysis_id == "analysis-1"
+    assert error.expected_version == 1
+    assert error.actual_version == 2
+
+
+def test_context_field_not_editable_error_carries_field() -> None:
+    error = ContextFieldNotEditableError("analysis-1", ContextField.CANDIDATE_KEYS)
+    assert error.context_field is ContextField.CANDIDATE_KEYS
+
+
+def test_question_not_found_error_carries_ids() -> None:
+    error = QuestionNotFoundError("analysis-1", "cq-missing")
+    assert error.analysis_id == "analysis-1"
+    assert error.question_id == "cq-missing"
+
+
+# ---------------------------------------------------------------------------
+# API-02 (WP-059): AC-08 real end-to-end sequence
+# ---------------------------------------------------------------------------
+
+
+def test_real_demo_csv_full_context_confirmation_sequence() -> None:
+    store, completed = _run_demo_to_completed()
+
+    context = get_or_infer_context(store, completed.analysis_id)
+    assert context.probable_domain.value == "Sales / order transactions"
+
+    question = _currency_question_id(store, completed.analysis_id)
+    context, _, _ = answer_guided_question(
+        store,
+        completed.analysis_id,
+        question.question_id,
+        answer_text="Single currency throughout",
+        expected_version=1,
+    )
+    assert context.currency_behavior.value == "Single currency throughout"
+
+    context = confirm_context_fields(
+        store,
+        completed.analysis_id,
+        {ContextField.PROBABLE_DOMAIN: "Sales / order transactions"},
+        expected_version=2,
+    )
+    assert context.probable_domain.inference_source is Provenance.USER_CONFIRMED
+
+    finalized = finalize_context(store, completed.analysis_id, expected_version=3)
+    assert finalized.context_finalized is True
+    assert finalized.context_version == 3
+
+
+# ---------------------------------------------------------------------------
+# API-02 (WP-059): AC-10 no ai_boundary/ai_provider import
+# ---------------------------------------------------------------------------
+
+
+def test_no_ai_boundary_or_ai_provider_import_in_service_module() -> None:
+    import_lines = [
+        line
+        for line in SERVICE_MODULE_PATH.read_text(encoding="utf-8").splitlines()
+        if line.startswith("import ") or line.startswith("from ")
+    ]
+    assert not any("ai_boundary" in line for line in import_lines)
+    assert not any("ai_provider" in line for line in import_lines)
+
+
+# ---------------------------------------------------------------------------
+# API-02 (WP-059): a real subprocess uvicorn boot, mirroring the
+# Dockerfile's exact CMD (`uvicorn trusttable_backend.main:app`), added
+# after a CI-reported "Docker Compose integration smoke tests" failure
+# on this package's own branch was investigated. Existing tests only
+# ever exercise `create_app()` in-process via `TestClient`/direct calls
+# (`conftest.py`, `test_analyses.py`); none previously proved the app
+# can actually boot as a genuinely separate OS process and serve
+# `/health/live` — a real, previously-uncovered gap this investigation
+# surfaced, kept here permanently rather than discarded after diagnosis.
+# ---------------------------------------------------------------------------
+
+
+def test_real_uvicorn_subprocess_boots_and_serves_health_live() -> None:
+    import socket
+    import subprocess
+    import sys
+    import time
+    import urllib.request
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "trusttable_backend.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        deadline = time.monotonic() + 20.0
+        last_error: Exception | None = None
+        healthy = False
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                break
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/api/v1/health/live", timeout=1
+                ) as response:
+                    if response.status == 200:
+                        healthy = True
+                        break
+            except Exception as exc:  # noqa: BLE001 - diagnostic probe, retried in a loop
+                last_error = exc
+            time.sleep(0.25)
+
+        if not healthy:
+            process.terminate()
+            try:
+                stdout, stderr = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout, stderr = process.communicate()
+            pytest.fail(
+                f"uvicorn subprocess never became healthy "
+                f"(exit_code={process.poll()}, last_probe_error={last_error!r}).\n"
+                f"--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}"
+            )
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()

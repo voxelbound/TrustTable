@@ -1,29 +1,28 @@
-"""Guided-question contracts (`CTX-03`), matching `docs/domain-model.md`
-§10 (`ClarificationQuestion`).
+"""Guided-question and answer contracts (`CTX-03`/`API-02`), matching
+`docs/domain-model.md` §10 (`ClarificationQuestion`) and §11
+(`ClarificationAnswer`, added by `API-02`, `WP-059`).
 
-`ClarificationAnswer` (§11) is deliberately not defined here —
-`docs/implementation-backlog.md#API-02` ("Confirm, correct, answer, and
-finalize") is the named backlog item for answer processing, a distinct,
-human-input-carrying aggregate this package does not construct, store,
-or consume.
-
-`context_field` is a new, disclosed field (not literally named by §10's
-field list): traceability back to which `context_inference.
-DatasetContext` field this question targets, needed by a future
-consumer (`API-02`) to know which field an answer should update. Same
-disclosed-addition pattern already established by `domain.context.
-ContextHypothesis.related_columns`.
+`context_field` on `ClarificationQuestion` is a new, disclosed field
+(not literally named by §10's field list): traceability back to which
+`context_inference.DatasetContext` field this question targets, needed
+by `API-02`'s answer-processing logic to know which field an answer
+should update. Same disclosed-addition pattern already established by
+`domain.context.ContextHypothesis.related_columns`.
 
 Framework-independent: no FastAPI/SQLAlchemy/pydantic import. Stdlib
-only (`dataclasses`, `enum`).
+only (`dataclasses`, `datetime`, `enum`).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 
 from .context import ContextField
+from .value_objects import Provenance
+
+_VALID_ANSWER_PROVENANCE = frozenset({Provenance.USER_CONFIRMED, Provenance.USER_CORRECTED})
 
 
 class QuestionAnsweredState(StrEnum):
@@ -81,3 +80,36 @@ class ClarificationQuestion:
             raise ValueError("ClarificationQuestion.explanation must not be empty")
         if not self.affected_assumptions:
             raise ValueError("ClarificationQuestion.affected_assumptions must not be empty")
+
+
+@dataclass(frozen=True, slots=True)
+class ClarificationAnswer:
+    """Records one answer to a `ClarificationQuestion`
+    (`docs/domain-model.md` §11).
+
+    `provenance` is restricted to `Provenance.USER_CONFIRMED`/
+    `USER_CORRECTED` — the two-value closed set §11 itself names. An
+    answer matching the question's own inferred default/suggested
+    answer is `USER_CONFIRMED`; a genuinely different value (including
+    free text where no default existed) is `USER_CORRECTED`
+    (`API-02`'s own disclosed interpretation of "the user provided a
+    corrected/concrete value where none existed").
+    """
+
+    question_id: str
+    selected_answer_or_free_text: str
+    answered_timestamp: datetime
+    resulting_context_changes: tuple[ContextField, ...]
+    provenance: Provenance
+
+    def __post_init__(self) -> None:
+        if not self.question_id:
+            raise ValueError("ClarificationAnswer.question_id must not be empty")
+        if not self.selected_answer_or_free_text:
+            raise ValueError("ClarificationAnswer.selected_answer_or_free_text must not be empty")
+        if not self.resulting_context_changes:
+            raise ValueError("ClarificationAnswer.resulting_context_changes must not be empty")
+        if self.provenance not in _VALID_ANSWER_PROVENANCE:
+            raise ValueError(
+                "ClarificationAnswer.provenance must be USER_CONFIRMED or USER_CORRECTED"
+            )
