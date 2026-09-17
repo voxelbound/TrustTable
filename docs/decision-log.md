@@ -229,6 +229,8 @@ implementation decision, not a universal claim of superiority.
 
 **Complete for v0.2 baseline scope (2026-09-16, appended — see `D-035`):** the runtime item is now also resolved (`llama.cpp`). All four named items are decided for v0.2 baseline scope; `AI-03` is ready to start, scoped to the baseline/CPU-oriented profile. The accelerated/GPU hardware-tier default remains explicitly deferred by deliberate human choice — a later, non-blocking follow-on, not an unresolved gap in this gate's baseline-scope completion.
 
+**Sequencing amendment (2026-09-17, appended — see `D-036`):** `AI-07` (llama-server runtime hardening: WebUI disabled, dedicated port) is inserted into the canonical order immediately after `API-02` and before `AI-05`. Updated order for the remaining items: `CTX-01` → `CTX-02` → `CTX-03` → `API-02` → **`AI-07`** → `AI-05` → `UI-02` → `EVAL-AI-01` → `REL-02`. This is a small, self-contained runtime-hardening correction with no dependency on `AI-05`/`CTX-0x`; it does not reopen any decision this entry or `D-034`/`D-035` already settled.
+
 ## D-034 — v0.2 baseline-profile model selection: Qwen3.5-4B-Q4_K_M
 
 **Decision:** Qwen3.5-4B-Q4_K_M is selected as the CPU-oriented/default TrustTable model (`D-029`'s baseline business/evaluator hardware profile). Qwen3.5-9B-Q4_K_M is retained, not disqualified, as a documented higher-capacity reevaluation/escalation candidate, to be revisited only if a future, product-realistic workload demonstrates a concrete capability limit in Qwen3.5-4B that Qwen3.5-9B is shown to resolve. This is a bounded product decision for the evaluated candidates and hardware profile — not a claim that Qwen3.5-4B is universally better than Qwen3.5-9B.
@@ -258,3 +260,20 @@ implementation decision, not a universal claim of superiority.
 **Standing instructions (unchanged from `D-034`):** the model benchmark is not to be re-run absent a genuinely new product requirement. No runtime head-to-head benchmark and no quantization benchmark were performed or are required by this decision.
 
 **`AI-03` implemented (2026-09-16, appended — no decision text altered):** `ai_provider.llama_cpp.LlamaCppProvider` is now the real, product-registered `AIProvider` for `llm_provider="llama_cpp"`, structurally mirroring the already-proven benchmark-only adapter (`WP-044`). `Settings.LlmProvider`'s literal values are now `"disabled" | "mock" | "llama_cpp"`; `Settings.llm_provider`'s default remains `"disabled"`. No FastAPI route, application service, or analysis-pipeline calls this provider yet — that remains `CTX-01`/`CTX-02`/`CTX-03`, separate later packages. No accelerated/GPU hardware-tier work was done.
+
+## D-036 — llama-server runtime hardening: infrastructure-only, WebUI disabled, dedicated port
+
+**Decision:** `llama.cpp`'s `llama-server` is treated strictly as inference infrastructure, never a user-facing application. TrustTable remains the sole user-facing surface. The documented and supported TrustTable runtime profile starts `llama-server` with its built-in Web UI disabled (`--no-webui`), and the documented local baseline moves `llama-server` to host port `8081`, distinct from TrustTable's own frontend port (`8080`), to eliminate a real host-port collision when both run locally at once.
+
+**Basis:** `llama.cpp`'s `tools/server/README.md` (`ggml-org/llama.cpp@master`, checked directly against the current upstream documentation before this decision, not delegated) confirms the server ships a Web UI **enabled by default** (`--ui, --webui, --no-ui, --no-webui` — "whether to enable the Web UI (default: enabled)"). TrustTable's existing local-development guide (`AI-04`, `WP-055`) instructed starting `llama-server --port 8080` with no `--no-webui` flag, which (a) would leave an unintended, unreviewed, undocumented user-facing UI reachable alongside TrustTable's own frontend, and (b) collides on host port `8080` with the TrustTable frontend `docker-compose.yml` already publishes there. Disabling the Web UI also removes exposure to its default-enabled experimental MCP proxy and server-side filesystem tool-calling features, which are otherwise reachable only through that same UI — a secondary, not independently sought, security-positive effect of this decision, not a new requirement.
+
+**Scope — what this decision changes:**
+- The documented/supported `llama-server` startup command gains `--no-webui` and moves from `--port 8080` to `--port 8081`.
+- `LLM_BASE_URL`'s documented example and default value (Docker→host) change from `http://host.docker.internal:8080` to `http://host.docker.internal:8081`.
+- TrustTable's own frontend port (`8080`) is unchanged.
+
+**Explicit non-scope — what this decision does not change:** this is not a model-selection or runtime-selection change and does **not** reopen `D-034` (exact model: Qwen3.5-4B-Q4_K_M) or `D-035` (runtime: `llama.cpp`, baseline/CPU-oriented profile). No new llama.cpp UI, agent, chat-history, or other user-facing functionality is introduced by this decision or its implementation — the change is a runtime-profile/default-configuration-value correction only.
+
+**Sequencing:** inserted into the canonical `v0.2` sequence (`D-033`) as `AI-07`, immediately after `API-02` and before `AI-05` — see `D-033`'s own appended annotation and `docs/implementation-backlog.md`. This ordering was chosen because it is a small, self-contained runtime-hardening correction with no dependency on `AI-05`/`CTX-0x` and no reason to defer it past the point it was identified.
+
+**Decided by:** human owner, explicit instruction, 2026-09-17.

@@ -69,7 +69,7 @@ are present, correctly typed, and bounded from day one.
 | Variable | Type | Default | Effect |
 |---|---|---|---|
 | `LLM_PROVIDER` | enum: `disabled` \| `mock` \| `llama_cpp` | `disabled` | Selects the active AI provider (`AI-01`/`AI-02`/`AI-03`). `llama_cpp` requires `LLM_BASE_URL`/`LLM_MODEL` to point at a running `llama-server` instance. |
-| `LLM_BASE_URL` | non-empty string (potentially sensitive) | `http://host.docker.internal:8080` | The `llama-server` (`llama.cpp`) endpoint `AI-03`'s provider connects to when `LLM_PROVIDER=llama_cpp`. |
+| `LLM_BASE_URL` | non-empty string (potentially sensitive) | `http://host.docker.internal:8081` | The `llama-server` (`llama.cpp`) endpoint `AI-03`'s provider connects to when `LLM_PROVIDER=llama_cpp`. `8081` is a dedicated port distinct from TrustTable's own frontend port (`8080`); `llama-server` is run with `--no-webui` in the documented/supported runtime profile (`docs/decision-log.md` D-036, `docs/local-development.md`). |
 | `LLM_MODEL` | string (unconstrained, default empty) | `""` (empty) | The exact model identifier `AI-03`'s provider requests — set this to the identifier your `llama-server` instance reports for the baseline-profile model (Qwen3.5-4B-Q4_K_M, `D-034`). |
 | `LLM_TEMPERATURE` | float, `0`–`2` | `0` | Will configure model sampling temperature once a provider calls a model. |
 | `LLM_CONTEXT_WINDOW` | positive integer | `8192` | Will bound the model context window once a provider calls a model. |
