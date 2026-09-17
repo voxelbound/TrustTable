@@ -178,6 +178,18 @@ Represents one execution of TrustTable against a dataset using a specific config
 - cancelled
 - deleted
 
+**`v0.2` shipped-state note (`docs/decision-log.md` D-037):**
+`inferring_context`, `awaiting_confirmation`, and `finalizing` describe
+a reserved future *pre-analysis context-gating* architecture — not the
+`v0.2` shipped pipeline. `v0.2`'s real, authoritative `AnalysisState`
+enum (`analysis/service.py`, `API-01`/`API-02`) is an 8-value subset
+that goes directly from `detecting` to `completed`; context
+confirmation and AI interpretation happen afterward, as an optional,
+additive enrichment phase over the already-`completed` analysis
+(`docs/architecture.md` §6). These three values remain documented here
+as the shape a future pre-analysis-gating decision would use, not
+deleted or reassigned.
+
 ### Invariants
 
 - completed facts are immutable
@@ -358,6 +370,15 @@ Represents one potential data-quality or AI-processing risk.
 - severity changes are separately recorded and justified
 - references must resolve
 
+**`interpretation ID` note (`docs/decision-log.md` D-037):** this
+field's target, `AIInterpretation` (§14), is the specified shape for
+`v0.2`'s `UI-02` enrichment record. `AI-05` (`WP-061`)'s
+`domain.explanation.FindingExplanation` is a disclosed, narrower
+interim type (narrative, provenance, and grounding references only —
+no provider/model/timing/rejection-audit fields, and no link back to
+this `interpretation ID` field) built before `D-037` existed; the real
+`UI-02` implementation package reconciles it toward this shape.
+
 ## 13. Evidence
 
 ### Purpose
@@ -451,6 +472,12 @@ Stores validated model-generated interpretation without replacing evidence.
 - numeric claims equal supplied facts
 - deterministic severity and trust score remain authoritative
 - rejected output remains auditable without storing unsafe raw content unnecessarily
+
+**`v0.2`/`UI-02` note (`docs/decision-log.md` D-037):** this is the
+target shape for `v0.2`'s optional, additive enrichment phase over an
+already-`completed` analysis (§5, §12's `interpretation ID` note) —
+not yet implemented as such; `AI-05` (`WP-061`) built a narrower
+interim `FindingExplanation` type ahead of this reconciliation.
 
 ## 15. PromptInjectionRisk
 

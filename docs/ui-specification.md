@@ -104,6 +104,13 @@ Progress and errors must be announced to assistive technology.
 
 ### 4.4 Context
 
+**Reachability (`docs/decision-log.md` D-037, `v0.2`):** reachable
+after analysis completion, alongside Overview/Findings — not a
+blocking pre-step. Confirming/correcting context and finalizing it
+triggers optional, additive enrichment (AI interpretation/explanations)
+over the already-`completed` deterministic analysis; it never gates or
+re-runs deterministic detection.
+
 Editable fields:
 
 - domain

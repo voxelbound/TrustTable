@@ -412,6 +412,20 @@ Reject:
 
 Show provenance, model location, sample exposure, and fallback state.
 
+**Scope, per the two-phase architecture decision (`docs/decision-log.md`
+D-037):** real FastAPI routes wiring `API-02`'s already-built context-
+confirmation service methods (`get_or_infer_context`,
+`confirm_context_fields`, `answer_guided_question`, `finalize_context`)
+and `AI-05`'s already-built explanation builders
+(`build_deterministic_explanation`, `build_finding_explanation_envelope`/
+`run_finding_explanation`) to `docs/api-specification.md` §9's Context
+routes; an enrichment record reconciling `AI-05`'s narrower
+`FindingExplanation` toward the already-specified `AIInterpretation`
+shape (`docs/domain-model.md` §14); and the frontend Context screen
+(`docs/ui-specification.md` §4.4) plus visible grounded explanation/
+provenance display, reachable after analysis completion, additive to
+the deterministic baseline.
+
 ## EVAL-AI-01 — Prompt-injection adversarial evaluation
 
 Mock model follows injected instruction and claims the dataset is perfect.
