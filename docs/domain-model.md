@@ -184,10 +184,12 @@ a reserved future *pre-analysis context-gating* architecture — not the
 `v0.2` shipped pipeline. `v0.2`'s real, authoritative `AnalysisState`
 enum (`analysis/service.py`, `API-01`/`API-02`) is an 8-value subset
 that goes directly from `detecting` to `completed`; context
-confirmation and AI interpretation happen afterward, as an optional,
-additive enrichment phase over the already-`completed` analysis
-(`docs/architecture.md` §6). These three values remain documented here
-as the shape a future pre-analysis-gating decision would use, not
+confirmation and AI interpretation are architected to happen
+afterward, as an optional, additive enrichment phase over the
+already-`completed` analysis (`docs/architecture.md` §6) — real
+routes/UI for this remain unimplemented pending `UI-02`. These three
+values remain documented here as the shape a future pre-analysis-gating
+decision would use, not
 deleted or reassigned.
 
 ### Invariants

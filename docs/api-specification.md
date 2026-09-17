@@ -289,7 +289,9 @@ the underlying analysis's own state (which is already `completed`
 before finalize can be called — see `docs/architecture.md` §6's
 two-phase model). A future pre-analysis-gating architecture, where
 finalize instead triggers detection itself, remains possible but is
-not what `v0.2` implements.
+not what `v0.2` implements. This route (and every other route in this
+section) is not yet implemented — see `docs/implementation-backlog.md`'s
+`UI-02` entry for the real implementation package.
 
 Returns:
 
