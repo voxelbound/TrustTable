@@ -81,7 +81,7 @@ Confirms:
 - migrations are current
 - worker service is ready
 
-Ollama availability does not make the application unready when AI is optional.
+AI provider (`llama.cpp`) availability does not make the application unready when AI is optional.
 
 ### GET `/version`
 
