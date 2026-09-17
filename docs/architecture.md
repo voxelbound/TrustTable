@@ -734,7 +734,21 @@ exception text or a stack trace in the response body (`docs/api-specification.md
 
 ## 6. Analysis pipeline
 
+**Two-phase model (`docs/decision-log.md` D-037, `v0.2`):** Phase 1 is
+the existing deterministic pipeline, unchanged — it already runs to
+completion unattended, with no pause, and is shipped exactly as shown
+below. Phase 2 is the **approved architecture for the remaining `v0.2`
+implementation** (`UI-02`): a second, optional, additive pass over that
+already-completed analysis, never a gate on it. Phase 2 itself is
+**not yet shipped** — `UI-02` is the package that wires `CTX-01`–
+`CTX-03`/`API-02`/`AI-05`'s already-built enabling slices to real API
+routes and a UI; until then, no HTTP route, enrichment record, or
+frontend screen for it exists.
+
 ```text
+Phase 1 — deterministic baseline (blocking within itself, unattended,
+already shipped)
+
 Validate file
    ↓
 Parse
@@ -749,17 +763,45 @@ Calculate risk score
    ↓
 Build deterministic context hypotheses
    ↓
-Optional validated AI context inference
+COMPLETED  ←  fully valid, reviewable, and exportable with zero
+              enrichment (docs/domain-model.md §8's "context does not
+              alter historic deterministic profile facts" invariant)
+
+Phase 2 — optional enrichment (additive, does not alter Phase 1
+output; approved target architecture, real routes/UI/enrichment
+record not yet implemented)
+
+Context confirmation and guided questions (optional, user-driven)
    ↓
-User confirmation
+Additive validated AI/context enrichment — for example grounded
+explanations and provenance, produced once `UI-02` wires the
+already-built `CTX-01`–`CTX-03`/`API-02`/`AI-05` enabling slices to
+real routes
    ↓
-Run contextual detectors
-   ↓
-Optional validated explanations and remediation
-   ↓
-Generate and execute validation rules
-   ↓
-Review and export
+(review and export continue to apply to the Phase 1 baseline, enriched
+ where Phase 2 was performed)
+```
+
+Explicitly **not** part of current `v0.2` scope (`D-037` decides
+neither): context-dependent detectors and validation-rule generation/
+execution. Both remain reserved for the preserved future option below.
+
+**Preserved future option, not implemented by `v0.2` (`D-037`):** the
+original, single-pipeline architecture below — where user confirmation
+blocks and gates a subsequent "run contextual detectors" step —
+remains a legitimate future direction (for example, if a later
+detector or `v0.3`'s rule engine genuinely requires confirmed context
+before it can run safely). Adopting it would be its own human-owned
+architecture decision, not something `D-037` forecloses. It is kept
+here as the reserved shape, not deleted:
+
+```text
+Validate file → Parse → Infer types → Profile → Run deterministic
+detectors → Calculate risk score → Build deterministic context
+hypotheses → Optional validated AI context inference → User
+confirmation → Run contextual detectors → Optional validated
+explanations and remediation → Generate and execute validation rules
+→ Review and export
 ```
 
 ## 7. LLM trust boundary
