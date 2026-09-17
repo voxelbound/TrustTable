@@ -404,6 +404,50 @@ export type FindingEvidenceListResponse = {
 };
 
 /**
+ * FindingExplanationResponse
+ *
+ * Body for `GET /analyses/{analysis_id}/findings/{finding_id}/explanation`
+ * (`UI-02` slice 1, `WP-063`). Mirrors `domain.explanation.
+ * FindingExplanation` exactly. `provenance` is the `Provenance` enum's
+ * string value (`"deterministic_fallback"` or `"ai_interpretation"`
+ * only — `FindingExplanation`'s own closed set, `AI-05`).
+ * `provider_name`/`model_identifier` are both `null` for a
+ * deterministic-fallback explanation (no provider was used — the
+ * default, AI-disabled behavior) and populated for an accepted
+ * AI-interpretation explanation.
+ */
+export type FindingExplanationResponse = {
+    /**
+     * Finding Id
+     */
+    finding_id: string;
+    /**
+     * Model Identifier
+     */
+    model_identifier: string | null;
+    /**
+     * Narrative
+     */
+    narrative: string;
+    /**
+     * Provenance
+     */
+    provenance: string;
+    /**
+     * Provider Name
+     */
+    provider_name: string | null;
+    /**
+     * Referenced Columns
+     */
+    referenced_columns: Array<ColumnReferenceResponse>;
+    /**
+     * Referenced Evidence Ids
+     */
+    referenced_evidence_ids: Array<string>;
+};
+
+/**
  * FindingItem
  *
  * One entry in `GET /analyses/{analysis_id}/findings`'s response
@@ -988,6 +1032,40 @@ export type GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEv
 };
 
 export type GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponse = GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses[keyof GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses];
+
+export type GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Finding Id
+         */
+        finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/findings/{finding_id}/explanation';
+};
+
+export type GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetError = GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetErrors[keyof GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetErrors];
+
+export type GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: FindingExplanationResponse;
+};
+
+export type GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetResponse = GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetResponses[keyof GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetResponses];
 
 export type GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetData = {
     body?: never;

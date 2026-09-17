@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query, Request, UploadFile
 
+from trusttable_backend.ai_provider.factory import create_provider
 from trusttable_backend.analysis import (
     Analysis,
     AnalysisFailure,
@@ -50,10 +51,16 @@ from trusttable_backend.analysis import (
 from trusttable_backend.config import get_settings
 from trusttable_backend.detectors.contract import FindingCandidate, SecurityExposureState
 from trusttable_backend.domain.evidence import Evidence
+from trusttable_backend.domain.explanation import FindingExplanation
 from trusttable_backend.domain.parsing import Dataset
 from trusttable_backend.domain.row_context import RowContextWindow
 from trusttable_backend.domain.value_objects import ColumnReference
 from trusttable_backend.errors import AppError
+from trusttable_backend.explanation.ai_explanation import (
+    build_finding_explanation_envelope,
+    run_finding_explanation,
+)
+from trusttable_backend.explanation.deterministic import build_deterministic_explanation
 from trusttable_backend.profiling.schemas import ColumnProfile, DatasetProfile, ProfilingWarning
 from trusttable_backend.risk.scoring import TrustAssessment
 from trusttable_backend.schemas.analysis import (
@@ -68,6 +75,7 @@ from trusttable_backend.schemas.analysis import (
     FindingDetailResponse,
     FindingEvidenceItem,
     FindingEvidenceListResponse,
+    FindingExplanationResponse,
     FindingItem,
     FindingsListResponse,
     ProfilingTimingResponse,
@@ -337,6 +345,65 @@ def _row_context_response(window: RowContextWindow) -> RowContextResponse:
             for entry in window.rows
         ],
     )
+
+
+def _finding_explanation_response(
+    finding_id: str, explanation: FindingExplanation
+) -> FindingExplanationResponse:
+    return FindingExplanationResponse(
+        finding_id=finding_id,
+        narrative=explanation.narrative,
+        provenance=explanation.provenance.value,
+        provider_name=explanation.provider_name,
+        model_identifier=explanation.model_identifier,
+        referenced_evidence_ids=list(explanation.referenced_evidence_ids),
+        referenced_columns=[_column_reference(column) for column in explanation.referenced_columns],
+    )
+
+
+@router.get(
+    "/analyses/{analysis_id}/findings/{finding_id}/explanation",
+    response_model=FindingExplanationResponse,
+)
+def get_analysis_finding_explanation(
+    analysis_id: str, finding_id: str, request: Request
+) -> FindingExplanationResponse:
+    """Return one finding's grounded explanation (`UI-02` slice 1,
+    `WP-063`; `docs/decision-log.md` D-037).
+
+    Always computes `AI-05`'s deterministic explanation first (no
+    provider call, always available — `docs/product-requirements.md`
+    §5.7). When `Settings.llm_provider != "disabled"` (the default
+    remains `"disabled"`, so this is a zero-behavior-change addition for
+    any deployment that has not explicitly configured a provider),
+    additionally attempts the validated AI path through the real
+    provider factory; the deterministic explanation is returned
+    unchanged on rejection or provider error — the same graceful-
+    degradation contract `AI-05`'s own tests already proved, now applied
+    to a real HTTP response.
+
+    Same `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` semantics as the
+    sibling finding routes.
+    """
+    store = get_analysis_store(request)
+    finding = _get_finding_or_404(store, analysis_id, finding_id)
+    evidence = get_finding_evidence(store, analysis_id, finding_id)
+    explanation = build_deterministic_explanation(finding)
+
+    settings = get_settings()
+    if settings.llm_provider != "disabled":
+        provider = create_provider(
+            settings.llm_provider,
+            base_url=settings.llm_base_url,
+            model_identifier=settings.llm_model,
+            timeout_seconds=float(settings.llm_timeout_seconds),
+        )
+        envelope = build_finding_explanation_envelope(finding, evidence)
+        result = run_finding_explanation(provider, envelope, evidence)
+        if result.accepted and result.explanation is not None:
+            explanation = result.explanation
+
+    return _finding_explanation_response(finding_id, explanation)
 
 
 @router.post("/analyses", response_model=UploadAnalysisResponse, status_code=202)

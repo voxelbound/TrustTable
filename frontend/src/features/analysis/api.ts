@@ -11,6 +11,7 @@ import {
   getAnalysisApiV1AnalysesAnalysisIdGet,
   getAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGet,
   getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGet,
+  getAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGet,
   getAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGet,
   getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet,
   getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet,
@@ -21,6 +22,7 @@ import {
   type DemoAnalysisResponse,
   type FindingDetailResponse,
   type FindingEvidenceListResponse,
+  type FindingExplanationResponse,
   type FindingsListResponse,
   type RowContextResponse,
   type UploadAnalysisResponse,
@@ -252,6 +254,33 @@ export function useFindingRowContext(
     },
     enabled:
       Boolean(analysisId) && Boolean(findingId) && anchorRow !== undefined,
+  })
+}
+
+/** `GET .../findings/{finding_id}/explanation` (`UI-02` slice 1,
+ * `WP-063`). Follows the same pattern as `useFindingEvidence`. */
+export function useFindingExplanation(
+  analysisId: string | undefined,
+  findingId: string | undefined,
+) {
+  return useQuery<FindingExplanationResponse, ApiCallError>({
+    queryKey: ['analysis-finding-explanation', analysisId, findingId],
+    queryFn: async () => {
+      const result =
+        await getAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGet(
+          {
+            path: {
+              analysis_id: analysisId as string,
+              finding_id: findingId as string,
+            },
+          },
+        )
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled: Boolean(analysisId) && Boolean(findingId),
   })
 }
 
