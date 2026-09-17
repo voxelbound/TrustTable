@@ -22,9 +22,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from trusttable_backend.analysis import AnalysisStore, create_analysis
+from trusttable_backend.config import get_settings
 from trusttable_backend.request_context import REQUEST_ID_HEADER
 
 _KNOWN_TRUST_LABELS = {
@@ -629,6 +631,80 @@ def test_get_analysis_finding_row_context_negative_before_returns_422(
     )
 
     assert response.status_code == 422
+
+
+# --- GET /analyses/{id}/findings/{finding_id}/explanation (`UI-02` slice 1, `WP-063`) --
+
+
+def test_get_analysis_finding_explanation_default_config_is_deterministic(
+    client: TestClient,
+) -> None:
+    """Default config (`llm_provider="disabled"`, unchanged) — the
+    response is the deterministic explanation, provider fields both
+    `null`."""
+    created = _create_demo_analysis(client)["analysis"]
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/0/explanation")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body.keys()) == {
+        "finding_id",
+        "narrative",
+        "provenance",
+        "provider_name",
+        "model_identifier",
+        "referenced_evidence_ids",
+        "referenced_columns",
+    }
+    assert body["finding_id"] == "0"
+    assert body["narrative"]
+    assert body["provenance"] == "deterministic_fallback"
+    assert body["provider_name"] is None
+    assert body["model_identifier"] is None
+    assert body["referenced_evidence_ids"]
+
+
+def test_get_analysis_finding_explanation_with_mock_provider_is_ai_interpretation(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`LLM_PROVIDER=mock` (real `MockProvider`, real factory) — the
+    response is the AI-interpretation explanation, provider fields
+    populated."""
+    created = _create_demo_analysis(client)["analysis"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/0/explanation")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provenance"] == "ai_interpretation"
+    assert body["provider_name"] == "mock"
+    assert body["model_identifier"] == "mock-v1"
+
+
+def test_get_analysis_finding_explanation_unknown_analysis_returns_structured_404(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/v1/analyses/does-not-exist/findings/0/explanation")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
+
+
+def test_get_analysis_finding_explanation_out_of_range_id_returns_structured_404(
+    client: TestClient,
+) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    out_of_range_id = str(created["finding_count"])
+
+    response = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{out_of_range_id}/explanation"
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "FINDING_NOT_FOUND"
 
 
 # --- POST /analyses/{id}/cancel ------------------------------------------

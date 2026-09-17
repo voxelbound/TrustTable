@@ -2,7 +2,11 @@ import { Link, useParams } from 'react-router'
 import { FindingSeverityBadge } from '../../components/provenance/FindingSeverityBadge'
 import { PromptInjectionWarning } from '../../components/provenance/PromptInjectionWarning'
 import { RowContext } from './RowContext'
-import { useFindingDetail, useFindingEvidence } from './api'
+import {
+  useFindingDetail,
+  useFindingEvidence,
+  useFindingExplanation,
+} from './api'
 
 const PROMPT_INJECTION_CATEGORY = 'ai_processing_security'
 const REPRESENTATIVE_SAMPLE_TYPE = 'representative_sample'
@@ -25,10 +29,15 @@ export function FindingDetailRoute() {
   }>()
   const detailQuery = useFindingDetail(analysisId, findingId)
   const evidenceQuery = useFindingEvidence(analysisId, findingId)
+  const explanationQuery = useFindingExplanation(analysisId, findingId)
 
   const backLink = `/analyses/${analysisId ?? ''}/findings`
 
-  if (detailQuery.isLoading || evidenceQuery.isLoading) {
+  if (
+    detailQuery.isLoading ||
+    evidenceQuery.isLoading ||
+    explanationQuery.isLoading
+  ) {
     return (
       <p
         role="status"
@@ -72,11 +81,28 @@ export function FindingDetailRoute() {
     )
   }
 
+  if (explanationQuery.isError) {
+    return (
+      <div className="flex flex-col gap-4">
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+          {explanationQuery.error.message}
+        </p>
+        <Link
+          to={backLink}
+          className="text-sm font-medium text-slate-900 underline dark:text-slate-100"
+        >
+          Back to findings
+        </Link>
+      </div>
+    )
+  }
+
   const finding = detailQuery.data
   if (!finding) {
     return null
   }
 
+  const explanation = explanationQuery.data
   const evidenceItems = evidenceQuery.data?.items ?? []
   const representativeExamples = evidenceItems.filter(
     (item) => item.evidence_type === REPRESENTATIVE_SAMPLE_TYPE,
@@ -112,6 +138,28 @@ export function FindingDetailRoute() {
           {finding.calculated_observation}
         </p>
       </section>
+
+      {explanation && (
+        <section aria-labelledby="explanation-heading">
+          <h2
+            id="explanation-heading"
+            className="text-xl font-semibold text-slate-900 dark:text-slate-100"
+          >
+            Explanation
+          </h2>
+          <p className="mt-1 text-sm text-slate-800 dark:text-slate-200">
+            {explanation.narrative}
+          </p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {explanation.provenance === 'ai_interpretation'
+              ? 'AI interpretation'
+              : 'Deterministic (no AI)'}
+            {explanation.provider_name && explanation.model_identifier
+              ? ` — ${explanation.provider_name} (${explanation.model_identifier})`
+              : null}
+          </p>
+        </section>
+      )}
 
       <section aria-labelledby="impact-heading">
         <h2
