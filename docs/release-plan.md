@@ -71,6 +71,15 @@ Deliver, in dependency order:
 > default remains explicitly deferred, by deliberate choice, as a
 > later, non-blocking follow-on.
 
+> **Annotation (2026-09-17, `docs/decision-log.md` D-036):** `llama.cpp`'s
+> `llama-server` is hardened as inference infrastructure only — its
+> built-in Web UI is disabled in the documented/supported runtime
+> profile, and the documented local baseline moves to host port `8081`,
+> distinct from TrustTable's own frontend port `8080`. Tracked as
+> `AI-07` in `docs/implementation-backlog.md`, sequenced immediately
+> after `API-02` and before `AI-05` (`D-033`'s sequencing amendment).
+> Does not reopen `D-034`/`D-035`.
+
 This is the first promoted portfolio release.
 
 ## v0.3 — Complete manager workflow

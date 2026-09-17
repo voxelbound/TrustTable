@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     # LLM provider
     llm_provider: LlmProvider = "disabled"
     llm_base_url: Annotated[str, Field(min_length=1, repr=False)] = (
-        "http://host.docker.internal:8080"
+        "http://host.docker.internal:8081"
     )
     llm_model: str = ""
     llm_temperature: Annotated[float, Field(ge=0, le=2)] = 0.0

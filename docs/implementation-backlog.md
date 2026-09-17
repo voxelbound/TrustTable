@@ -386,6 +386,18 @@ No more than five material questions.
 
 Confirm, correct, answer, and finalize.
 
+## AI-07 — llama-server runtime hardening (WebUI disabled, dedicated port)
+
+`llama.cpp`'s `llama-server` is inference infrastructure only, never a
+user-facing application — TrustTable is the sole user-facing surface.
+The documented/supported runtime profile disables the built-in Web UI
+(`--no-webui`) and moves the local baseline to host port `8081`,
+distinct from TrustTable's own frontend port `8080`. See
+`docs/decision-log.md` D-036. Does not reopen `D-034`/`D-035`.
+
+> Annotation (2026-09-17, `D-036` sequencing): inserted here, between
+> `API-02` and `AI-05`, per `D-033`'s appended sequencing amendment.
+
 ## AI-05 — Grounded explanations
 
 Reject:
