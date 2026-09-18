@@ -11,8 +11,11 @@ independent, and stdlib-only — no AI/LLM input path exists anywhere in
 either (mirrors `risk.scoring`'s own "AI cannot alter" no-`ai_boundary`/
 `ai_provider`-import structural guarantee). `ai_context.py` deliberately
 imports both, since its entire purpose is calling a real `AIProvider`
-through `SEC-02`'s trust boundary; it is an enabling slice, not yet
-wired into the live analysis pipeline (see its own module docstring).
+through `SEC-02`'s trust boundary. Wired into the live
+`GET /analyses/{analysis_id}/context` route (`api/v1/analyses.py`) on
+first inference when a provider is configured (`UI-02` slice 2
+revision, `WP-064` r2) — see its own module docstring for the exact
+scoping.
 
 See `heuristics.py`/`ai_context.py`/`guided_questions.py` for the
 public API.
@@ -29,6 +32,7 @@ from .ai_context import (
     build_context_inference_envelope,
     combine_hypotheses,
     run_context_inference,
+    serialize_dataset_context,
 )
 from .guided_questions import MAX_GUIDED_QUESTIONS, generate_guided_questions
 from .heuristics import (
@@ -51,4 +55,5 @@ __all__ = [
     "infer_context_hypotheses",
     "infer_dataset_context",
     "run_context_inference",
+    "serialize_dataset_context",
 ]

@@ -2,12 +2,17 @@
 explanations" model call `docs/product-requirements.md` §12 names
 (`AIOperation.FINDING_EXPLANATION`, already defined by `AI-01`).
 
-**Enabling slice, not yet wired into the live pipeline** — matching the
-precedent already established by `CTX-02` (built, not yet called) and
-every prior `AI-0x` package. Nothing in this module is imported by
-`analysis.service`, no `AnalysisState` value changes, and
+**Wired into a real, live HTTP route** (`GET .../findings/{finding_id}/
+explanation`, `UI-02` slice 1, `WP-063`; confirmed-context grounding
+added `UI-02` slice 2 revision, `WP-064` r2) — the route layer, not
+`analysis.service`, calls this module directly (see this module's own
+"Enabling slice" precedent discussion below for why the seam is the
+route layer, not the service layer). Nothing in this module is imported
+by `analysis.service`, no `AnalysisState` value changes, and
 `Analysis.security_exposure` is untouched — no product-visible behavior
-changes for any existing analysis.
+change for the deterministic pipeline itself; the explanation route's
+own behavior is real and live whenever `Settings.llm_provider !=
+"disabled"`.
 
 Unlike `deterministic.py` (this package's own deterministic-only
 sibling, which deliberately imports neither `ai_boundary` nor
@@ -43,6 +48,7 @@ otherwise.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Final
 
@@ -100,6 +106,8 @@ def _known_numeric_facts_from_evidence(evidence: tuple[Evidence, ...]) -> dict[s
 def build_finding_explanation_envelope(
     finding: FindingCandidate,
     evidence: tuple[Evidence, ...],
+    *,
+    confirmed_context: Mapping[str, object] | None = None,
 ) -> PromptEnvelope:
     """Build the `PromptEnvelope` for a `FINDING_EXPLANATION` call about
     `finding`.
@@ -109,8 +117,24 @@ def build_finding_explanation_envelope(
     unchanged. This package sends zero dataset samples — disclosed, not
     silently assumed (a finding's own evidence is already the grounding
     a business-facing explanation needs).
+
+    `confirmed_context` (`UI-02` slice 2 revision, `WP-064` r2;
+    `docs/decision-log.md` D-037's "confirmed/finalized context available
+    to the explanation/enrichment path" requirement) is optional and
+    caller-supplied — typically a finalized `DatasetContext`, serialized
+    the same way `context_inference.ai_context.
+    build_context_inference_envelope` already does. Left `None` (the
+    default) whenever no context has been confirmed yet, so this
+    function's own behavior for a caller that never supplies it is
+    identical to before this revision. `PromptEnvelope.confirmed_context`
+    remains untrusted regardless (`docs/architecture.md` §7), matching
+    `build_context_inference_envelope`'s own precedent.
     """
-    return build_prompt_envelope(task=AI_EXPLANATION_TASK, computed_evidence=evidence)
+    return build_prompt_envelope(
+        task=AI_EXPLANATION_TASK,
+        computed_evidence=evidence,
+        confirmed_context=confirmed_context,
+    )
 
 
 @dataclass(frozen=True, slots=True)
