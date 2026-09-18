@@ -25,9 +25,47 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+import trusttable_backend.api.v1.analyses as analyses_module
+from trusttable_backend.ai_provider.contract import ProviderRequest, ProviderResponse
 from trusttable_backend.analysis import AnalysisStore, create_analysis
 from trusttable_backend.config import get_settings
 from trusttable_backend.request_context import REQUEST_ID_HEADER
+
+_VALID_AI_OUTPUT = {
+    "schema_version": "1",
+    "narrative": "A validated AI narrative.",
+    "provenance": "ai_interpretation",
+}
+
+
+class _RecordingProvider:
+    """A minimal `AIProvider`-protocol test double (structural, no
+    inheritance needed — matches `AI-01`'s own established convention)
+    that records every request it receives, so a test can inspect
+    exactly what `PromptEnvelope` a route built and sent — real proof
+    of wiring, not just a proof that *some* accepted response came
+    back (`UI-02` slice 2 revision, `WP-064` r2)."""
+
+    def __init__(self, raw_output: dict[str, object] | None = None) -> None:
+        self._raw_output = raw_output or dict(_VALID_AI_OUTPUT)
+        self.requests: list[ProviderRequest] = []
+
+    @property
+    def provider_name(self) -> str:
+        return "recording"
+
+    def health_check(self) -> Any:
+        raise NotImplementedError
+
+    def complete(self, request: ProviderRequest) -> ProviderResponse:
+        self.requests.append(request)
+        return ProviderResponse(
+            raw_output=self._raw_output,
+            provider_name=self.provider_name,
+            model_identifier="recording-v1",
+            duration_ms=1.0,
+        )
+
 
 _KNOWN_TRUST_LABELS = {
     "high_confidence",
@@ -949,6 +987,132 @@ def test_post_analysis_finalize_unknown_analysis_returns_structured_404(
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
+
+
+# --- Real end-to-end CTX-02/context/explanation wiring (`UI-02` slice 2
+# --- revision, `WP-064` r2; `docs/decision-log.md` D-037's "confirmed/
+# --- finalized context available to the explanation/enrichment path"
+# --- requirement) --------------------------------------------------------
+
+
+def test_get_analysis_context_default_disabled_provider_never_calls_ctx02(
+    client: TestClient,
+) -> None:
+    """Negative control: default config (`llm_provider="disabled"`,
+    unchanged) never invokes CTX-02 — `probable_domain` stays the known
+    real-demo-dataset deterministic (`CALCULATED`) value `CTX-01`/`WP-056`
+    already established."""
+    created = _create_demo_analysis(client)["analysis"]
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/context")
+
+    body = response.json()
+    assert body["probable_domain"]["value"] == "Sales / order transactions"
+    assert body["probable_domain"]["inference_source"] == "calculated"
+
+
+def test_get_analysis_context_wires_ctx02_ai_augmentation(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real proof `GET .../context` calls `context_inference.ai_context.
+    run_context_inference` through the trust boundary and persists the
+    accepted AI-sourced `probable_domain` — not merely that some
+    accepted response came back, but that the route actually built and
+    sent a real `CONTEXT_INFERENCE` request and used its result."""
+    created = _create_demo_analysis(client)["analysis"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+    recording = _RecordingProvider(
+        {
+            "schema_version": "1",
+            "narrative": "This is a sales/order transaction dataset.",
+            "provenance": "ai_interpretation",
+        }
+    )
+    monkeypatch.setattr(analyses_module, "create_provider", lambda *a, **kw: recording)
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/context")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["probable_domain"]["value"] == "This is a sales/order transaction dataset."
+    assert body["probable_domain"]["inference_source"] == "ai_interpretation"
+    assert body["context_version"] == 1
+    assert len(recording.requests) == 1
+    assert recording.requests[0].operation.value == "context_inference"
+
+
+def test_get_analysis_context_ai_augmentation_only_happens_once(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real provider is never called more than once per analysis —
+    a second `GET .../context` returns the identical, already-augmented
+    context without a second provider call."""
+    created = _create_demo_analysis(client)["analysis"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+    recording = _RecordingProvider()
+    monkeypatch.setattr(analyses_module, "create_provider", lambda *a, **kw: recording)
+
+    first = client.get(f"/api/v1/analyses/{created['analysis_id']}/context")
+    second = client.get(f"/api/v1/analyses/{created['analysis_id']}/context")
+
+    assert first.json() == second.json()
+    assert len(recording.requests) == 1
+
+
+def test_get_analysis_finding_explanation_uses_confirmed_context_after_finalize(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real end-to-end proof of the full flow: infer context, finalize
+    it, then request a finding explanation — the explanation envelope
+    actually carries the finalized `DatasetContext` as
+    `confirmed_context`, not just Finding+Evidence as before this
+    revision."""
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+    recording = _RecordingProvider()
+    monkeypatch.setattr(analyses_module, "create_provider", lambda *a, **kw: recording)
+
+    client.get(f"/api/v1/analyses/{analysis_id}/context")
+    finalize_response = client.post(
+        f"/api/v1/analyses/{analysis_id}/finalize", json={"expected_version": 1}
+    )
+    assert finalize_response.status_code == 202
+    recording.requests.clear()  # isolate the explanation call's own request
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/explanation")
+
+    assert response.status_code == 200
+    assert len(recording.requests) == 1
+    confirmed_context = recording.requests[0].envelope.confirmed_context
+    assert confirmed_context
+    assert "probable_domain" in confirmed_context
+
+
+def test_get_analysis_finding_explanation_ignores_unfinalized_context(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Negative control: context inferred but not finalized — the
+    explanation envelope's `confirmed_context` stays empty, matching
+    this route's exact pre-revision (`WP-063`) behavior."""
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+    recording = _RecordingProvider()
+    monkeypatch.setattr(analyses_module, "create_provider", lambda *a, **kw: recording)
+
+    client.get(f"/api/v1/analyses/{analysis_id}/context")
+    recording.requests.clear()
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/explanation")
+
+    assert response.status_code == 200
+    assert len(recording.requests) == 1
+    assert recording.requests[0].envelope.confirmed_context == {}
 
 
 # --- POST /analyses/{id}/cancel ------------------------------------------

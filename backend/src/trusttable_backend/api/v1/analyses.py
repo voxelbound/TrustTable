@@ -44,6 +44,7 @@ from trusttable_backend.analysis import (
     QuestionNotFoundError,
     RowNotInFindingError,
     answer_guided_question,
+    apply_ai_context_augmentation,
     cancel_analysis,
     confirm_context_fields,
     create_analysis,
@@ -58,6 +59,16 @@ from trusttable_backend.analysis import (
     run_analysis,
 )
 from trusttable_backend.config import get_settings
+from trusttable_backend.context_inference.ai_context import (
+    build_context_inference_envelope,
+    combine_hypotheses,
+    run_context_inference,
+    serialize_dataset_context,
+)
+from trusttable_backend.context_inference.heuristics import (
+    consolidate_dataset_context,
+    infer_context_hypotheses,
+)
 from trusttable_backend.detectors.contract import FindingCandidate, SecurityExposureState
 from trusttable_backend.domain.clarification import ClarificationAnswer, ClarificationQuestion
 from trusttable_backend.domain.context import ContextField, ContextFieldValue, DatasetContext
@@ -389,7 +400,8 @@ def get_analysis_finding_explanation(
     analysis_id: str, finding_id: str, request: Request
 ) -> FindingExplanationResponse:
     """Return one finding's grounded explanation (`UI-02` slice 1,
-    `WP-063`; `docs/decision-log.md` D-037).
+    `WP-063`; confirmed-context grounding added `UI-02` slice 2 revision,
+    `WP-064` r2; `docs/decision-log.md` D-037).
 
     Always computes `AI-05`'s deterministic explanation first (no
     provider call, always available — `docs/product-requirements.md`
@@ -402,23 +414,44 @@ def get_analysis_finding_explanation(
     degradation contract `AI-05`'s own tests already proved, now applied
     to a real HTTP response.
 
+    When the analysis's context has been finalized (`Analysis.
+    context_finalized`, via `POST .../finalize`), the confirmed
+    `DatasetContext` is serialized into the AI envelope's
+    `confirmed_context` field, grounding the explanation in confirmed
+    business facts (domain, row grain, currency behavior, etc.) in
+    addition to the finding's own evidence — D-037's "confirmed/
+    finalized context available to the explanation/enrichment path"
+    requirement. Deliberately gated on `context_finalized` rather than
+    merely `context is not None`: this is what makes `POST .../finalize`
+    a meaningful, observable action rather than a no-op flag flip.
+    Before finalize, this route's behavior is unchanged from `WP-063`
+    (evidence-grounded only).
+
     Same `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` semantics as the
     sibling finding routes.
     """
     store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
     finding = _get_finding_or_404(store, analysis_id, finding_id)
     evidence = get_finding_evidence(store, analysis_id, finding_id)
     explanation = build_deterministic_explanation(finding)
 
     settings = get_settings()
     if settings.llm_provider != "disabled":
+        confirmed_context = (
+            serialize_dataset_context(analysis.context)
+            if analysis.context_finalized and analysis.context is not None
+            else None
+        )
         provider = create_provider(
             settings.llm_provider,
             base_url=settings.llm_base_url,
             model_identifier=settings.llm_model,
             timeout_seconds=float(settings.llm_timeout_seconds),
         )
-        envelope = build_finding_explanation_envelope(finding, evidence)
+        envelope = build_finding_explanation_envelope(
+            finding, evidence, confirmed_context=confirmed_context
+        )
         result = run_finding_explanation(provider, envelope, evidence)
         if result.accepted and result.explanation is not None:
             explanation = result.explanation
@@ -524,17 +557,60 @@ def get_analysis_context(analysis_id: str, request: Request) -> ContextResponse:
     call (`API-02`, `UI-02` slice 2; `docs/api-specification.md` §9's
     `GET .../context`).
 
+    CTX-02 wiring (`UI-02` slice 2 revision, `WP-064` r2; `docs/
+    decision-log.md` D-037's "configured AI context inference can
+    participate in the Context flow" requirement): only when this
+    analysis's context did not exist yet **before** this call
+    (`analysis.context is None`, captured before `get_or_infer_context`
+    runs — the true "very first call" signal, not `context_version`,
+    which never changes again once augmented) and only when
+    `Settings.llm_provider != "disabled"`, additionally calls the real
+    provider through `context_inference.ai_context.
+    run_context_inference`, combines an accepted AI-sourced
+    `probable_domain` hypothesis with the deterministic hypothesis set
+    via `combine_hypotheses`/`consolidate_dataset_context` (the same
+    consolidation `CTX-02`'s own tests already proved), and persists the
+    augmented context via `apply_ai_context_augmentation` — never
+    incrementing `context_version` (this refines the first-inference
+    snapshot, it is not a user edit). On rejection or provider error,
+    the deterministic-only context from `get_or_infer_context` is
+    returned unchanged — the same graceful-degradation contract used
+    throughout this codebase. Every subsequent call for the same
+    analysis (context already existed before this call) skips the AI
+    call entirely and returns the already-cached context — a real
+    provider is never called more than once per analysis by this route.
+
     Raises `ANALYSIS_NOT_FOUND` (404) for an unknown ID and
     `INVALID_ANALYSIS_STATE` (409) for a known but not-yet-`completed`
     analysis.
     """
     store = get_analysis_store(request)
     analysis = _get_or_404(store, analysis_id)
+    is_first_inference = analysis.context is None
     try:
         context = get_or_infer_context(store, analysis_id)
     except AnalysisNotReadyError as exc:
         raise _analysis_not_ready(analysis_id, analysis.state) from exc
     updated = get_status(store, analysis_id)
+
+    settings = get_settings()
+    if settings.llm_provider != "disabled" and is_first_inference:
+        assert updated.dataset_profile is not None  # guaranteed by COMPLETED invariant
+        provider = create_provider(
+            settings.llm_provider,
+            base_url=settings.llm_base_url,
+            model_identifier=settings.llm_model,
+            timeout_seconds=float(settings.llm_timeout_seconds),
+        )
+        envelope = build_context_inference_envelope(context, evidence=updated.evidence)
+        ai_result = run_context_inference(provider, envelope)
+        if ai_result.accepted and ai_result.hypothesis is not None:
+            deterministic_hypotheses = infer_context_hypotheses(updated.dataset_profile)
+            combined = combine_hypotheses(deterministic_hypotheses, ai_result)
+            context = consolidate_dataset_context(combined)
+            apply_ai_context_augmentation(store, analysis_id, context)
+            updated = get_status(store, analysis_id)
+
     return _context_response(updated.context_version, context)
 
 
