@@ -69,6 +69,29 @@ export const postAnalysisCancelApiV1AnalysesAnalysisIdCancelPost = <ThrowOnError
  * call (`API-02`, `UI-02` slice 2; `docs/api-specification.md` §9's
  * `GET .../context`).
  *
+ * CTX-02 wiring (`UI-02` slice 2 revision, `WP-064` r2; `docs/
+ * decision-log.md` D-037's "configured AI context inference can
+ * participate in the Context flow" requirement): only when this
+ * analysis's context did not exist yet **before** this call
+ * (`analysis.context is None`, captured before `get_or_infer_context`
+ * runs — the true "very first call" signal, not `context_version`,
+ * which never changes again once augmented) and only when
+ * `Settings.llm_provider != "disabled"`, additionally calls the real
+ * provider through `context_inference.ai_context.
+ * run_context_inference`, combines an accepted AI-sourced
+ * `probable_domain` hypothesis with the deterministic hypothesis set
+ * via `combine_hypotheses`/`consolidate_dataset_context` (the same
+ * consolidation `CTX-02`'s own tests already proved), and persists the
+ * augmented context via `apply_ai_context_augmentation` — never
+ * incrementing `context_version` (this refines the first-inference
+ * snapshot, it is not a user edit). On rejection or provider error,
+ * the deterministic-only context from `get_or_infer_context` is
+ * returned unchanged — the same graceful-degradation contract used
+ * throughout this codebase. Every subsequent call for the same
+ * analysis (context already existed before this call) skips the AI
+ * call entirely and returns the already-cached context — a real
+ * provider is never called more than once per analysis by this route.
+ *
  * Raises `ANALYSIS_NOT_FOUND` (404) for an unknown ID and
  * `INVALID_ANALYSIS_STATE` (409) for a known but not-yet-`completed`
  * analysis.
@@ -160,7 +183,8 @@ export const getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdE
  * Get Analysis Finding Explanation
  *
  * Return one finding's grounded explanation (`UI-02` slice 1,
- * `WP-063`; `docs/decision-log.md` D-037).
+ * `WP-063`; confirmed-context grounding added `UI-02` slice 2 revision,
+ * `WP-064` r2; `docs/decision-log.md` D-037).
  *
  * Always computes `AI-05`'s deterministic explanation first (no
  * provider call, always available — `docs/product-requirements.md`
@@ -172,6 +196,19 @@ export const getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdE
  * unchanged on rejection or provider error — the same graceful-
  * degradation contract `AI-05`'s own tests already proved, now applied
  * to a real HTTP response.
+ *
+ * When the analysis's context has been finalized (`Analysis.
+ * context_finalized`, via `POST .../finalize`), the confirmed
+ * `DatasetContext` is serialized into the AI envelope's
+ * `confirmed_context` field, grounding the explanation in confirmed
+ * business facts (domain, row grain, currency behavior, etc.) in
+ * addition to the finding's own evidence — D-037's "confirmed/
+ * finalized context available to the explanation/enrichment path"
+ * requirement. Deliberately gated on `context_finalized` rather than
+ * merely `context is not None`: this is what makes `POST .../finalize`
+ * a meaningful, observable action rather than a no-op flag flip.
+ * Before finalize, this route's behavior is unchanged from `WP-063`
+ * (evidence-grounded only).
  *
  * Same `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` semantics as the
  * sibling finding routes.
