@@ -99,10 +99,19 @@ for consistency across this codebase's two independent bounded-retry
 call sites."""
 
 
-def _serialize_dataset_context(dataset_context: DatasetContext) -> dict[str, object]:
+def serialize_dataset_context(dataset_context: DatasetContext) -> dict[str, object]:
     """Serialize `dataset_context` into a JSON-safe mapping for
     `PromptEnvelope.confirmed_context`. Tuple values become lists;
-    enum values become their string value."""
+    enum values become their string value.
+
+    Public (`UI-02` slice 2 revision, `WP-064` r2): originally private
+    to this module's own `build_context_inference_envelope`, promoted
+    to a shared helper once the explanation route layer needed the
+    identical shape for `explanation.ai_explanation.
+    build_finding_explanation_envelope`'s new `confirmed_context`
+    parameter — a single source of truth for "how a `DatasetContext`
+    becomes `confirmed_context` JSON" rather than a third duplicate
+    copy."""
     fields: dict[str, object] = {}
     for field in ContextField:
         field_value = getattr(dataset_context, field.value)
@@ -155,7 +164,7 @@ def build_context_inference_envelope(
     return build_prompt_envelope(
         task=AI_CONTEXT_TASK,
         computed_evidence=evidence,
-        confirmed_context=_serialize_dataset_context(dataset_context),
+        confirmed_context=serialize_dataset_context(dataset_context),
         raw_samples=raw_samples,
         sample_sending_enabled=sample_sending_enabled,
         max_sample_count=max_sample_count,
@@ -279,4 +288,5 @@ __all__ = [
     "build_context_inference_envelope",
     "combine_hypotheses",
     "run_context_inference",
+    "serialize_dataset_context",
 ]

@@ -35,21 +35,43 @@ from trusttable_backend.analysis import (
     Analysis,
     AnalysisFailure,
     AnalysisNotFoundError,
+    AnalysisNotReadyError,
     AnalysisState,
     AnalysisStore,
+    ContextFieldNotEditableError,
+    ContextVersionConflictError,
     FindingNotFoundError,
+    QuestionNotFoundError,
     RowNotInFindingError,
+    answer_guided_question,
+    apply_ai_context_augmentation,
     cancel_analysis,
+    confirm_context_fields,
     create_analysis,
     create_analysis_from_upload,
+    finalize_context,
     get_finding,
     get_finding_evidence,
     get_finding_row_context,
+    get_guided_questions,
+    get_or_infer_context,
     get_status,
     run_analysis,
 )
 from trusttable_backend.config import get_settings
+from trusttable_backend.context_inference.ai_context import (
+    build_context_inference_envelope,
+    combine_hypotheses,
+    run_context_inference,
+    serialize_dataset_context,
+)
+from trusttable_backend.context_inference.heuristics import (
+    consolidate_dataset_context,
+    infer_context_hypotheses,
+)
 from trusttable_backend.detectors.contract import FindingCandidate, SecurityExposureState
+from trusttable_backend.domain.clarification import ClarificationAnswer, ClarificationQuestion
+from trusttable_backend.domain.context import ContextField, ContextFieldValue, DatasetContext
 from trusttable_backend.domain.evidence import Evidence
 from trusttable_backend.domain.explanation import FindingExplanation
 from trusttable_backend.domain.parsing import Dataset
@@ -68,10 +90,19 @@ from trusttable_backend.schemas.analysis import (
     AnalysisProfileResponse,
     AnalysisResource,
     AnalysisStatusResponse,
+    AnswerGuidedQuestionRequest,
+    AnswerGuidedQuestionResponse,
+    ClarificationAnswerResponse,
+    ClarificationQuestionListResponse,
+    ClarificationQuestionResponse,
     ColumnProfileResponse,
     ColumnReferenceResponse,
+    ConfirmContextFieldsRequest,
+    ContextFieldValueResponse,
+    ContextResponse,
     DatasetSummaryResponse,
     DemoAnalysisResponse,
+    FinalizeContextRequest,
     FindingDetailResponse,
     FindingEvidenceItem,
     FindingEvidenceListResponse,
@@ -369,7 +400,8 @@ def get_analysis_finding_explanation(
     analysis_id: str, finding_id: str, request: Request
 ) -> FindingExplanationResponse:
     """Return one finding's grounded explanation (`UI-02` slice 1,
-    `WP-063`; `docs/decision-log.md` D-037).
+    `WP-063`; confirmed-context grounding added `UI-02` slice 2 revision,
+    `WP-064` r2; `docs/decision-log.md` D-037).
 
     Always computes `AI-05`'s deterministic explanation first (no
     provider call, always available — `docs/product-requirements.md`
@@ -382,28 +414,333 @@ def get_analysis_finding_explanation(
     degradation contract `AI-05`'s own tests already proved, now applied
     to a real HTTP response.
 
+    When the analysis's context has been finalized (`Analysis.
+    context_finalized`, via `POST .../finalize`), the confirmed
+    `DatasetContext` is serialized into the AI envelope's
+    `confirmed_context` field, grounding the explanation in confirmed
+    business facts (domain, row grain, currency behavior, etc.) in
+    addition to the finding's own evidence — D-037's "confirmed/
+    finalized context available to the explanation/enrichment path"
+    requirement. Deliberately gated on `context_finalized` rather than
+    merely `context is not None`: this is what makes `POST .../finalize`
+    a meaningful, observable action rather than a no-op flag flip.
+    Before finalize, this route's behavior is unchanged from `WP-063`
+    (evidence-grounded only).
+
     Same `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` semantics as the
     sibling finding routes.
     """
     store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
     finding = _get_finding_or_404(store, analysis_id, finding_id)
     evidence = get_finding_evidence(store, analysis_id, finding_id)
     explanation = build_deterministic_explanation(finding)
 
     settings = get_settings()
     if settings.llm_provider != "disabled":
+        confirmed_context = (
+            serialize_dataset_context(analysis.context)
+            if analysis.context_finalized and analysis.context is not None
+            else None
+        )
         provider = create_provider(
             settings.llm_provider,
             base_url=settings.llm_base_url,
             model_identifier=settings.llm_model,
             timeout_seconds=float(settings.llm_timeout_seconds),
         )
-        envelope = build_finding_explanation_envelope(finding, evidence)
+        envelope = build_finding_explanation_envelope(
+            finding, evidence, confirmed_context=confirmed_context
+        )
         result = run_finding_explanation(provider, envelope, evidence)
         if result.accepted and result.explanation is not None:
             explanation = result.explanation
 
     return _finding_explanation_response(finding_id, explanation)
+
+
+# --- Context confirmation (`API-02`, `UI-02` slice 2, `WP-064`) --------
+
+
+def _analysis_not_ready(analysis_id: str, state: AnalysisState) -> AppError:
+    return AppError(
+        "INVALID_ANALYSIS_STATE",
+        "Context is not available for this analysis in its current state.",
+        status_code=409,
+        details={"analysis_id": analysis_id, "state": state.value},
+    )
+
+
+def _context_version_conflict(exc: ContextVersionConflictError) -> AppError:
+    return AppError(
+        "CONTEXT_VERSION_CONFLICT",
+        "The supplied context version is out of date.",
+        status_code=409,
+        details={
+            "analysis_id": exc.analysis_id,
+            "expected_version": exc.expected_version,
+            "actual_version": exc.actual_version,
+        },
+    )
+
+
+def _invalid_context(analysis_id: str, message: str, *, field: str | None = None) -> AppError:
+    details: dict[str, object] = {"analysis_id": analysis_id}
+    if field is not None:
+        details["context_field"] = field
+    return AppError("INVALID_CONTEXT", message, status_code=422, details=details)
+
+
+def _question_not_found(analysis_id: str, question_id: str) -> AppError:
+    return AppError(
+        "QUESTION_NOT_FOUND",
+        "The requested guided question was not found.",
+        status_code=404,
+        details={"analysis_id": analysis_id, "question_id": question_id},
+    )
+
+
+def _context_field_value(field_value: ContextFieldValue) -> ContextFieldValueResponse:
+    value = field_value.value
+    return ContextFieldValueResponse(
+        value=list(value) if isinstance(value, tuple) else value,
+        confidence=field_value.confidence,
+        inference_source=field_value.inference_source.value,
+        confirmation_state=field_value.confirmation_state.value,
+        evidence_ids=list(field_value.evidence_ids),
+    )
+
+
+def _context_response(context_version: int, context: DatasetContext) -> ContextResponse:
+    return ContextResponse(
+        context_version=context_version,
+        schema_version=context.schema_version,
+        probable_domain=_context_field_value(context.probable_domain),
+        row_grain=_context_field_value(context.row_grain),
+        primary_entity=_context_field_value(context.primary_entity),
+        candidate_keys=_context_field_value(context.candidate_keys),
+        business_dates=_context_field_value(context.business_dates),
+        measure_roles=_context_field_value(context.measure_roles),
+        dimensions=_context_field_value(context.dimensions),
+        currency_behavior=_context_field_value(context.currency_behavior),
+        expected_business_rules=_context_field_value(context.expected_business_rules),
+    )
+
+
+def _clarification_question(question: ClarificationQuestion) -> ClarificationQuestionResponse:
+    return ClarificationQuestionResponse(
+        question_id=question.question_id,
+        context_field=question.context_field.value,
+        concise_text=question.concise_text,
+        explanation=question.explanation,
+        suggested_answers=list(question.suggested_answers),
+        inferred_default=question.inferred_default,
+        affected_assumptions=list(question.affected_assumptions),
+        free_text_allowed=question.free_text_allowed,
+        answered_state=question.answered_state.value,
+    )
+
+
+def _clarification_answer(answer: ClarificationAnswer) -> ClarificationAnswerResponse:
+    return ClarificationAnswerResponse(
+        question_id=answer.question_id,
+        selected_answer_or_free_text=answer.selected_answer_or_free_text,
+        answered_timestamp=answer.answered_timestamp,
+        resulting_context_changes=[field.value for field in answer.resulting_context_changes],
+        provenance=answer.provenance.value,
+    )
+
+
+@router.get("/analyses/{analysis_id}/context", response_model=ContextResponse)
+def get_analysis_context(analysis_id: str, request: Request) -> ContextResponse:
+    """Return `analysis_id`'s dataset context, inferring it on first
+    call (`API-02`, `UI-02` slice 2; `docs/api-specification.md` §9's
+    `GET .../context`).
+
+    CTX-02 wiring (`UI-02` slice 2 revision, `WP-064` r2; `docs/
+    decision-log.md` D-037's "configured AI context inference can
+    participate in the Context flow" requirement): only when this
+    analysis's context did not exist yet **before** this call
+    (`analysis.context is None`, captured before `get_or_infer_context`
+    runs — the true "very first call" signal, not `context_version`,
+    which never changes again once augmented) and only when
+    `Settings.llm_provider != "disabled"`, additionally calls the real
+    provider through `context_inference.ai_context.
+    run_context_inference`, combines an accepted AI-sourced
+    `probable_domain` hypothesis with the deterministic hypothesis set
+    via `combine_hypotheses`/`consolidate_dataset_context` (the same
+    consolidation `CTX-02`'s own tests already proved), and persists the
+    augmented context via `apply_ai_context_augmentation` — never
+    incrementing `context_version` (this refines the first-inference
+    snapshot, it is not a user edit). On rejection or provider error,
+    the deterministic-only context from `get_or_infer_context` is
+    returned unchanged — the same graceful-degradation contract used
+    throughout this codebase. Every subsequent call for the same
+    analysis (context already existed before this call) skips the AI
+    call entirely and returns the already-cached context — a real
+    provider is never called more than once per analysis by this route.
+
+    Raises `ANALYSIS_NOT_FOUND` (404) for an unknown ID and
+    `INVALID_ANALYSIS_STATE` (409) for a known but not-yet-`completed`
+    analysis.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    is_first_inference = analysis.context is None
+    try:
+        context = get_or_infer_context(store, analysis_id)
+    except AnalysisNotReadyError as exc:
+        raise _analysis_not_ready(analysis_id, analysis.state) from exc
+    updated = get_status(store, analysis_id)
+
+    settings = get_settings()
+    if settings.llm_provider != "disabled" and is_first_inference:
+        assert updated.dataset_profile is not None  # guaranteed by COMPLETED invariant
+        provider = create_provider(
+            settings.llm_provider,
+            base_url=settings.llm_base_url,
+            model_identifier=settings.llm_model,
+            timeout_seconds=float(settings.llm_timeout_seconds),
+        )
+        envelope = build_context_inference_envelope(context, evidence=updated.evidence)
+        ai_result = run_context_inference(provider, envelope)
+        if ai_result.accepted and ai_result.hypothesis is not None:
+            deterministic_hypotheses = infer_context_hypotheses(updated.dataset_profile)
+            combined = combine_hypotheses(deterministic_hypotheses, ai_result)
+            context = consolidate_dataset_context(combined)
+            apply_ai_context_augmentation(store, analysis_id, context)
+            updated = get_status(store, analysis_id)
+
+    return _context_response(updated.context_version, context)
+
+
+@router.put("/analyses/{analysis_id}/context", response_model=ContextResponse)
+def put_analysis_context(
+    analysis_id: str, body: ConfirmContextFieldsRequest, request: Request
+) -> ContextResponse:
+    """Replace one or more editable context field values
+    (`API-02`, `UI-02` slice 2; `docs/api-specification.md` §9's
+    `PUT .../context`, "requires resource version").
+
+    Raises `ANALYSIS_NOT_FOUND`/`INVALID_ANALYSIS_STATE` (via
+    `GET .../context`'s own semantics), `CONTEXT_VERSION_CONFLICT`
+    (409) on a stale `expected_version`, and `INVALID_CONTEXT` (422)
+    for an unknown field name or a non-editable role field.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    edits: dict[ContextField, str] = {}
+    for key, value in body.edits.items():
+        try:
+            edits[ContextField(key)] = value
+        except ValueError as exc:
+            raise _invalid_context(
+                analysis_id, f"Unknown context field: {key!r}", field=key
+            ) from exc
+    if not edits:
+        raise _invalid_context(analysis_id, "At least one context field edit is required.")
+    try:
+        context = confirm_context_fields(
+            store, analysis_id, edits, expected_version=body.expected_version
+        )
+    except AnalysisNotReadyError as exc:
+        raise _analysis_not_ready(analysis_id, analysis.state) from exc
+    except ContextVersionConflictError as exc:
+        raise _context_version_conflict(exc) from exc
+    except ContextFieldNotEditableError as exc:
+        raise _invalid_context(
+            analysis_id,
+            f"Context field is not editable: {exc.context_field.value}",
+            field=exc.context_field.value,
+        ) from exc
+    updated = get_status(store, analysis_id)
+    return _context_response(updated.context_version, context)
+
+
+@router.get("/analyses/{analysis_id}/questions", response_model=ClarificationQuestionListResponse)
+def get_analysis_questions(analysis_id: str, request: Request) -> ClarificationQuestionListResponse:
+    """Return `analysis_id`'s active guided questions (`API-02`, `UI-02`
+    slice 2; `docs/api-specification.md` §9's `GET .../questions`).
+
+    Same `ANALYSIS_NOT_FOUND`/`INVALID_ANALYSIS_STATE` semantics as
+    `GET .../context`.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    try:
+        questions = get_guided_questions(store, analysis_id)
+    except AnalysisNotReadyError as exc:
+        raise _analysis_not_ready(analysis_id, analysis.state) from exc
+    items = [_clarification_question(question) for question in questions]
+    return ClarificationQuestionListResponse(items=items, total_items=len(items))
+
+
+@router.post(
+    "/analyses/{analysis_id}/questions/{question_id}/answer",
+    response_model=AnswerGuidedQuestionResponse,
+)
+def post_analysis_question_answer(
+    analysis_id: str, question_id: str, body: AnswerGuidedQuestionRequest, request: Request
+) -> AnswerGuidedQuestionResponse:
+    """Store an answer to one guided question (`API-02`, `UI-02` slice 2;
+    `docs/api-specification.md` §9's "stores an answer and resulting
+    context updates").
+
+    Raises `ANALYSIS_NOT_FOUND`/`INVALID_ANALYSIS_STATE` (via
+    `GET .../context`'s own semantics), `CONTEXT_VERSION_CONFLICT`
+    (409) on a stale `expected_version`, and `QUESTION_NOT_FOUND` (404)
+    for an unknown `question_id`.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    try:
+        context, question, answer = answer_guided_question(
+            store,
+            analysis_id,
+            question_id,
+            answer_text=body.answer_text,
+            expected_version=body.expected_version,
+        )
+    except AnalysisNotReadyError as exc:
+        raise _analysis_not_ready(analysis_id, analysis.state) from exc
+    except ContextVersionConflictError as exc:
+        raise _context_version_conflict(exc) from exc
+    except QuestionNotFoundError as exc:
+        raise _question_not_found(analysis_id, question_id) from exc
+    updated = get_status(store, analysis_id)
+    return AnswerGuidedQuestionResponse(
+        context=_context_response(updated.context_version, context),
+        question=_clarification_question(question),
+        answer=_clarification_answer(answer),
+    )
+
+
+@router.post("/analyses/{analysis_id}/finalize", response_model=AnalysisResource, status_code=202)
+def post_analysis_finalize(
+    analysis_id: str, body: FinalizeContextRequest, request: Request
+) -> AnalysisResource:
+    """Mark `analysis_id`'s context finalized (`API-02`, `UI-02` slice 2;
+    `docs/api-specification.md` §9's `POST .../finalize`).
+
+    Does not change `context`/`guided_questions`/`context_version` or
+    trigger any AI call — matches `analysis.service.finalize_context`'s
+    own documented behavior exactly (`docs/decision-log.md` D-037: the
+    reachable enrichment capability is the already-shipped on-demand
+    explanation endpoint, not a forced side effect of finalize itself).
+
+    Raises `ANALYSIS_NOT_FOUND`/`INVALID_ANALYSIS_STATE` (via
+    `GET .../context`'s own semantics) and `CONTEXT_VERSION_CONFLICT`
+    (409) on a stale `expected_version`.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    try:
+        finalized = finalize_context(store, analysis_id, expected_version=body.expected_version)
+    except AnalysisNotReadyError as exc:
+        raise _analysis_not_ready(analysis_id, analysis.state) from exc
+    except ContextVersionConflictError as exc:
+        raise _context_version_conflict(exc) from exc
+    return _analysis_resource(finalized)
 
 
 @router.post("/analyses", response_model=UploadAnalysisResponse, status_code=202)

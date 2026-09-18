@@ -825,6 +825,44 @@ def get_or_infer_context(store: AnalysisStore, analysis_id: str) -> DatasetConte
     return context
 
 
+def apply_ai_context_augmentation(
+    store: AnalysisStore, analysis_id: str, augmented_context: DatasetContext
+) -> DatasetContext:
+    """Persist an AI-augmented `DatasetContext` the caller already
+    computed (`UI-02` slice 2 revision, `WP-064` r2; `docs/decision-log.md`
+    D-037's "configured AI context inference can participate in the
+    Context flow" requirement).
+
+    This module never calls `CTX-02`/`ai_provider` itself (see this
+    module's own docstring's structural guarantee) — the API route layer
+    computes `augmented_context` (via `context_inference.ai_context`)
+    and hands the finished value here purely for persistence, exactly
+    mirroring `get_or_infer_context`'s own "compute once" first-inference
+    snapshot. Does not increment `context_version` — this refines the
+    same first-inference snapshot `get_or_infer_context` just produced,
+    it is not a user edit (`confirm_context_fields`/`answer_guided_question`
+    own that concern separately).
+
+    Only valid immediately after `get_or_infer_context`'s first call
+    (`context_version == 1`, `context_finalized is False`) — raises
+    `ValueError` otherwise, refusing to silently overwrite a
+    user-confirmed/corrected or already-finalized context.
+
+    Raises `AnalysisNotFoundError` for an unknown ID.
+    """
+    analysis = get_status(store, analysis_id)
+    if analysis.context_version != 1 or analysis.context_finalized:
+        raise ValueError(
+            "apply_ai_context_augmentation: only valid immediately after the first "
+            "get_or_infer_context call (context_version == 1, not yet finalized) — "
+            f"analysis {analysis_id} has context_version={analysis.context_version}, "
+            f"context_finalized={analysis.context_finalized}"
+        )
+    updated = replace(analysis, context=augmented_context)
+    store.replace(updated)
+    return augmented_context
+
+
 def get_guided_questions(
     store: AnalysisStore, analysis_id: str
 ) -> tuple[ClarificationQuestion, ...]:

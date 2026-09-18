@@ -7,9 +7,11 @@ import { useAnalysisFindings, useAnalysisResource } from './api'
 /** The Overview screen (`docs/ui-specification.md` §4.5). Section order
  * matches the specification exactly: trust assessment, top three
  * findings, immediate actions, remaining-finding summary, dataset
- * summary, technical links. "Immediate actions" and "technical links"
- * are disclosed placeholders — see `WP-025`'s Non-goals (`REM-01`
- * remediation content and the `/technical` route do not exist yet). */
+ * summary, technical links. "Immediate actions" remains a disclosed
+ * placeholder — see `WP-025`'s Non-goals (`REM-01` remediation content
+ * does not exist yet). "Technical links" now includes a real link to
+ * the Context screen (`UI-02` slice 2, `WP-064`); the `/technical`
+ * route itself remains open. */
 export function OverviewRoute() {
   const { analysisId } = useParams<{ analysisId: string }>()
   const resourceQuery = useAnalysisResource(analysisId)
@@ -161,6 +163,12 @@ export function OverviewRoute() {
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
           Technical details are coming soon.
         </p>
+        <Link
+          to={`/analyses/${analysisId ?? ''}/context`}
+          className="mt-3 inline-block text-sm font-medium text-slate-900 underline dark:text-slate-100"
+        >
+          Review dataset context
+        </Link>
       </section>
     </div>
   )
