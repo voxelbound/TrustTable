@@ -6,19 +6,27 @@
  * hooks ... -> Generated API client").
  */
 
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getAnalysisApiV1AnalysesAnalysisIdGet,
+  getAnalysisContextApiV1AnalysesAnalysisIdContextGet,
   getAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGet,
   getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGet,
   getAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGet,
   getAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGet,
   getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet,
+  getAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGet,
   getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet,
+  postAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePost,
+  postAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPost,
   postAnalysisUploadApiV1AnalysesPost,
   postDemoSalesApiV1DemoSalesPost,
+  putAnalysisContextApiV1AnalysesAnalysisIdContextPut,
   type AnalysisResource,
   type AnalysisStatusResponse,
+  type AnswerGuidedQuestionResponse,
+  type ClarificationQuestionListResponse,
+  type ContextResponse,
   type DemoAnalysisResponse,
   type FindingDetailResponse,
   type FindingEvidenceListResponse,
@@ -308,5 +316,136 @@ export function useFindingEvidence(
       return result.data
     },
     enabled: Boolean(analysisId) && Boolean(findingId),
+  })
+}
+
+/** `GET .../context` (`API-02`, `UI-02` slice 2, `WP-064`). */
+export function useAnalysisContext(analysisId: string | undefined) {
+  return useQuery<ContextResponse, ApiCallError>({
+    queryKey: ['analysis-context', analysisId],
+    queryFn: async () => {
+      const result = await getAnalysisContextApiV1AnalysesAnalysisIdContextGet({
+        path: { analysis_id: analysisId as string },
+      })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled: Boolean(analysisId),
+  })
+}
+
+/** `GET .../questions` (`API-02`, `UI-02` slice 2, `WP-064`). */
+export function useGuidedQuestions(analysisId: string | undefined) {
+  return useQuery<ClarificationQuestionListResponse, ApiCallError>({
+    queryKey: ['analysis-guided-questions', analysisId],
+    queryFn: async () => {
+      const result =
+        await getAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGet({
+          path: { analysis_id: analysisId as string },
+        })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled: Boolean(analysisId),
+  })
+}
+
+export interface ConfirmContextFieldsInput {
+  edits: Record<string, string>
+  expectedVersion: number
+}
+
+/** `PUT .../context` (`API-02`, `UI-02` slice 2, `WP-064`). Invalidates
+ * the cached context query on success so the screen reflects the new
+ * version/values immediately. */
+export function useConfirmContextFields(analysisId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation<ContextResponse, ApiCallError, ConfirmContextFieldsInput>({
+    mutationFn: async ({ edits, expectedVersion }) => {
+      const result = await putAnalysisContextApiV1AnalysesAnalysisIdContextPut({
+        path: { analysis_id: analysisId as string },
+        body: { edits, expected_version: expectedVersion },
+      })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['analysis-context', analysisId],
+      })
+    },
+  })
+}
+
+export interface AnswerGuidedQuestionInput {
+  questionId: string
+  answerText: string
+  expectedVersion: number
+}
+
+/** `POST .../questions/{question_id}/answer` (`API-02`, `UI-02` slice
+ * 2, `WP-064`). Invalidates both the context and guided-questions
+ * queries on success — a single answer updates both. */
+export function useAnswerGuidedQuestion(analysisId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation<
+    AnswerGuidedQuestionResponse,
+    ApiCallError,
+    AnswerGuidedQuestionInput
+  >({
+    mutationFn: async ({ questionId, answerText, expectedVersion }) => {
+      const result =
+        await postAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPost(
+          {
+            path: {
+              analysis_id: analysisId as string,
+              question_id: questionId,
+            },
+            body: {
+              answer_text: answerText,
+              expected_version: expectedVersion,
+            },
+          },
+        )
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['analysis-context', analysisId],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['analysis-guided-questions', analysisId],
+      })
+    },
+  })
+}
+
+/** `POST .../finalize` (`API-02`, `UI-02` slice 2, `WP-064`). */
+export function useFinalizeContext(analysisId: string | undefined) {
+  return useMutation<
+    AnalysisResource,
+    ApiCallError,
+    { expectedVersion: number }
+  >({
+    mutationFn: async ({ expectedVersion }) => {
+      const result =
+        await postAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePost({
+          path: { analysis_id: analysisId as string },
+          body: { expected_version: expectedVersion },
+        })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
   })
 }

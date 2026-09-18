@@ -152,4 +152,13 @@ describe('OverviewRoute', () => {
       screen.getByText('Technical details are coming soon.'),
     ).toBeInTheDocument()
   })
+
+  it('UI-02 slice 2 (WP-064): renders a link to the Context screen', async () => {
+    renderOverview()
+
+    expect(await screen.findByText('Review dataset context')).toHaveAttribute(
+      'href',
+      `/analyses/${ANALYSIS_ID}/context`,
+    )
+  })
 })

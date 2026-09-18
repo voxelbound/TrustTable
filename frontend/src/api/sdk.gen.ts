@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetAnalysisApiV1AnalysesAnalysisIdGetData, GetAnalysisApiV1AnalysesAnalysisIdGetErrors, GetAnalysisApiV1AnalysesAnalysisIdGetResponses, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetData, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetErrors, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetData, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetErrors, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetData, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetErrors, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetResponses, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetData, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetErrors, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetResponses, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetData, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetErrors, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetErrors, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetData, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetErrors, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses, GetLivenessApiV1HealthLiveGetData, GetLivenessApiV1HealthLiveGetResponses, GetReadinessApiV1HealthReadyGetData, GetReadinessApiV1HealthReadyGetResponses, GetVersionApiV1VersionGetData, GetVersionApiV1VersionGetResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostData, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostAnalysisUploadApiV1AnalysesPostData, PostAnalysisUploadApiV1AnalysesPostErrors, PostAnalysisUploadApiV1AnalysesPostResponses, PostDemoSalesApiV1DemoSalesPostData, PostDemoSalesApiV1DemoSalesPostResponses } from './types.gen';
+import type { GetAnalysisApiV1AnalysesAnalysisIdGetData, GetAnalysisApiV1AnalysesAnalysisIdGetErrors, GetAnalysisApiV1AnalysesAnalysisIdGetResponses, GetAnalysisContextApiV1AnalysesAnalysisIdContextGetData, GetAnalysisContextApiV1AnalysesAnalysisIdContextGetErrors, GetAnalysisContextApiV1AnalysesAnalysisIdContextGetResponses, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetData, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetErrors, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetData, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetErrors, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetData, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetErrors, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetResponses, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetData, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetErrors, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetResponses, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetData, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetErrors, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetErrors, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses, GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetData, GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetErrors, GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetResponses, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetData, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetErrors, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses, GetLivenessApiV1HealthLiveGetData, GetLivenessApiV1HealthLiveGetResponses, GetReadinessApiV1HealthReadyGetData, GetReadinessApiV1HealthReadyGetResponses, GetVersionApiV1VersionGetData, GetVersionApiV1VersionGetResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostData, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostData, PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostErrors, PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostResponses, PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostData, PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostErrors, PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses, PostAnalysisUploadApiV1AnalysesPostData, PostAnalysisUploadApiV1AnalysesPostErrors, PostAnalysisUploadApiV1AnalysesPostResponses, PostDemoSalesApiV1DemoSalesPostData, PostDemoSalesApiV1DemoSalesPostResponses, PutAnalysisContextApiV1AnalysesAnalysisIdContextPutData, PutAnalysisContextApiV1AnalysesAnalysisIdContextPutErrors, PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -63,6 +63,88 @@ export const getAnalysisApiV1AnalysesAnalysisIdGet = <ThrowOnError extends boole
 export const postAnalysisCancelApiV1AnalysesAnalysisIdCancelPost = <ThrowOnError extends boolean = false>(options: Options<PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostData, ThrowOnError>): RequestResult<PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, ThrowOnError> => (options.client ?? client).post<PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/cancel', ...options });
 
 /**
+ * Get Analysis Context
+ *
+ * Return `analysis_id`'s dataset context, inferring it on first
+ * call (`API-02`, `UI-02` slice 2; `docs/api-specification.md` §9's
+ * `GET .../context`).
+ *
+ * CTX-02 wiring (`UI-02` slice 2 revision, `WP-064` r2; `docs/
+ * decision-log.md` D-037's "configured AI context inference can
+ * participate in the Context flow" requirement): only when this
+ * analysis's context did not exist yet **before** this call
+ * (`analysis.context is None`, captured before `get_or_infer_context`
+ * runs — the true "very first call" signal, not `context_version`,
+ * which never changes again once augmented) and only when
+ * `Settings.llm_provider != "disabled"`, additionally calls the real
+ * provider through `context_inference.ai_context.
+ * run_context_inference`, combines an accepted AI-sourced
+ * `probable_domain` hypothesis with the deterministic hypothesis set
+ * via `combine_hypotheses`/`consolidate_dataset_context` (the same
+ * consolidation `CTX-02`'s own tests already proved), and persists the
+ * augmented context via `apply_ai_context_augmentation` — never
+ * incrementing `context_version` (this refines the first-inference
+ * snapshot, it is not a user edit). On rejection or provider error,
+ * the deterministic-only context from `get_or_infer_context` is
+ * returned unchanged — the same graceful-degradation contract used
+ * throughout this codebase. Every subsequent call for the same
+ * analysis (context already existed before this call) skips the AI
+ * call entirely and returns the already-cached context — a real
+ * provider is never called more than once per analysis by this route.
+ *
+ * Raises `ANALYSIS_NOT_FOUND` (404) for an unknown ID and
+ * `INVALID_ANALYSIS_STATE` (409) for a known but not-yet-`completed`
+ * analysis.
+ */
+export const getAnalysisContextApiV1AnalysesAnalysisIdContextGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisContextApiV1AnalysesAnalysisIdContextGetData, ThrowOnError>): RequestResult<GetAnalysisContextApiV1AnalysesAnalysisIdContextGetResponses, GetAnalysisContextApiV1AnalysesAnalysisIdContextGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisContextApiV1AnalysesAnalysisIdContextGetResponses, GetAnalysisContextApiV1AnalysesAnalysisIdContextGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/context', ...options });
+
+/**
+ * Put Analysis Context
+ *
+ * Replace one or more editable context field values
+ * (`API-02`, `UI-02` slice 2; `docs/api-specification.md` §9's
+ * `PUT .../context`, "requires resource version").
+ *
+ * Raises `ANALYSIS_NOT_FOUND`/`INVALID_ANALYSIS_STATE` (via
+ * `GET .../context`'s own semantics), `CONTEXT_VERSION_CONFLICT`
+ * (409) on a stale `expected_version`, and `INVALID_CONTEXT` (422)
+ * for an unknown field name or a non-editable role field.
+ */
+export const putAnalysisContextApiV1AnalysesAnalysisIdContextPut = <ThrowOnError extends boolean = false>(options: Options<PutAnalysisContextApiV1AnalysesAnalysisIdContextPutData, ThrowOnError>): RequestResult<PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponses, PutAnalysisContextApiV1AnalysesAnalysisIdContextPutErrors, ThrowOnError> => (options.client ?? client).put<PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponses, PutAnalysisContextApiV1AnalysesAnalysisIdContextPutErrors, ThrowOnError>({
+    url: '/api/v1/analyses/{analysis_id}/context',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Post Analysis Finalize
+ *
+ * Mark `analysis_id`'s context finalized (`API-02`, `UI-02` slice 2;
+ * `docs/api-specification.md` §9's `POST .../finalize`).
+ *
+ * Does not change `context`/`guided_questions`/`context_version` or
+ * trigger any AI call — matches `analysis.service.finalize_context`'s
+ * own documented behavior exactly (`docs/decision-log.md` D-037: the
+ * reachable enrichment capability is the already-shipped on-demand
+ * explanation endpoint, not a forced side effect of finalize itself).
+ *
+ * Raises `ANALYSIS_NOT_FOUND`/`INVALID_ANALYSIS_STATE` (via
+ * `GET .../context`'s own semantics) and `CONTEXT_VERSION_CONFLICT`
+ * (409) on a stale `expected_version`.
+ */
+export const postAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePost = <ThrowOnError extends boolean = false>(options: Options<PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostData, ThrowOnError>): RequestResult<PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostResponses, PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostErrors, ThrowOnError> => (options.client ?? client).post<PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostResponses, PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostErrors, ThrowOnError>({
+    url: '/api/v1/analyses/{analysis_id}/finalize',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Get Analysis Findings
  *
  * Return the findings list (`docs/api-specification.md` §10).
@@ -101,7 +183,8 @@ export const getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdE
  * Get Analysis Finding Explanation
  *
  * Return one finding's grounded explanation (`UI-02` slice 1,
- * `WP-063`; `docs/decision-log.md` D-037).
+ * `WP-063`; confirmed-context grounding added `UI-02` slice 2 revision,
+ * `WP-064` r2; `docs/decision-log.md` D-037).
  *
  * Always computes `AI-05`'s deterministic explanation first (no
  * provider call, always available — `docs/product-requirements.md`
@@ -113,6 +196,19 @@ export const getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdE
  * unchanged on rejection or provider error — the same graceful-
  * degradation contract `AI-05`'s own tests already proved, now applied
  * to a real HTTP response.
+ *
+ * When the analysis's context has been finalized (`Analysis.
+ * context_finalized`, via `POST .../finalize`), the confirmed
+ * `DatasetContext` is serialized into the AI envelope's
+ * `confirmed_context` field, grounding the explanation in confirmed
+ * business facts (domain, row grain, currency behavior, etc.) in
+ * addition to the finding's own evidence — D-037's "confirmed/
+ * finalized context available to the explanation/enrichment path"
+ * requirement. Deliberately gated on `context_finalized` rather than
+ * merely `context is not None`: this is what makes `POST .../finalize`
+ * a meaningful, observable action rather than a no-op flag flip.
+ * Before finalize, this route's behavior is unchanged from `WP-063`
+ * (evidence-grounded only).
  *
  * Same `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` semantics as the
  * sibling finding routes.
@@ -147,6 +243,38 @@ export const getAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingI
  * explicit HTTP error rather than a silently empty/null body.
  */
 export const getAnalysisProfileApiV1AnalysesAnalysisIdProfileGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData, ThrowOnError>): RequestResult<GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/profile', ...options });
+
+/**
+ * Get Analysis Questions
+ *
+ * Return `analysis_id`'s active guided questions (`API-02`, `UI-02`
+ * slice 2; `docs/api-specification.md` §9's `GET .../questions`).
+ *
+ * Same `ANALYSIS_NOT_FOUND`/`INVALID_ANALYSIS_STATE` semantics as
+ * `GET .../context`.
+ */
+export const getAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetData, ThrowOnError>): RequestResult<GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetResponses, GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetResponses, GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/questions', ...options });
+
+/**
+ * Post Analysis Question Answer
+ *
+ * Store an answer to one guided question (`API-02`, `UI-02` slice 2;
+ * `docs/api-specification.md` §9's "stores an answer and resulting
+ * context updates").
+ *
+ * Raises `ANALYSIS_NOT_FOUND`/`INVALID_ANALYSIS_STATE` (via
+ * `GET .../context`'s own semantics), `CONTEXT_VERSION_CONFLICT`
+ * (409) on a stale `expected_version`, and `QUESTION_NOT_FOUND` (404)
+ * for an unknown `question_id`.
+ */
+export const postAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPost = <ThrowOnError extends boolean = false>(options: Options<PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostData, ThrowOnError>): RequestResult<PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses, PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostErrors, ThrowOnError> => (options.client ?? client).post<PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses, PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostErrors, ThrowOnError>({
+    url: '/api/v1/analyses/{analysis_id}/questions/{question_id}/answer',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
 
 /**
  * Get Analysis Status
