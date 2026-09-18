@@ -2,6 +2,9 @@ import { http, HttpResponse } from 'msw'
 import type {
   AnalysisResource,
   AnalysisStatusResponse,
+  AnswerGuidedQuestionResponse,
+  ClarificationQuestionListResponse,
+  ContextResponse,
   DemoAnalysisResponse,
   FindingDetailResponse,
   FindingEvidenceListResponse,
@@ -211,6 +214,80 @@ export function makeFindingExplanationResponse(
   }
 }
 
+function makeContextFieldValue(
+  value: string | string[],
+  inferenceSource = 'calculated',
+) {
+  return {
+    value,
+    confidence: 0.7,
+    inference_source: inferenceSource,
+    confirmation_state: 'inferred',
+    evidence_ids: [],
+  }
+}
+
+export function makeContextResponse(
+  overrides: Partial<ContextResponse> = {},
+): ContextResponse {
+  return {
+    context_version: 1,
+    schema_version: '1',
+    probable_domain: makeContextFieldValue('Sales / order transactions'),
+    row_grain: makeContextFieldValue('One row per order_id'),
+    primary_entity: makeContextFieldValue('order'),
+    candidate_keys: makeContextFieldValue(['order_id']),
+    business_dates: makeContextFieldValue(['order_date']),
+    measure_roles: makeContextFieldValue(['quantity', 'unit_price']),
+    dimensions: makeContextFieldValue(['category', 'region']),
+    currency_behavior: makeContextFieldValue('', 'deterministic_fallback'),
+    expected_business_rules: makeContextFieldValue(
+      '',
+      'deterministic_fallback',
+    ),
+    ...overrides,
+  }
+}
+
+export function makeQuestionListResponse(
+  overrides: Partial<ClarificationQuestionListResponse> = {},
+): ClarificationQuestionListResponse {
+  const items = overrides.items ?? [
+    {
+      question_id: 'cq-currency_behavior-1',
+      context_field: 'currency_behavior',
+      concise_text: 'What currency are monetary values recorded in?',
+      explanation: 'Affects how monetary findings are interpreted.',
+      suggested_answers: ['USD', 'EUR'],
+      inferred_default: null,
+      affected_assumptions: ['Monetary value interpretation'],
+      free_text_allowed: true,
+      answered_state: 'unanswered',
+    },
+  ]
+  return { total_items: items.length, ...overrides, items }
+}
+
+export function makeAnswerGuidedQuestionResponse(
+  overrides: Partial<AnswerGuidedQuestionResponse> = {},
+): AnswerGuidedQuestionResponse {
+  return {
+    context: makeContextResponse({ context_version: 2 }),
+    question: {
+      ...makeQuestionListResponse().items[0],
+      answered_state: 'answered',
+    },
+    answer: {
+      question_id: 'cq-currency_behavior-1',
+      selected_answer_or_free_text: 'USD',
+      answered_timestamp: '2026-09-18T00:00:00Z',
+      resulting_context_changes: ['currency_behavior'],
+      provenance: 'user_confirmed',
+    },
+    ...overrides,
+  }
+}
+
 export function makeStatusResponse(
   overrides: Partial<AnalysisStatusResponse> = {},
 ): AnalysisStatusResponse {
@@ -293,6 +370,21 @@ export const handlers = [
       return HttpResponse.json(makeFindingExplanationResponse())
     },
   ),
+  http.get(`${BASE}/analyses/:analysisId/context`, () => {
+    return HttpResponse.json(makeContextResponse())
+  }),
+  http.put(`${BASE}/analyses/:analysisId/context`, () => {
+    return HttpResponse.json(makeContextResponse({ context_version: 2 }))
+  }),
+  http.get(`${BASE}/analyses/:analysisId/questions`, () => {
+    return HttpResponse.json(makeQuestionListResponse())
+  }),
+  http.post(`${BASE}/analyses/:analysisId/questions/:questionId/answer`, () => {
+    return HttpResponse.json(makeAnswerGuidedQuestionResponse())
+  }),
+  http.post(`${BASE}/analyses/:analysisId/finalize`, () => {
+    return HttpResponse.json(makeAnalysisResource(), { status: 202 })
+  }),
   http.get(
     `${BASE}/analyses/:analysisId/findings/:findingId/row-context`,
     () => {

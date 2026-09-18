@@ -147,6 +147,36 @@ export type AnalysisStatusResponse = {
 };
 
 /**
+ * AnswerGuidedQuestionRequest
+ *
+ * Request body for `POST .../questions/{question_id}/answer`
+ * (`UI-02` slice 2, `WP-064`).
+ */
+export type AnswerGuidedQuestionRequest = {
+    /**
+     * Answer Text
+     */
+    answer_text: string;
+    /**
+     * Expected Version
+     */
+    expected_version: number;
+};
+
+/**
+ * AnswerGuidedQuestionResponse
+ *
+ * Body for `POST /analyses/{analysis_id}/questions/{question_id}/answer`
+ * (`UI-02` slice 2, `WP-064`; `docs/api-specification.md` §9's "stores
+ * an answer and resulting context updates").
+ */
+export type AnswerGuidedQuestionResponse = {
+    answer: ClarificationAnswerResponse;
+    context: ContextResponse;
+    question: ClarificationQuestionResponse;
+};
+
+/**
  * Body_post_analysis_upload_api_v1_analyses_post
  */
 export type BodyPostAnalysisUploadApiV1AnalysesPost = {
@@ -154,6 +184,97 @@ export type BodyPostAnalysisUploadApiV1AnalysesPost = {
      * File
      */
     file: Blob | File;
+};
+
+/**
+ * ClarificationAnswerResponse
+ *
+ * Mirrors `domain.clarification.ClarificationAnswer` (`UI-02`
+ * slice 2, `WP-064`).
+ */
+export type ClarificationAnswerResponse = {
+    /**
+     * Answered Timestamp
+     */
+    answered_timestamp: string;
+    /**
+     * Provenance
+     */
+    provenance: string;
+    /**
+     * Question Id
+     */
+    question_id: string;
+    /**
+     * Resulting Context Changes
+     */
+    resulting_context_changes: Array<string>;
+    /**
+     * Selected Answer Or Free Text
+     */
+    selected_answer_or_free_text: string;
+};
+
+/**
+ * ClarificationQuestionListResponse
+ *
+ * Body for `GET /analyses/{analysis_id}/questions` (`UI-02`
+ * slice 2, `WP-064`).
+ */
+export type ClarificationQuestionListResponse = {
+    /**
+     * Items
+     */
+    items: Array<ClarificationQuestionResponse>;
+    /**
+     * Total Items
+     */
+    total_items: number;
+};
+
+/**
+ * ClarificationQuestionResponse
+ *
+ * Mirrors `domain.clarification.ClarificationQuestion` (`UI-02`
+ * slice 2, `WP-064`).
+ */
+export type ClarificationQuestionResponse = {
+    /**
+     * Affected Assumptions
+     */
+    affected_assumptions: Array<string>;
+    /**
+     * Answered State
+     */
+    answered_state: string;
+    /**
+     * Concise Text
+     */
+    concise_text: string;
+    /**
+     * Context Field
+     */
+    context_field: string;
+    /**
+     * Explanation
+     */
+    explanation: string;
+    /**
+     * Free Text Allowed
+     */
+    free_text_allowed: boolean;
+    /**
+     * Inferred Default
+     */
+    inferred_default: string | null;
+    /**
+     * Question Id
+     */
+    question_id: string;
+    /**
+     * Suggested Answers
+     */
+    suggested_answers: Array<string>;
 };
 
 /**
@@ -212,6 +333,92 @@ export type ColumnReferenceResponse = {
 };
 
 /**
+ * ConfirmContextFieldsRequest
+ *
+ * Request body for `PUT /analyses/{analysis_id}/context` (`UI-02`
+ * slice 2, `WP-064`). `edits` keys are `ContextField` string values
+ * (e.g. `"probable_domain"`); an unknown key or a role-field key both
+ * resolve to `INVALID_CONTEXT` (422).
+ */
+export type ConfirmContextFieldsRequest = {
+    /**
+     * Edits
+     */
+    edits: {
+        [key: string]: string;
+    };
+    /**
+     * Expected Version
+     */
+    expected_version: number;
+};
+
+/**
+ * ContextFieldValueResponse
+ *
+ * Mirrors `domain.context.ContextFieldValue` (`UI-02` slice 2,
+ * `WP-064`). `value` is a plain `str` for the five single-value
+ * `ContextField`s and a `list[str]` of column original names for the
+ * four column-role fields — mirroring the domain type's own disclosed
+ * open-typed shape exactly (see its docstring).
+ */
+export type ContextFieldValueResponse = {
+    /**
+     * Confidence
+     */
+    confidence: number;
+    /**
+     * Confirmation State
+     */
+    confirmation_state: string;
+    /**
+     * Evidence Ids
+     */
+    evidence_ids: Array<string>;
+    /**
+     * Inference Source
+     */
+    inference_source: string;
+    /**
+     * Value
+     */
+    value: string | Array<string>;
+};
+
+/**
+ * ContextResponse
+ *
+ * Body for `GET`/`PUT /analyses/{analysis_id}/context` (`UI-02`
+ * slice 2, `WP-064`; `docs/api-specification.md` §9).
+ *
+ * `context_version` is not part of `domain.context.DatasetContext`
+ * itself (`Analysis.context_version` is separate) — included here as
+ * a disclosed, minimal API-shape addition the client needs for the
+ * optimistic-concurrency contract §9 already specifies ("requires
+ * resource version"). Every other field mirrors `DatasetContext`
+ * exactly.
+ */
+export type ContextResponse = {
+    business_dates: ContextFieldValueResponse;
+    candidate_keys: ContextFieldValueResponse;
+    /**
+     * Context Version
+     */
+    context_version: number;
+    currency_behavior: ContextFieldValueResponse;
+    dimensions: ContextFieldValueResponse;
+    expected_business_rules: ContextFieldValueResponse;
+    measure_roles: ContextFieldValueResponse;
+    primary_entity: ContextFieldValueResponse;
+    probable_domain: ContextFieldValueResponse;
+    row_grain: ContextFieldValueResponse;
+    /**
+     * Schema Version
+     */
+    schema_version: string;
+};
+
+/**
  * DatasetSummaryResponse
  *
  * A bounded summary of `domain.parsing.Dataset` — omits
@@ -263,6 +470,19 @@ export type DemoAnalysisResponse = {
      * Status Url
      */
     status_url: string;
+};
+
+/**
+ * FinalizeContextRequest
+ *
+ * Request body for `POST /analyses/{analysis_id}/finalize` (`UI-02`
+ * slice 2, `WP-064`).
+ */
+export type FinalizeContextRequest = {
+    /**
+     * Expected Version
+     */
+    expected_version: number;
 };
 
 /**
@@ -935,6 +1155,96 @@ export type PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses = {
 
 export type PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponse = PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses[keyof PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses];
 
+export type GetAnalysisContextApiV1AnalysesAnalysisIdContextGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/context';
+};
+
+export type GetAnalysisContextApiV1AnalysesAnalysisIdContextGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisContextApiV1AnalysesAnalysisIdContextGetError = GetAnalysisContextApiV1AnalysesAnalysisIdContextGetErrors[keyof GetAnalysisContextApiV1AnalysesAnalysisIdContextGetErrors];
+
+export type GetAnalysisContextApiV1AnalysesAnalysisIdContextGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ContextResponse;
+};
+
+export type GetAnalysisContextApiV1AnalysesAnalysisIdContextGetResponse = GetAnalysisContextApiV1AnalysesAnalysisIdContextGetResponses[keyof GetAnalysisContextApiV1AnalysesAnalysisIdContextGetResponses];
+
+export type PutAnalysisContextApiV1AnalysesAnalysisIdContextPutData = {
+    body: ConfirmContextFieldsRequest;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/context';
+};
+
+export type PutAnalysisContextApiV1AnalysesAnalysisIdContextPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutAnalysisContextApiV1AnalysesAnalysisIdContextPutError = PutAnalysisContextApiV1AnalysesAnalysisIdContextPutErrors[keyof PutAnalysisContextApiV1AnalysesAnalysisIdContextPutErrors];
+
+export type PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: ContextResponse;
+};
+
+export type PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponse = PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponses[keyof PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponses];
+
+export type PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostData = {
+    body: FinalizeContextRequest;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/finalize';
+};
+
+export type PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostError = PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostErrors[keyof PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostErrors];
+
+export type PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostResponses = {
+    /**
+     * Successful Response
+     */
+    202: AnalysisResource;
+};
+
+export type PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostResponse = PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostResponses[keyof PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostResponses];
+
 export type GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetData = {
     body?: never;
     path: {
@@ -1143,6 +1453,70 @@ export type GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses = {
 };
 
 export type GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponse = GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses[keyof GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses];
+
+export type GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/questions';
+};
+
+export type GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetError = GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetErrors[keyof GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetErrors];
+
+export type GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ClarificationQuestionListResponse;
+};
+
+export type GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetResponse = GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetResponses[keyof GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetResponses];
+
+export type PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostData = {
+    body: AnswerGuidedQuestionRequest;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Question Id
+         */
+        question_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/questions/{question_id}/answer';
+};
+
+export type PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostError = PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostErrors[keyof PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostErrors];
+
+export type PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: AnswerGuidedQuestionResponse;
+};
+
+export type PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponse = PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses[keyof PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses];
 
 export type GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetData = {
     body?: never;

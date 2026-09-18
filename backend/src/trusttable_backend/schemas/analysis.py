@@ -380,3 +380,112 @@ class FindingExplanationResponse(BaseModel):
     model_identifier: str | None
     referenced_evidence_ids: list[str]
     referenced_columns: list[ColumnReferenceResponse]
+
+
+class ContextFieldValueResponse(BaseModel):
+    """Mirrors `domain.context.ContextFieldValue` (`UI-02` slice 2,
+    `WP-064`). `value` is a plain `str` for the five single-value
+    `ContextField`s and a `list[str]` of column original names for the
+    four column-role fields — mirroring the domain type's own disclosed
+    open-typed shape exactly (see its docstring).
+    """
+
+    value: str | list[str]
+    confidence: float
+    inference_source: str
+    confirmation_state: str
+    evidence_ids: list[str]
+
+
+class ContextResponse(BaseModel):
+    """Body for `GET`/`PUT /analyses/{analysis_id}/context` (`UI-02`
+    slice 2, `WP-064`; `docs/api-specification.md` §9).
+
+    `context_version` is not part of `domain.context.DatasetContext`
+    itself (`Analysis.context_version` is separate) — included here as
+    a disclosed, minimal API-shape addition the client needs for the
+    optimistic-concurrency contract §9 already specifies ("requires
+    resource version"). Every other field mirrors `DatasetContext`
+    exactly.
+    """
+
+    context_version: int
+    schema_version: str
+    probable_domain: ContextFieldValueResponse
+    row_grain: ContextFieldValueResponse
+    primary_entity: ContextFieldValueResponse
+    candidate_keys: ContextFieldValueResponse
+    business_dates: ContextFieldValueResponse
+    measure_roles: ContextFieldValueResponse
+    dimensions: ContextFieldValueResponse
+    currency_behavior: ContextFieldValueResponse
+    expected_business_rules: ContextFieldValueResponse
+
+
+class ClarificationQuestionResponse(BaseModel):
+    """Mirrors `domain.clarification.ClarificationQuestion` (`UI-02`
+    slice 2, `WP-064`)."""
+
+    question_id: str
+    context_field: str
+    concise_text: str
+    explanation: str
+    suggested_answers: list[str]
+    inferred_default: str | None
+    affected_assumptions: list[str]
+    free_text_allowed: bool
+    answered_state: str
+
+
+class ClarificationQuestionListResponse(BaseModel):
+    """Body for `GET /analyses/{analysis_id}/questions` (`UI-02`
+    slice 2, `WP-064`)."""
+
+    items: list[ClarificationQuestionResponse]
+    total_items: int
+
+
+class ClarificationAnswerResponse(BaseModel):
+    """Mirrors `domain.clarification.ClarificationAnswer` (`UI-02`
+    slice 2, `WP-064`)."""
+
+    question_id: str
+    selected_answer_or_free_text: str
+    answered_timestamp: datetime
+    resulting_context_changes: list[str]
+    provenance: str
+
+
+class AnswerGuidedQuestionResponse(BaseModel):
+    """Body for `POST /analyses/{analysis_id}/questions/{question_id}/answer`
+    (`UI-02` slice 2, `WP-064`; `docs/api-specification.md` §9's "stores
+    an answer and resulting context updates")."""
+
+    context: ContextResponse
+    question: ClarificationQuestionResponse
+    answer: ClarificationAnswerResponse
+
+
+class ConfirmContextFieldsRequest(BaseModel):
+    """Request body for `PUT /analyses/{analysis_id}/context` (`UI-02`
+    slice 2, `WP-064`). `edits` keys are `ContextField` string values
+    (e.g. `"probable_domain"`); an unknown key or a role-field key both
+    resolve to `INVALID_CONTEXT` (422)."""
+
+    edits: dict[str, str]
+    expected_version: int
+
+
+class AnswerGuidedQuestionRequest(BaseModel):
+    """Request body for `POST .../questions/{question_id}/answer`
+    (`UI-02` slice 2, `WP-064`)."""
+
+    answer_text: str
+    expected_version: int
+
+
+class FinalizeContextRequest(BaseModel):
+    """Request body for `POST /analyses/{analysis_id}/finalize` (`UI-02`
+    slice 2, `WP-064`)."""
+
+    expected_version: int

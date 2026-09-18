@@ -707,6 +707,250 @@ def test_get_analysis_finding_explanation_out_of_range_id_returns_structured_404
     assert response.json()["error"]["code"] == "FINDING_NOT_FOUND"
 
 
+# --- GET/PUT /analyses/{id}/context, /questions, .../answer, /finalize
+# --- (`API-02`, `UI-02` slice 2, `WP-064`) --------------------------------
+
+_CONTEXT_FIELD_KEYS = {
+    "value",
+    "confidence",
+    "inference_source",
+    "confirmation_state",
+    "evidence_ids",
+}
+_CONTEXT_RESPONSE_KEYS = {
+    "context_version",
+    "schema_version",
+    "probable_domain",
+    "row_grain",
+    "primary_entity",
+    "candidate_keys",
+    "business_dates",
+    "measure_roles",
+    "dimensions",
+    "currency_behavior",
+    "expected_business_rules",
+}
+
+
+def test_get_analysis_context_shape(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/context")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body.keys()) == _CONTEXT_RESPONSE_KEYS
+    assert body["context_version"] == 1
+    assert set(body["probable_domain"].keys()) == _CONTEXT_FIELD_KEYS
+    assert isinstance(body["candidate_keys"]["value"], list)
+    assert isinstance(body["probable_domain"]["value"], str)
+
+
+def test_get_analysis_context_unknown_analysis_returns_structured_404(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/v1/analyses/does-not-exist/context")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
+
+
+def test_get_analysis_context_before_completion_returns_409(client: TestClient) -> None:
+    """White-box: only a real `queued` analysis is not yet ready."""
+    analysis_id = _create_queued_analysis_id(client)
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/context")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "INVALID_ANALYSIS_STATE"
+
+
+def test_put_analysis_context_edits_field_and_increments_version(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+
+    response = client.put(
+        f"/api/v1/analyses/{analysis_id}/context",
+        json={"edits": {"row_grain": "One row per order"}, "expected_version": 1},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["context_version"] == 2
+    assert body["row_grain"]["value"] == "One row per order"
+    assert body["row_grain"]["inference_source"] in {"user_confirmed", "user_corrected"}
+    assert body["row_grain"]["confirmation_state"] in {"confirmed", "corrected"}
+
+
+def test_put_analysis_context_version_conflict_returns_409(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+
+    response = client.put(
+        f"/api/v1/analyses/{analysis_id}/context",
+        json={"edits": {"row_grain": "One row per order"}, "expected_version": 99},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "CONTEXT_VERSION_CONFLICT"
+
+
+def test_put_analysis_context_role_field_returns_422(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+
+    response = client.put(
+        f"/api/v1/analyses/{analysis_id}/context",
+        json={"edits": {"candidate_keys": "order_id"}, "expected_version": 1},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_CONTEXT"
+
+
+def test_put_analysis_context_unknown_field_returns_422(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+
+    response = client.put(
+        f"/api/v1/analyses/{analysis_id}/context",
+        json={"edits": {"not_a_real_field": "x"}, "expected_version": 1},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_CONTEXT"
+
+
+def test_get_analysis_questions_returns_known_demo_questions(client: TestClient) -> None:
+    """Matches `CTX-03`/`API-02`'s own already-established real-demo-
+    dataset fact: only `currency_behavior`/`expected_business_rules`
+    remain unresolved."""
+    created = _create_demo_analysis(client)["analysis"]
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/questions")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_items"] == 2
+    fields = {item["context_field"] for item in body["items"]}
+    assert fields == {"currency_behavior", "expected_business_rules"}
+    item = body["items"][0]
+    assert set(item.keys()) == {
+        "question_id",
+        "context_field",
+        "concise_text",
+        "explanation",
+        "suggested_answers",
+        "inferred_default",
+        "affected_assumptions",
+        "free_text_allowed",
+        "answered_state",
+    }
+    assert item["answered_state"] == "unanswered"
+
+
+def test_get_analysis_questions_unknown_analysis_returns_structured_404(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/v1/analyses/does-not-exist/questions")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
+
+
+def test_post_analysis_question_answer_marks_answered_and_updates_context(
+    client: TestClient,
+) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+    questions = client.get(f"/api/v1/analyses/{analysis_id}/questions").json()["items"]
+    question_id = questions[0]["question_id"]
+    context_field = questions[0]["context_field"]
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/questions/{question_id}/answer",
+        json={"answer_text": "A custom business answer", "expected_version": 1},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body.keys()) == {"context", "question", "answer"}
+    assert body["question"]["question_id"] == question_id
+    assert body["question"]["answered_state"] == "answered"
+    assert body["answer"]["question_id"] == question_id
+    assert body["answer"]["selected_answer_or_free_text"] == "A custom business answer"
+    assert body["answer"]["provenance"] in {"user_confirmed", "user_corrected"}
+    assert body["context"]["context_version"] == 2
+    assert body["context"][context_field]["value"] == "A custom business answer"
+
+
+def test_post_analysis_question_answer_unknown_question_returns_404(
+    client: TestClient,
+) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/questions/does-not-exist/answer",
+        json={"answer_text": "x", "expected_version": 1},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "QUESTION_NOT_FOUND"
+
+
+def test_post_analysis_question_answer_version_conflict_returns_409(
+    client: TestClient,
+) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+    question_id = client.get(f"/api/v1/analyses/{analysis_id}/questions").json()["items"][0][
+        "question_id"
+    ]
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/questions/{question_id}/answer",
+        json={"answer_text": "x", "expected_version": 99},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "CONTEXT_VERSION_CONFLICT"
+
+
+def test_post_analysis_finalize_returns_202_and_updated_resource(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+    client.get(f"/api/v1/analyses/{analysis_id}/context")  # ensure context inferred (version 1)
+
+    response = client.post(f"/api/v1/analyses/{analysis_id}/finalize", json={"expected_version": 1})
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["analysis_id"] == analysis_id
+
+
+def test_post_analysis_finalize_version_conflict_returns_409(client: TestClient) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+    client.get(f"/api/v1/analyses/{analysis_id}/context")
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/finalize", json={"expected_version": 99}
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "CONTEXT_VERSION_CONFLICT"
+
+
+def test_post_analysis_finalize_unknown_analysis_returns_structured_404(
+    client: TestClient,
+) -> None:
+    response = client.post("/api/v1/analyses/does-not-exist/finalize", json={"expected_version": 1})
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
+
+
 # --- POST /analyses/{id}/cancel ------------------------------------------
 
 
