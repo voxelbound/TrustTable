@@ -663,12 +663,37 @@ export type FindingEvidenceListResponse = {
  * permanently-`False` raw-sample-exposure posture — never this
  * per-request enrichment call. See `docs/architecture.md` §6/§7 and
  * `docs/decision-log.md` D-037/D-038.
+ *
+ * `evidence_sent_to_model`/`confirmed_context_sent_to_model`
+ * (`WP-065` r4 — closes a real semantic-review `FAIL`: `ai_call_status`
+ * alone discloses axes 1-3/6 of D-038's six-axis model but never
+ * axis 5, "finding/evidence/context metadata exposure") disclose
+ * exactly what bounded metadata this specific request actually sent
+ * to a model, independent of whether that attempt was accepted.
+ * `evidence_sent_to_model` is `True` whenever `ai_call_status` is any
+ * `attempted_*` value (this finding's own captured `Evidence` is
+ * always the envelope's `computed_evidence` on every attempt).
+ * `confirmed_context_sent_to_model` is `True` only when an attempt was
+ * made *and* `Analysis.context_finalized` was already `True` at call
+ * time (the same gate `confirmed_context` itself uses). Both are
+ * `False` whenever `ai_call_status == "not_configured"`. Neither ever
+ * reflects raw dataset sample content — only this route's own bounded
+ * `Evidence`/`DatasetContext` inputs, matching `AI-05`/`CTX-02`'s
+ * existing zero-raw-sample-sending design.
  */
 export type FindingExplanationResponse = {
     /**
      * Ai Call Status
      */
     ai_call_status: string;
+    /**
+     * Confirmed Context Sent To Model
+     */
+    confirmed_context_sent_to_model: boolean;
+    /**
+     * Evidence Sent To Model
+     */
+    evidence_sent_to_model: boolean;
     /**
      * Finding Id
      */

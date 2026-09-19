@@ -101,7 +101,7 @@ export function PromptInjectionWarning({
         <dd>
           {securityExposure.model_provider_enabled
             ? 'A configured AI model'
-            : 'No AI model is configured for this exposure path'}
+            : 'Not applicable for this exposure path'}
         </dd>
         <dt className="font-medium">
           This flagged content&apos;s own rejected-output status
