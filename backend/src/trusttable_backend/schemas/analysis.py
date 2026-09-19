@@ -25,7 +25,7 @@ and avoids relying on Pydantic's nested-attribute-inference behavior.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -369,17 +369,82 @@ class RowContextResponse(BaseModel):
     rows: list[RowContextEntryResponse]
 
 
+class BusinessImpactStatementResponse(BaseModel):
+    """One possible business implication of a finding (`AI-08`), mirroring
+    `domain.explanation.BusinessImpactStatement`.
+
+    `basis` says what the statement rests on and therefore how a client
+    must present it: `"evidence"` (follows from the finding's computed
+    evidence), `"confirmed_context"` (relies on context the user confirmed
+    or corrected) or `"assumption"` (only a possible consequence — always
+    shown together with its `assumption`, never as a fact).
+    """
+
+    statement: str
+    basis: Literal["evidence", "confirmed_context", "assumption"]
+    evidence_ids: list[str]
+    context_fields: list[str]
+    assumption: str | None
+
+
+class ProposedValidationRuleResponse(BaseModel):
+    """A validation rule *proposal* (`AI-08`), mirroring
+    `domain.explanation.ProposedValidationRule`.
+
+    `status` is always `"proposed"`: nothing in the application runs,
+    enforces or exports this rule (the rule engine is `RULE-01`, a later
+    item), so a client must never present it as active or authoritative.
+    `rule_type` is one of the `docs/product-requirements.md` §13 types.
+    """
+
+    rule_type: str
+    columns: list[ColumnReferenceResponse]
+    description: str
+    status: Literal["proposed"]
+
+
+class AiProvenanceResponse(BaseModel):
+    """Human-readable provenance of an accepted AI interpretation
+    (`AI-08`), derived by `ai_provider.display`.
+
+    Only display labels and a sanitized identifier: never a filesystem
+    path (the raw configured model value never leaves the backend).
+    `model_identifier` is the final path segment only, bounded, kept for
+    diagnostics.
+    """
+
+    deployment_label: str
+    runtime_label: str
+    model_label: str | None
+    quantization: str | None
+    model_identifier: str | None
+
+
 class FindingExplanationResponse(BaseModel):
     """Body for `GET /analyses/{analysis_id}/findings/{finding_id}/explanation`
-    (`UI-02` slice 1, `WP-063`). Mirrors `domain.explanation.
-    FindingExplanation` exactly, plus `ai_call_status` (`WP-065`, defect
-    fix). `provenance` is the `Provenance` enum's string value
+    (`UI-02` slice 1, `WP-063`; four-section analysis `AI-08`). Mirrors
+    `domain.explanation.FindingExplanation` exactly, plus `ai_call_status`
+    (`WP-065`, defect fix) and the human-readable `ai_provenance`.
+    `provenance` is the `Provenance` enum's string value
     (`"deterministic_fallback"` or `"ai_interpretation"` only —
     `FindingExplanation`'s own closed set, `AI-05`).
     `provider_name`/`model_identifier` are both `null` for a
     deterministic-fallback explanation (no provider was used — the
     default, AI-disabled behavior) and populated for an accepted
-    AI-interpretation explanation.
+    AI-interpretation explanation. **`AI-08`:** `model_identifier` is the
+    *sanitized* identifier (final path segment only); the raw configured
+    value never leaves the backend, and `ai_provenance` carries the labels
+    a UI should show.
+
+    **`AI-08` — the four sections.** `narrative` (the explanation),
+    `business_impact`, `remediation` and `validation_rule` are always
+    present. When `provenance == "ai_interpretation"` they come from one
+    validated, structurally constrained AI response; otherwise from
+    TrustTable's deterministic built-in guidance, so they are useful with
+    AI disabled, rejected or failing. `business_impact` statements carry
+    their `basis`; `remediation` is advisory only (TrustTable never
+    changes an uploaded file); `validation_rule.status` is always
+    `"proposed"`.
 
     `ai_call_status` (`WP-065`) discloses this specific request's own AI
     call lifecycle independently of `provenance`/`provider_name`, closing
@@ -431,11 +496,15 @@ class FindingExplanationResponse(BaseModel):
     provenance: str
     provider_name: str | None
     model_identifier: str | None
+    ai_provenance: AiProvenanceResponse | None
     ai_call_status: str
     evidence_sent_to_model: bool
     confirmed_context_sent_to_model: bool
     referenced_evidence_ids: list[str]
     referenced_columns: list[ColumnReferenceResponse]
+    business_impact: list[BusinessImpactStatementResponse]
+    remediation: list[str]
+    validation_rule: ProposedValidationRuleResponse | None
 
 
 class ContextFieldValueResponse(BaseModel):

@@ -1,13 +1,15 @@
 # Local development
 
-TrustTable is currently at **v0.1 — Deterministic vertical slice**
-(`docs/release-plan.md`): a real, working local application. Upload a CSV
-or run the bundled synthetic sales demo and get deterministic findings,
-evidence, and a trust assessment through the running UI or API — no
-LLM/AI required (v0.1 has no AI path at all; local AI beta is v0.2, not
-yet wired in). This document covers running the backend and frontend
-natively, running the full stack with Docker Compose, exercising the
-demo and CSV-upload flows, and running the test suites.
+TrustTable is a real, working local application. Upload a CSV or run the
+bundled synthetic sales demo and get deterministic findings, evidence, and
+a trust assessment through the running UI or API — no LLM/AI required.
+Optionally (`v0.2 — Local AI beta`, in progress) a local `llama.cpp` model
+adds an AI-assisted analysis of each finding, always validated and never
+authoritative; see [`docs/installation-linux.md`](installation-linux.md)
+for the Linux install and local-AI setup. This document covers running the
+backend and frontend natively, running the full stack with Docker Compose,
+exercising the demo and CSV-upload flows, a developer-oriented summary of
+the local AI runtime, and running the test suites.
 
 ## Prerequisites
 
@@ -207,17 +209,20 @@ image scanning are `SEC-01` scope, not `REL-01`.
 
 ## Running a local AI runtime (llama.cpp, baseline profile)
 
-As of `AI-03`, TrustTable includes a real AI provider
-(`LlamaCppProvider`, `backend/src/trusttable_backend/ai_provider/
-llama_cpp.py`) for `llama.cpp`'s `llama-server`, selectable via
-`LLM_PROVIDER=llama_cpp` (see "LLM provider" in
-[`docs/configuration.md`](configuration.md)). **No product route or
-analysis feature calls it yet** (`CTX-01`/`CTX-02`/`CTX-03`, later
-backlog items) — this section is a hands-on setup guide for running
-and verifying the runtime itself ahead of that wiring, useful both for
-manual verification and for developing those later features. **No paid
-account, hosted API key, or inference API is required** — everything
-below runs entirely on your own machine.
+TrustTable includes a real AI provider (`LlamaCppProvider`,
+`backend/src/trusttable_backend/ai_provider/llama_cpp.py`) for
+`llama.cpp`'s `llama-server`, selectable via `LLM_PROVIDER=llama_cpp` (see
+"LLM provider" in [`docs/configuration.md`](configuration.md)). The API
+routes call it — never the deterministic analysis pipeline — for the
+grounded analysis of a finding (`GET .../findings/{finding_id}/explanation`:
+explanation, possible business impact, remediation and a proposed
+validation rule) and for optional context inference. With `LLM_PROVIDER`
+unset (`disabled`) none of this contacts any model. **No paid account,
+hosted API key, or inference API is required** — everything below runs
+entirely on your own machine. The complete Linux walk-through, including
+running without AI, provisioning the model file and verification, is in
+[`docs/installation-linux.md`](installation-linux.md); this section is the
+developer summary.
 
 ### 1. Install `llama.cpp`'s `llama-server`
 
@@ -285,8 +290,9 @@ curl -s http://127.0.0.1:8081/health
 curl -s http://127.0.0.1:8081/v1/models
 ```
 
-The second command's response includes the exact model identifier
-`llama-server` reports — you will need it in the next step.
+The second command's response includes the model identifier
+`llama-server` reports (useful for choosing a readable `LLM_MODEL` name in
+the next step; `llama-server` serves the one model it was started with).
 
 ### 4. Point TrustTable at it
 
@@ -297,8 +303,12 @@ variables — see "How configuration is loaded" in
 ```sh
 LLM_PROVIDER=llama_cpp
 LLM_BASE_URL=http://127.0.0.1:8081
-LLM_MODEL=<the exact model identifier llama-server reported above>
+LLM_MODEL=Qwen3.5-4B-Q4_K_M
 ```
+
+`LLM_MODEL` is a model name; only a label derived from it (for example
+"Qwen3.5 4B") and a sanitized final path segment are ever shown or
+returned — never a file path.
 
 From inside the Docker Compose stack, use
 `http://host.docker.internal:8081` (the dedicated `llama-server` port
@@ -307,10 +317,16 @@ default port, and not TrustTable's own frontend port `8080`) for
 `LLM_BASE_URL` instead, since the backend container cannot reach
 `127.0.0.1` on the host directly.
 
-`Settings.llm_provider` defaults to `disabled`; setting it to
-`llama_cpp` only activates the provider class itself. No backend route
-or analysis feature currently calls it, so this is preparatory setup,
-not yet an end-to-end AI-assisted analysis flow.
+`Settings.llm_provider` defaults to `disabled`. With `llama_cpp`, open a
+finding in the UI (or call its `.../explanation` route): the response's
+`ai_call_status` says whether the model was called and its answer
+accepted, and `ai_provenance` shows the human-readable model identity.
+On a CPU-only machine also raise `LLM_TIMEOUT_SECONDS` (the structured
+analysis is a longer answer than earlier calls). From a Docker Compose
+backend on Linux, `docker-compose.yml` maps `host.docker.internal` to the
+host gateway; `llama-server` must then be reachable from the Docker
+bridge (see `docs/installation-linux.md` §3.3 for the bind-address and
+firewall guidance).
 
 ### What this does not cover
 
@@ -319,8 +335,8 @@ not yet an end-to-end AI-assisted analysis flow.
   prerequisite threat-model update and that feature both exist.
 - The accelerated/GPU hardware-tier default — explicitly deferred
   (D-035), not evaluated by this project.
-- Any product feature that actually calls this provider during an
-  analysis — that begins with `CTX-01`.
+- A GitHub/GHCR-only install (no PyPI, npm or base-image access) — not
+  supported yet; a `v0.2` packaging (`REL-02`) acceptance requirement.
 
 ## Running the tests
 

@@ -70,12 +70,12 @@ are present, correctly typed, and bounded from day one.
 |---|---|---|---|
 | `LLM_PROVIDER` | enum: `disabled` \| `mock` \| `llama_cpp` | `disabled` | Selects the active AI provider (`AI-01`/`AI-02`/`AI-03`). `llama_cpp` requires `LLM_BASE_URL`/`LLM_MODEL` to point at a running `llama-server` instance. |
 | `LLM_BASE_URL` | non-empty string (potentially sensitive) | `http://host.docker.internal:8081` | The `llama-server` (`llama.cpp`) endpoint `AI-03`'s provider connects to when `LLM_PROVIDER=llama_cpp`. `8081` is a dedicated port distinct from TrustTable's own frontend port (`8080`); `llama-server` is run with `--no-webui` in the documented/supported runtime profile (`docs/decision-log.md` D-036, `docs/local-development.md`). |
-| `LLM_MODEL` | string (unconstrained, default empty) | `""` (empty) | The exact model identifier `AI-03`'s provider requests — set this to the identifier your `llama-server` instance reports for the baseline-profile model (Qwen3.5-4B-Q4_K_M, `D-034`). |
-| `LLM_TEMPERATURE` | float, `0`–`2` | `0` | Will configure model sampling temperature once a provider calls a model. |
-| `LLM_CONTEXT_WINDOW` | positive integer | `8192` | Will bound the model context window once a provider calls a model. |
-| `LLM_TIMEOUT_SECONDS` | positive integer | `120` | Will bound a single model call's timeout once a provider calls a model. |
-| `LLM_SEND_SAMPLE_VALUES` | boolean | `false` | Will gate whether sample dataset values may ever be sent to a model, once that path exists (`CTX-02`). Off by default. |
-| `LLM_MAX_SAMPLE_VALUES` | non-negative integer | `10` | Will bound how many sample values may be sent if `LLM_SEND_SAMPLE_VALUES` is enabled. |
+| `LLM_MODEL` | string (unconstrained, default empty) | `""` (empty) | The model identifier `AI-03`'s provider sends as the request's `model` field — set it to a model **name** such as the baseline-profile model `Qwen3.5-4B-Q4_K_M` (`D-034`). It may also be a file path or repository id; that works, but the backend never returns it to a client: API responses and the UI show only a sanitized last path segment plus a derived label such as "Local AI · llama.cpp · Qwen3.5 4B" (`AI-08`, `docs/decision-log.md` D-040). A `llama-server` serves the single model it was started with and does not require this to match. |
+| `LLM_TEMPERATURE` | float, `0`–`2` | `0` | Validated at startup. **Not yet applied:** the API routes construct the provider with its own default temperature (`0.0`); wiring this setting through is not part of `AI-08`. |
+| `LLM_CONTEXT_WINDOW` | positive integer | `8192` | Validated at startup. **Not applied by TrustTable:** the context window is a `llama-server` start-up flag (`--ctx-size`, `docs/installation-linux.md`). |
+| `LLM_TIMEOUT_SECONDS` | positive integer | `120` | The timeout of one model call. The structured finding analysis (`AI-08`) asks for a longer answer than earlier calls; on a CPU-only machine raise this (for example `300`) if Finding Detail reports that an AI attempt could not complete. |
+| `LLM_SEND_SAMPLE_VALUES` | boolean | `false` | Will gate whether sample dataset values may ever be sent to a model. No route reads it today: no request sends dataset samples (`docs/decision-log.md` D-040). Off by default. |
+| `LLM_MAX_SAMPLE_VALUES` | non-negative integer | `10` | Would bound how many sample values may be sent if `LLM_SEND_SAMPLE_VALUES` were enabled; unused while no request sends samples. |
 
 ## Security
 

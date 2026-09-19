@@ -13,7 +13,10 @@ It never contacts a real model; `complete()` returns:
    may attempt to follow the injection"), which `ai_boundary.validation.
    validate_model_output` is then proven to reject;
 2. a caller-supplied static `raw_output`, if given;
-3. otherwise, `default_mock_raw_output(request)` — a minimal,
+3. otherwise, when the request names a structured `OutputContract`
+   (`AI-08`) that supplies a `mock_output_factory`, that factory's
+   schema-valid, grounded output for the request's envelope;
+4. otherwise, `default_mock_raw_output(request)` — a minimal,
    schema-valid response guaranteed to be **accepted** by
    `validate_model_output` regardless of the request's contents.
 
@@ -92,10 +95,16 @@ class MockProvider:
         )
 
     def complete(self, request: ProviderRequest) -> ProviderResponse:
+        contract = request.output_contract
         if self._response_factory is not None:
             raw_output = self._response_factory(request)
         elif self._raw_output is not None:
             raw_output = self._raw_output
+        elif contract is not None and contract.mock_output_factory is not None:
+            # `AI-08`: a request that names a structured output contract gets
+            # that contract's own schema-valid, grounded default, built only
+            # from what the request's envelope carries.
+            raw_output = contract.mock_output_factory(request.envelope)
         else:
             raw_output = default_mock_raw_output(request)
         return ProviderResponse(

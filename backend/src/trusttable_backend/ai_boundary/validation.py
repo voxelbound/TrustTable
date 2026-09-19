@@ -74,6 +74,20 @@ class RejectionReason(StrEnum):
     #: The narrative asserts an unsupported whole-dataset claim or tells the
     #: user to disregard deterministic results (`claim_screen`, `EVAL-AI-01`).
     UNSUPPORTED_CLAIM = "unsupported_claim"
+    #: A structured output's business-impact statement names a context field
+    #: that was not actually sent to the model as confirmed context
+    #: (`finding_analysis`, `AI-08`).
+    UNKNOWN_CONTEXT_FIELD = "unknown_context_field"
+    #: A business-impact statement asserts a consequence (loss, penalty,
+    #: regulatory or customer effect, ...) that neither the supplied
+    #: evidence nor the confirmed context supports (`finding_analysis`,
+    #: `AI-08`).
+    UNSUPPORTED_IMPACT_CLAIM = "unsupported_impact_claim"
+    #: A remediation step or proposed-rule description claims that data was
+    #: (or will automatically be) changed, or that a rule was applied or
+    #: activated — both are advisory-only surfaces (`finding_analysis`,
+    #: `AI-08`).
+    UNSUPPORTED_ACTION_CLAIM = "unsupported_action_claim"
 
 
 @dataclass(frozen=True, slots=True)

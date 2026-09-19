@@ -477,4 +477,8 @@ def test_rejection_reason_set_is_additive_and_closed() -> None:
         "numeric_claim_mismatch",
         "invalid_severity",
         "unsupported_claim",
+        # `AI-08` additions (structured finding-analysis output).
+        "unknown_context_field",
+        "unsupported_impact_claim",
+        "unsupported_action_claim",
     }
