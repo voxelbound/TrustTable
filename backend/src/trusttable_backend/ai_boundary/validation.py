@@ -13,6 +13,14 @@ removing a finding or changing a score, so a hostile output cannot
 express that intent at all — any attempt to add such a field is rejected
 as an unsupported control field.
 
+The structural checks cannot see what a narrative *says*, so a bounded,
+closed claim screen (`claim_screen`, `EVAL-AI-01`) additionally rejects
+narratives that assert an unsupported whole-dataset claim (for example
+that the dataset is perfect) or tell the user to disregard deterministic
+findings, with `RejectionReason.UNSUPPORTED_CLAIM`. It is defense in
+depth on top of the structural guarantee, not a replacement for it, and
+has a documented lexical limitation.
+
 `validate_model_output` never raises on malformed `raw_output`; any
 structural problem produces a rejected `ValidationOutcome` instead
 (`docs/testing-strategy.md` §2.6's "safe fallback after malformed
@@ -30,6 +38,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from ..domain.value_objects import Provenance, Severity
+from .claim_screen import screen_narrative
 from .envelope import PromptEnvelope
 
 #: Bumped whenever the validated output schema's field set/semantics
@@ -62,6 +71,9 @@ class RejectionReason(StrEnum):
     UNKNOWN_NUMERIC_CLAIM = "unknown_numeric_claim"
     NUMERIC_CLAIM_MISMATCH = "numeric_claim_mismatch"
     INVALID_SEVERITY = "invalid_severity"
+    #: The narrative asserts an unsupported whole-dataset claim or tells the
+    #: user to disregard deterministic results (`claim_screen`, `EVAL-AI-01`).
+    UNSUPPORTED_CLAIM = "unsupported_claim"
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +135,12 @@ def validate_model_output(
     narrative = raw_output.get("narrative")
     if "narrative" in raw_output and not isinstance(narrative, str):
         schema_invalid = True
+    elif isinstance(narrative, str) and screen_narrative(narrative):
+        # `EVAL-AI-01`: a schema-valid narrative can still assert an
+        # unsupported whole-dataset claim (or tell the user to disregard
+        # deterministic findings), which the structural checks below
+        # cannot see. Only the reason code is recorded, never the text.
+        reasons.append(RejectionReason.UNSUPPORTED_CLAIM)
 
     provenance_value = raw_output.get("provenance")
     if "provenance" in raw_output and not isinstance(provenance_value, str):

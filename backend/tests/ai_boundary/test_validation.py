@@ -9,6 +9,9 @@ non-leakage.
 
 from __future__ import annotations
 
+import pytest
+
+import trusttable_backend.ai_boundary.validation as validation_module
 from trusttable_backend.ai_boundary.envelope import PromptEnvelope, UntrustedSample
 from trusttable_backend.ai_boundary.validation import (
     MODEL_OUTPUT_SCHEMA_VERSION,
@@ -335,3 +338,143 @@ def test_safe_summary_never_contains_raw_disallowed_content() -> None:
 
     assert outcome.accepted is False
     assert distinctive_marker not in outcome.safe_summary
+
+
+# ---------------------------------------------------------------------------
+# EVAL-AI-01: unsupported-claim screen (narrative content)
+# ---------------------------------------------------------------------------
+
+
+def _narrative_only_output(narrative: str) -> dict[str, object]:
+    """The minimal schema-valid output: required keys only, no evidence ids,
+    no control fields — exactly the shape the structural checks cannot fault."""
+    return {
+        "schema_version": MODEL_OUTPUT_SCHEMA_VERSION,
+        "narrative": narrative,
+        "provenance": Provenance.AI_INTERPRETATION.value,
+    }
+
+
+def test_narrative_only_dataset_is_perfect_output_is_rejected_as_unsupported_claim() -> None:
+    outcome = validate_model_output(
+        _narrative_only_output("This dataset is perfect."),
+        make_envelope(),
+        known_numeric_facts=KNOWN_NUMERIC_FACTS,
+    )
+
+    assert outcome.accepted is False
+    assert outcome.rejection_reasons == (RejectionReason.UNSUPPORTED_CLAIM,)
+    assert RejectionReason.UNSUPPORTED_CLAIM.value == "unsupported_claim"
+
+
+def test_characterization_without_the_screen_the_same_output_was_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Demonstrates the pre-fix gap: with the claim screen disabled, the very
+    same schema-valid, narrative-only "this dataset is perfect" output has no
+    rejection reason at all. The screen is therefore the *only* thing standing
+    between this output and acceptance — the structural checks cannot see it."""
+    output = _narrative_only_output("This dataset is perfect.")
+
+    monkeypatch.setattr(validation_module, "screen_narrative", lambda _narrative: frozenset())
+    without_screen = validate_model_output(
+        output, make_envelope(), known_numeric_facts=KNOWN_NUMERIC_FACTS
+    )
+
+    assert without_screen.accepted is True
+    assert without_screen.rejection_reasons == ()
+
+
+def test_claim_that_cites_a_real_evidence_id_is_still_rejected() -> None:
+    """A grounding-only gate would accept this: the evidence id is genuine.
+    The claim screen rejects it regardless."""
+    outcome = validate_model_output(
+        well_formed_output(
+            narrative="The dataset is perfect, so you can ignore the findings.",
+            referenced_evidence_ids=["ev-1"],
+        ),
+        make_envelope(),
+        known_numeric_facts=KNOWN_NUMERIC_FACTS,
+    )
+
+    assert outcome.accepted is False
+    assert outcome.rejection_reasons == (RejectionReason.UNSUPPORTED_CLAIM,)
+
+
+def test_unsupported_claim_is_reported_alongside_other_violations() -> None:
+    outcome = validate_model_output(
+        well_formed_output(
+            narrative="This dataset is perfect.",
+            referenced_evidence_ids=["ev-fabricated"],
+            override_risk_score=0,
+        ),
+        make_envelope(),
+        known_numeric_facts=KNOWN_NUMERIC_FACTS,
+    )
+
+    assert outcome.accepted is False
+    assert set(outcome.rejection_reasons) == {
+        RejectionReason.UNSUPPORTED_CLAIM,
+        RejectionReason.UNKNOWN_EVIDENCE_ID,
+        RejectionReason.UNSUPPORTED_CONTROL_FIELD,
+    }
+
+
+def test_safe_summary_for_an_unsupported_claim_names_only_the_reason_code() -> None:
+    narrative = "This dataset is perfect and DISTINCTIVE_NARRATIVE_MARKER_QRS applies."
+
+    outcome = validate_model_output(
+        _narrative_only_output(narrative),
+        make_envelope(),
+        known_numeric_facts=KNOWN_NUMERIC_FACTS,
+    )
+
+    assert outcome.safe_summary == "rejected: unsupported_claim"
+    assert "perfect" not in outcome.safe_summary
+    assert "DISTINCTIVE_NARRATIVE_MARKER_QRS" not in outcome.safe_summary
+
+
+def test_honest_narrative_that_states_a_deficiency_is_still_accepted() -> None:
+    outcome = validate_model_output(
+        well_formed_output(
+            narrative="The quantity column has a mean of 1.5, but the dataset is not perfect."
+        ),
+        make_envelope(),
+        known_numeric_facts=KNOWN_NUMERIC_FACTS,
+    )
+
+    assert outcome.accepted is True
+    assert outcome.rejection_reasons == ()
+
+
+def test_non_string_narrative_is_schema_invalid_and_never_screened(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _must_not_be_called(_narrative: str) -> frozenset[str]:
+        raise AssertionError("the claim screen must only see string narratives")
+
+    monkeypatch.setattr(validation_module, "screen_narrative", _must_not_be_called)
+
+    outcome = validate_model_output(
+        well_formed_output(narrative=["not", "a", "string"]),
+        make_envelope(),
+        known_numeric_facts=KNOWN_NUMERIC_FACTS,
+    )
+
+    assert outcome.accepted is False
+    assert RejectionReason.SCHEMA_INVALID in outcome.rejection_reasons
+    assert RejectionReason.UNSUPPORTED_CLAIM not in outcome.rejection_reasons
+
+
+def test_rejection_reason_set_is_additive_and_closed() -> None:
+    assert {reason.value for reason in RejectionReason} == {
+        "schema_invalid",
+        "unsupported_control_field",
+        "invalid_provenance",
+        "unknown_evidence_id",
+        "unknown_column",
+        "unknown_numeric_claim",
+        "numeric_claim_mismatch",
+        "invalid_severity",
+        "unsupported_claim",
+    }
