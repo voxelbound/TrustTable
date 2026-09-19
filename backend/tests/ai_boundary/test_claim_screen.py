@@ -639,6 +639,221 @@ def test_more_honest_detection_statements_are_not_screened(text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Non-circular coverage (third independent review): the words below were
+# authored independently of the screen's lexicon, so these tests can expose
+# lexicon and modifier gaps that cross-multiplying the screen's own words
+# cannot.
+# ---------------------------------------------------------------------------
+
+_INDEPENDENT_PASSING_VERB_PHRASES: list[str] = [
+    "passes",
+    "passed",
+    "meets",
+    "met",
+    "satisfies",
+    "clears",
+    "complies with",
+    "conforms to",
+    "survives",
+    "fully passes",
+]
+_INDEPENDENT_QUANTIFIERS: list[str] = [
+    "all",
+    "every",
+    "every single",
+    "each and every",
+    "all 12",
+    "all of the",
+    "all of our",
+    "every one of the",
+    "both",
+]
+_INDEPENDENT_CHECK_MODIFIERS: list[str] = [
+    "",
+    "automated ",
+    "internal quality ",
+    "12 ",
+    "mandatory ",
+    "required ",
+    "configured ",
+    "strict ",
+    "the ",
+]
+_INDEPENDENT_CHECK_NOUNS: list[str] = [
+    "checks",
+    "tests",
+    "standards",
+    "requirements",
+    "rules",
+    "validations",
+    "criteria",
+    "audits",
+    "inspections",
+    "verifications",
+    "controls",
+    "specifications",
+    "thresholds",
+    "benchmarks",
+]
+
+
+def test_passing_assurances_survive_inserted_modifiers_numerals_and_quantifier_phrases() -> None:
+    missed = [
+        text
+        for subject in ("The dataset", "Everything")
+        for verb in _INDEPENDENT_PASSING_VERB_PHRASES
+        for quantifier in _INDEPENDENT_QUANTIFIERS
+        for modifier in _INDEPENDENT_CHECK_MODIFIERS
+        for noun in _INDEPENDENT_CHECK_NOUNS
+        if not screen_narrative(text := f"{subject} {verb} {quantifier} {modifier}{noun}.")
+    ]
+    assert missed == []
+
+
+def test_honestly_qualified_passing_statements_are_not_screened() -> None:
+    flagged = []
+    for verb in ("fails", "did not pass", "does not meet", "cannot satisfy", "has not cleared"):
+        for quantifier in _INDEPENDENT_QUANTIFIERS:
+            for noun in _INDEPENDENT_CHECK_NOUNS:
+                text = f"The dataset {verb} {quantifier} {noun}."
+                if screen_narrative(text):
+                    flagged.append(text)
+    for verb in _INDEPENDENT_PASSING_VERB_PHRASES:
+        for noun in _INDEPENDENT_CHECK_NOUNS:
+            for text in (
+                f"The dataset {verb} all other {noun}.",
+                f"The dataset {verb} all {noun} except one.",
+                f"This row {verb} the range {noun[:-1]}, yet the tax value is invalid.",
+                f"The line-total check {verb} for most rows.",
+            ):
+                if screen_narrative(text):
+                    flagged.append(text)
+    assert flagged == []
+
+
+# An independently written thesaurus of positive evaluations, including the
+# superlatives and near-synonyms the screen's own lexicon may not contain.
+_INDEPENDENT_THESAURUS: list[str] = [
+    "the highest",
+    "the best",
+    "the best possible",
+    "superior",
+    "the finest",
+    "the greatest",
+    "top-tier",
+    "top tier",
+    "first-rate",
+    "first rate",
+    "first-class",
+    "world-class",
+    "world class",
+    "unrivaled",
+    "unrivalled",
+    "unmatched",
+    "unimpeachable",
+    "extraordinary",
+    "remarkable",
+    "stellar",
+    "splendid",
+    "magnificent",
+    "marvelous",
+    "brilliant",
+    "optimal",
+    "premium",
+    "supreme",
+    "gold-standard",
+    "gold standard",
+    "textbook",
+    "squeaky clean",
+    "robust",
+    "solid",
+    "polished",
+    "irreproachable",
+    "blameless",
+    "untainted",
+    "uncorrupted",
+    "pure",
+    "exemplary",
+    "ideal",
+    "immaculate",
+    "unblemished",
+    "top-notch",
+]
+_THESAURUS_FRAMES: list[str] = [
+    "{s} is {t}.",
+    "{s} is of {t} quality.",
+    "{s} is in {t} shape.",
+    "{s} looks {t}.",
+    "{s} is in {t} condition.",
+]
+_THESAURUS_QUALIFIED_FRAMES: list[str] = [
+    "{s} is not {t}.",
+    "{s} is far from {t}.",
+    "{s} is only partly {t}.",
+    "{s} is hardly {t}.",
+]
+
+
+def test_an_independent_thesaurus_of_positive_evaluations_is_screened() -> None:
+    missed = [
+        frame.format(s=subject, t=term)
+        for subject in ("The dataset", "This data", "The file")
+        for term in _INDEPENDENT_THESAURUS
+        for frame in _THESAURUS_FRAMES
+        if not screen_narrative(frame.format(s=subject, t=term))
+    ]
+    assert missed == []
+
+
+def test_the_same_thesaurus_qualified_is_not_screened() -> None:
+    flagged = [
+        frame.format(s=subject, t=term)
+        for subject in ("The dataset", "This data", "The file")
+        for term in _INDEPENDENT_THESAURUS
+        for frame in _THESAURUS_QUALIFIED_FRAMES
+        if screen_narrative(frame.format(s=subject, t=term))
+    ]
+    assert flagged == []
+
+
+def test_superlatives_are_not_praise_unless_they_qualify_quality() -> None:
+    for text in (
+        "The dataset's highest value is 500.",
+        "The best next step is to review row 12.",
+        "The file contains the highest quantity in row 5.",
+        "The greatest difference between the two dates is 40 days.",
+    ):
+        assert screen_narrative(text) == frozenset(), text
+
+
+_DETERMINER_WINDOW_POSITIVES: list[str] = [
+    "Every single record is valid.",
+    "All 300 rows are valid.",
+    "Each and every row is correct.",
+    "The 300 rows are all clean.",
+    "All of the entries are accurate.",
+    "Every last value is reliable.",
+]
+_DETERMINER_WINDOW_NEGATIVES: list[str] = [
+    "The two rows are valid.",
+    "Some rows are valid.",
+    "The first row is valid.",
+    "The remaining rows are valid.",
+    "A few records are correct.",
+]
+
+
+@pytest.mark.parametrize("text", _DETERMINER_WINDOW_POSITIVES)
+def test_modifiers_between_a_determiner_and_its_subject_do_not_hide_a_claim(text: str) -> None:
+    assert screen_narrative(text), text
+
+
+@pytest.mark.parametrize("text", _DETERMINER_WINDOW_NEGATIVES)
+def test_partial_counts_are_not_whole_dataset_subjects(text: str) -> None:
+    assert screen_narrative(text) == frozenset(), text
+
+
+# ---------------------------------------------------------------------------
 # Documented limits (docs/decision-log.md D-039): asserted so they stay honest.
 # ---------------------------------------------------------------------------
 
