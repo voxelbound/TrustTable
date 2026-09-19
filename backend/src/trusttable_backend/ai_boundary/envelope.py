@@ -14,10 +14,39 @@ only (`dataclasses`, `collections.abc`).
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Final
 
 from ..domain.evidence import Evidence
 from ..domain.value_objects import ColumnReference
+
+#: Prefix of the neutral evidence ids a provider sees (`evidence_1`,
+#: `evidence_2`, ...). See `provider_evidence_view`.
+PROVIDER_EVIDENCE_ALIAS_PREFIX: Final[str] = "evidence_"
+
+
+def provider_evidence_view(evidence: Sequence[Evidence]) -> tuple[Evidence, ...]:
+    """`evidence` with each item's id replaced by a neutral positional alias.
+
+    A canonical evidence id can embed dataset content: for example
+    `InconsistentCapitalizationDetector` builds it from the *normalized cell
+    value* (`...evidence.notes.<normalized value>`), so sending it would send
+    the value. A provider therefore only ever sees `evidence_1`,
+    `evidence_2`, ...; a caller that needs the canonical id back (for
+    example to build a domain object from an accepted answer) keeps the
+    original sequence and maps by position. Idempotent: applying it to an
+    already-aliased sequence yields the same aliases.
+
+    `build_prompt_envelope` applies this to every envelope it builds, so
+    every provider-bound path — finding analysis, context inference, and
+    any future route — gets it without having to remember. The payload
+    allow-list is applied separately at serialization (`ai_boundary.prompt`).
+    """
+    return tuple(
+        replace(item, evidence_id=f"{PROVIDER_EVIDENCE_ALIAS_PREFIX}{position}")
+        for position, item in enumerate(evidence, start=1)
+    )
+
 
 #: Matches `Settings.llm_max_sample_values`'s existing default
 #: (`config.py`, `FND-02`) so a future API-layer package wiring
@@ -142,6 +171,12 @@ def build_prompt_envelope(
 ) -> PromptEnvelope:
     """Convenience constructor: builds untrusted samples via
     `build_untrusted_samples` and assembles a `PromptEnvelope`.
+
+    `computed_evidence` is stored in its provider view
+    (`provider_evidence_view`: neutral ids), so no route that builds its
+    envelope here can send a canonical evidence id — which may embed cell
+    content — to a provider. The caller's own evidence objects are not
+    modified.
     """
     samples = build_untrusted_samples(
         raw_samples,
@@ -152,7 +187,7 @@ def build_prompt_envelope(
     )
     return PromptEnvelope(
         task=task,
-        computed_evidence=tuple(computed_evidence),
+        computed_evidence=provider_evidence_view(computed_evidence),
         confirmed_context=confirmed_context if confirmed_context is not None else {},
         untrusted_dataset_samples=samples,
         sample_sending_enabled=sample_sending_enabled,
@@ -162,10 +197,12 @@ def build_prompt_envelope(
 __all__ = [
     "DEFAULT_MAX_SAMPLE_COUNT",
     "DEFAULT_MAX_SAMPLE_VALUE_LENGTH",
+    "PROVIDER_EVIDENCE_ALIAS_PREFIX",
     "PromptEnvelope",
     "RedactionHook",
     "UntrustedSample",
     "build_prompt_envelope",
     "build_untrusted_samples",
     "default_redaction_hook",
+    "provider_evidence_view",
 ]
