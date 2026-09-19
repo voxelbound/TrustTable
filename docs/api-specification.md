@@ -281,17 +281,23 @@ Stores an answer and resulting context updates.
 Valid when context is sufficiently confirmed or explicitly left unknown.
 
 **Clarified (`docs/decision-log.md` D-037, `v0.2`):** "finalize" ends
-the context-confirmation sub-flow and triggers **enrichment** —
-validated AI interpretation/explanations grounded in the confirmed
-context and the existing deterministic evidence. This is additive: it
-never re-runs or gates deterministic detection, and it never changes
-the underlying analysis's own state (which is already `completed`
-before finalize can be called — see `docs/architecture.md` §6's
-two-phase model). A future pre-analysis-gating architecture, where
-finalize instead triggers detection itself, remains possible but is
-not what `v0.2` implements. This route (and every other route in this
-section) is not yet implemented — see `docs/implementation-backlog.md`'s
-`UI-02` entry for the real implementation package.
+the context-confirmation sub-flow and makes confirmed context
+**available to** enrichment — it does not itself perform a synchronous
+enrichment call. This is additive: it never re-runs or gates
+deterministic detection, and it never changes the underlying
+analysis's own state (which is already `completed` before finalize can
+be called — see `docs/architecture.md` §6's two-phase model). A future
+pre-analysis-gating architecture, where finalize instead triggers
+detection itself, remains possible but is not what `v0.2` implements.
+
+**Corrected (`WP-065`, defect fix):** every route in this section is
+now implemented (`API-02`/`UI-02`, `WP-059`/`WP-064`) — this section
+previously and incorrectly stated otherwise after implementation
+shipped. `finalize`'s own enrichment capability is the already-shipped,
+on-demand `GET .../findings/{finding_id}/explanation` route (§10),
+which reads confirmed context only after `context_finalized` is set —
+not a forced side effect of `finalize` itself (`docs/decision-log.md`
+D-037's appended `WP-064` r2 closure note).
 
 Returns:
 
@@ -393,6 +399,46 @@ Capability boundary: `anchor_row` must resolve to a RowReference
 already belonging to the finding's own affected row references — this
 endpoint reads context around a finding, not arbitrary rows in the file.
 
+### GET `/analyses/{analysis_id}/findings/{finding_id}/explanation`
+
+Added (`AI-05`/`UI-02` slice 1, `WP-063`; documented retroactively by
+`WP-065`, a defect fix that also corrected two stale "not yet
+implemented"/"no route calls a provider" claims elsewhere in this repo
+after this route and §9's Context routes had already shipped).
+
+Always computes and, by default (`llm_provider="disabled"`), returns a
+deterministic explanation of the finding — no AI call, first
+implementation of `docs/product-requirements.md` §5.7's
+"deterministic explanations" AI-disabled-mode requirement. When a real
+AI provider is configured, additionally attempts a validated,
+evidence-grounded explanation through it; on acceptance the AI
+explanation is returned instead, on rejection or provider error the
+deterministic explanation is returned unchanged (graceful
+degradation). When the analysis's context has been finalized
+(`POST .../finalize`), the confirmed context is also made available to
+this call, grounding the explanation further.
+
+Returns:
+
+- `narrative` — one or two sentences explaining the finding
+- `provenance` — `"deterministic_fallback"` or `"ai_interpretation"`
+- `provider_name`, `model_identifier` — both `null` unless `provenance`
+  is `"ai_interpretation"`
+- `ai_call_status` (`WP-065`) — exactly one of `"not_configured"`
+  (no AI provider configured, no attempt made), `"attempted_accepted"`,
+  `"attempted_rejected"` (a provider was called but its output, and any
+  bounded retries, never validated), `"attempted_provider_error"` (a
+  provider was called and failed to respond). Deliberately independent
+  of `provenance` alone, which cannot distinguish "never attempted"
+  from "attempted and failed", and deliberately independent of a
+  finding's own `security_exposure` (§13) — see D-038.
+- `referenced_evidence_ids`, `referenced_columns` — grounding proof,
+  always derived from what was actually sent, never the model's own
+  claims
+
+Raises `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` per the sibling finding
+routes.
+
 ## 11. Validation rules
 
 ### GET `/analyses/{analysis_id}/rules`
@@ -468,6 +514,16 @@ Prompt-injection findings expose:
 - `full_value_available` according to safe product behavior
 
 Raw suspicious text is never present in list endpoints.
+
+**Scope boundary (`WP-065`, defect fix; D-038):** these fields describe
+only whether *this finding's own flagged raw dataset value* would be
+sent to a model by the deterministic detection pipeline — always
+`False`/not-sent today. They are independent of, and must never be
+read as, a general "was AI used" indicator: §10's
+`GET .../findings/{finding_id}/explanation` route can independently
+call a real configured provider for the same finding (using only
+bounded evidence, never this flagged raw value) and discloses that
+call's own status via its own `ai_call_status` field.
 
 ## 14. Common error codes
 

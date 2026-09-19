@@ -628,15 +628,47 @@ export type FindingEvidenceListResponse = {
  *
  * Body for `GET /analyses/{analysis_id}/findings/{finding_id}/explanation`
  * (`UI-02` slice 1, `WP-063`). Mirrors `domain.explanation.
- * FindingExplanation` exactly. `provenance` is the `Provenance` enum's
- * string value (`"deterministic_fallback"` or `"ai_interpretation"`
- * only — `FindingExplanation`'s own closed set, `AI-05`).
+ * FindingExplanation` exactly, plus `ai_call_status` (`WP-065`, defect
+ * fix). `provenance` is the `Provenance` enum's string value
+ * (`"deterministic_fallback"` or `"ai_interpretation"` only —
+ * `FindingExplanation`'s own closed set, `AI-05`).
  * `provider_name`/`model_identifier` are both `null` for a
  * deterministic-fallback explanation (no provider was used — the
  * default, AI-disabled behavior) and populated for an accepted
  * AI-interpretation explanation.
+ *
+ * `ai_call_status` (`WP-065`) discloses this specific request's own AI
+ * call lifecycle independently of `provenance`/`provider_name`, closing
+ * a real gap `provenance` alone cannot express: `provenance ==
+ * "deterministic_fallback"` is ambiguous between "no provider is
+ * configured" and "a provider was tried and failed/was rejected".
+ * Exactly one of:
+ *
+ * - `"not_configured"` — `Settings.llm_provider == "disabled"`; no AI
+ * call was attempted for this request.
+ * - `"attempted_accepted"` — a provider was called and its output was
+ * accepted; `provenance == "ai_interpretation"`.
+ * - `"attempted_rejected"` — a provider was called, its output (and
+ * any bounded retries) failed `ai_boundary.validation.
+ * validate_model_output`; the deterministic explanation was returned
+ * instead (`provenance == "deterministic_fallback"`).
+ * - `"attempted_provider_error"` — a provider was called and raised a
+ * `ProviderError` (connection/timeout/malformed response); the
+ * deterministic explanation was returned instead (`provenance ==
+ * "deterministic_fallback"`).
+ *
+ * Deliberately independent of `Analysis.security_exposure` (`GET
+ * .../findings/{finding_id}`'s own `security_exposure` field), which
+ * describes only the deterministic detection pipeline's own,
+ * permanently-`False` raw-sample-exposure posture — never this
+ * per-request enrichment call. See `docs/architecture.md` §6/§7 and
+ * `docs/decision-log.md` D-037/D-038.
  */
 export type FindingExplanationResponse = {
+    /**
+     * Ai Call Status
+     */
+    ai_call_status: string;
     /**
      * Finding Id
      */
@@ -936,9 +968,17 @@ export type SampleMetadataResponse = {
 /**
  * SecurityExposureResponse
  *
- * Mirrors `detectors.contract.SecurityExposureState`. Always
- * reports the disabled/no-transmission state today — no AI/LLM
- * provider exists yet (`AI-01`/`AI-02`).
+ * Mirrors `detectors.contract.SecurityExposureState` exactly —
+ * see that class's own docstring for the full scope boundary
+ * (`WP-065`, defect fix; `docs/decision-log.md` D-038). Always reports
+ * the disabled/no-transmission state today: not because no AI/LLM
+ * provider exists (`AI-01`/`AI-02`/`AI-03` are all real and can be
+ * configured), but because this field describes only the
+ * deterministic detection pipeline's own raw-sample-exposure posture,
+ * which never sends dataset content to a model. It is deliberately
+ * independent of, and must never be conflated with, a separate,
+ * optional, per-request AI enrichment call's own status (see
+ * `FindingExplanationResponse.ai_call_status`).
  */
 export type SecurityExposureResponse = {
     /**
