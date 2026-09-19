@@ -692,10 +692,18 @@ and representative examples split by `evidence_type`, technical
 metadata, and a dedicated `PromptInjectionWarning` presentation for
 `ai_processing_security` findings — consuming `WP-027`'s
 `GET .../findings/{finding_id}` and `.../evidence` routes (see "Analysis
-API routes" above for that backend gap's closure). Business impact,
-remediation, proposed validation rules, and review controls remain
-honestly disclosed as not-yet-available placeholders (`REM-01`/
-`RULE-01`/`REV-01`, not yet built). The Start screen's upload control is
+API routes" above for that backend gap's closure). **Updated (`AI-08`,
+D-040):** the Finding detail screen now renders four analysis sections
+from one `GET .../explanation` response — Explanation, Possible business
+impact (each statement labelled evidence-backed, from confirmed context,
+or conditional with its assumption), Remediation (advisory only) and
+Validation rule (a proposal, explicitly not active) — from a single
+validated AI response when one was accepted and from deterministic built-in
+guidance otherwise, with a human-readable provenance line and never a
+filesystem path. Only persistent review controls remain an honestly
+disclosed not-yet-available placeholder (`REV-01`, not yet built); the
+rule engine, rule execution and remediation workflow (`RULE-01`/`REM-01`)
+remain later items. The Start screen's upload control is
 now enabled (`WP-029`, CSV only) — see "Analysis API routes" above for
 `POST /analyses`.
 
@@ -855,6 +863,8 @@ Output validation verifies:
 - allowed severity and provenance
 - absence of unsupported control fields
 - absence of unsupported whole-dataset claims and of instructions to disregard deterministic results (a bounded, closed lexical screen over the narrative — `docs/decision-log.md` D-039)
+
+**Structured finding-analysis output (`AI-08`, D-040).** The finding-analysis call does not ask for free prose. It carries a versioned output contract (`finding_analysis_v1`, `ai_boundary/finding_analysis.py`) built per request, whose JSON schema enumerates only the evidence IDs, columns, confirmed-context fields and numeric-fact names actually supplied; `llama.cpp` receives it as a `response_format`. The response is then validated *role by role*, and the validator — not the schema — is the acceptance authority: the four roles are an explanation, business-impact statements labelled `evidence` / `confirmed_context` / `assumption`, advisory remediation steps, and one proposed validation rule. In addition to the checks above it verifies that an impact statement's declared basis is supported, that consequence terms (loss, penalty, regulatory, customer, …) and every number in prose are grounded in the supplied evidence or confirmed context, and that remediation and rule text never claim data was changed or a rule activated. Only user-confirmed or corrected context, and only once finalized, is ever sent as `confirmed_context`. Provider and model identity leave the backend only as derived labels and a sanitized identifier (`ai_provider/display.py`), never as a filesystem path.
 
 The deterministic trust score and findings remain authoritative. The claim screen is defense in depth on top of that structural guarantee, not a replacement for it: it exists so a false whole-dataset assertion cannot be presented as an accepted AI interpretation beside the findings that contradict it. Its limits (lexical, English-only, evadable by a creative paraphrase, biased toward rejecting so that a false positive falls back to the deterministic explanation) are documented in D-039.
 

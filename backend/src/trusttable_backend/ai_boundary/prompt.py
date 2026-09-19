@@ -99,6 +99,13 @@ def _serialize_evidence(evidence: Evidence) -> dict[str, Any]:
         "calculation_version": evidence.calculation_version,
         "structured_payload": structured_payload,
         "display_safe_summary": evidence.display_safe_summary,
+        # `AI-08`: the model is later held to `referenced_columns` being
+        # real column keys and to numeric claims matching supplied counts,
+        # so it must be told which columns this evidence covers and how
+        # many rows it affects. Both are computed facts (a count and the
+        # column keys already present in the summary), never row content.
+        "affected_columns": [column.internal_key for column in evidence.affected_columns],
+        "affected_row_count": len(evidence.affected_row_references),
     }
 
 

@@ -105,29 +105,210 @@ describe('FindingDetailRoute', () => {
     ).toBeInTheDocument()
   })
 
-  it('AC-04: renders honest not-yet-available placeholders for unbuilt §4.7 sections', async () => {
+  it('AI-08: the business impact, remediation and validation rule placeholders are gone; only review controls remains not yet available', async () => {
     renderDetail()
 
     await screen.findByRole('heading', { name: 'Observation' })
-    expect(
-      screen.getByText(
-        'Not yet available — business-impact analysis is a later backlog item.',
-      ),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'Not yet available — remediation recommendations are a later backlog item.',
-      ),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'Not yet available — proposed validation rules are a later backlog item.',
-      ),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/Not yet available/)).toBeInTheDocument()
+    // Exactly one "Not yet available" remains: persistent finding review.
+    expect(screen.getAllByText(/Not yet available/)).toHaveLength(1)
     expect(
       screen.getByText(
         'Not yet available — persistent finding review is a later backlog item.',
       ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/business-impact analysis is a later/)).toBeNull()
+    expect(
+      screen.queryByText(/remediation recommendations are a later/),
+    ).toBeNull()
+    expect(
+      screen.queryByText(/proposed validation rules are a later/),
+    ).toBeNull()
+  })
+
+  it('AI-08: renders all four analysis sections from one response, with built-in guidance when no AI is configured', async () => {
+    renderDetail()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Explanation' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Possible business impact' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Remediation' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Validation rule' }),
+    ).toBeInTheDocument()
+    // Built-in guidance content, not placeholders.
+    expect(
+      screen.getByText(
+        /Dates later than the analysis date may be typing errors/,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Conditional')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Assumes: the column is meant to record events that have already happened/,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Check the flagged rows and correct any mistyped dates/),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Proposed — not active')).toBeInTheDocument()
+    expect(screen.getByText('Date range')).toBeInTheDocument()
+    expect(screen.getByText(/Applies to: order_date/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/TrustTable never changes your uploaded data/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/does not run or enforce it/)).toBeInTheDocument()
+  })
+
+  it('AI-08: an accepted AI analysis distinguishes evidence-backed, context-backed and conditional impact and labels the provenance without any filesystem path', async () => {
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/explanation',
+        () =>
+          HttpResponse.json(
+            makeFindingExplanationResponse({
+              narrative: 'The evidence records 2 affected row(s).',
+              provenance: 'ai_interpretation',
+              provider_name: 'llama_cpp',
+              // A leaky backend must still never reach the screen: the UI
+              // renders only `ai_provenance`'s labels.
+              model_identifier: String.raw`C:\LocalAI\TrustTable\models\Qwen3.5-9B-Q4_K_M.gguf`,
+              ai_provenance: {
+                deployment_label: 'Local AI',
+                runtime_label: 'llama.cpp',
+                model_label: 'Qwen3.5 9B',
+                quantization: 'Q4_K_M',
+                model_identifier: 'Qwen3.5-9B-Q4_K_M.gguf',
+              },
+              ai_call_status: 'attempted_accepted',
+              evidence_sent_to_model: true,
+              confirmed_context_sent_to_model: true,
+              business_impact: [
+                {
+                  statement: 'The supplied evidence documents this condition.',
+                  basis: 'evidence',
+                  evidence_ids: ['validity.future_dates.evidence.order_date'],
+                  context_fields: [],
+                  assumption: null,
+                },
+                {
+                  statement:
+                    'This matters given the confirmed dataset context.',
+                  basis: 'confirmed_context',
+                  evidence_ids: [],
+                  context_fields: ['row_grain'],
+                  assumption: null,
+                },
+                {
+                  statement: 'Reports built on this data may be affected.',
+                  basis: 'assumption',
+                  evidence_ids: [],
+                  context_fields: [],
+                  assumption: 'the affected values feed reports',
+                },
+              ],
+              remediation: ['Fix the flagged dates at the source.'],
+              validation_rule: {
+                rule_type: 'not_null',
+                columns: [],
+                description: 'Proposed: values should be filled in.',
+                status: 'proposed',
+              },
+            }),
+          ),
+      ),
+    )
+
+    renderDetail()
+
+    expect(
+      await screen.findByText(
+        'AI interpretation — Local AI · llama.cpp · Qwen3.5 9B (Q4_K_M)',
+      ),
+    ).toBeInTheDocument()
+    // All three impact kinds are individually labelled.
+    expect(screen.getByText('Evidence-backed')).toBeInTheDocument()
+    expect(screen.getByText('From your confirmed context')).toBeInTheDocument()
+    expect(screen.getByText('Conditional')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Based on your confirmed row grain/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Assumes: the affected values feed reports/),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Proposed — not active')).toBeInTheDocument()
+    expect(
+      screen.getByText(/along with your confirmed dataset context/),
+    ).toBeInTheDocument()
+    // No absolute host path anywhere on the page.
+    const page = document.body.textContent ?? ''
+    for (const fragment of ['C:\\', 'LocalAI', 'TrustTable\\models', '.gguf']) {
+      expect(page).not.toContain(fragment)
+    }
+  })
+
+  it('AI-08: a rejected AI attempt keeps all four sections (built-in guidance) and discloses the rejection', async () => {
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/explanation',
+        () =>
+          HttpResponse.json(
+            makeFindingExplanationResponse({
+              ai_call_status: 'attempted_rejected',
+              evidence_sent_to_model: true,
+            }),
+          ),
+      ),
+    )
+
+    renderDetail()
+
+    expect(
+      await screen.findByText(
+        /Built-in TrustTable guidance \(no AI\) — an AI attempt for this analysis did not produce a usable result/,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Possible business impact' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Remediation' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Proposed — not active')).toBeInTheDocument()
+  })
+
+  it('AI-08: a finding with no impact, steps or rule still renders honest empty states, not placeholders', async () => {
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/explanation',
+        () =>
+          HttpResponse.json(
+            makeFindingExplanationResponse({
+              business_impact: [],
+              remediation: [],
+              validation_rule: null,
+            }),
+          ),
+      ),
+    )
+
+    renderDetail()
+
+    expect(
+      await screen.findByText(
+        'No business-impact statements were produced for this finding.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('No remediation steps were produced for this finding.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('No validation rule was proposed for this finding.'),
     ).toBeInTheDocument()
   })
 
@@ -223,10 +404,10 @@ describe('FindingDetailRoute', () => {
     expect(
       screen.getByText('This is a medium-severity finding worth reviewing.'),
     ).toBeInTheDocument()
-    expect(screen.getByText(/Deterministic \(no AI\)/)).toBeInTheDocument()
     expect(
-      screen.getByText(/no AI provider is configured for this explanation/),
+      screen.getByText(/Built-in TrustTable guidance \(no AI\)/),
     ).toBeInTheDocument()
+    expect(screen.getByText(/no AI provider is configured/)).toBeInTheDocument()
     // D-038 axis 5: nothing was sent to a model, since no attempt was made.
     expect(
       screen.queryByText(/evidence was sent to the model/),
@@ -252,10 +433,12 @@ describe('FindingDetailRoute', () => {
     expect(
       await screen.findByRole('heading', { name: 'Explanation' }),
     ).toBeInTheDocument()
-    expect(screen.getByText(/Deterministic \(no AI\)/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Built-in TrustTable guidance \(no AI\)/),
+    ).toBeInTheDocument()
     expect(
       screen.getByText(
-        /an AI attempt for this explanation did not produce a usable result/,
+        /an AI attempt for this analysis did not produce a usable result/,
       ),
     ).toBeInTheDocument()
     expect(
@@ -284,7 +467,7 @@ describe('FindingDetailRoute', () => {
       await screen.findByRole('heading', { name: 'Explanation' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/an AI attempt for this explanation could not complete/),
+      screen.getByText(/an AI attempt for this analysis could not complete/),
     ).toBeInTheDocument()
   })
 
@@ -337,6 +520,13 @@ describe('FindingDetailRoute', () => {
               provenance: 'ai_interpretation',
               provider_name: 'llama_cpp',
               model_identifier: 'Qwen3.5-4B-Q4_K_M',
+              ai_provenance: {
+                deployment_label: 'Local AI',
+                runtime_label: 'llama.cpp',
+                model_label: 'Qwen3.5 4B',
+                quantization: 'Q4_K_M',
+                model_identifier: 'Qwen3.5-4B-Q4_K_M',
+              },
               ai_call_status: 'attempted_accepted',
               evidence_sent_to_model: true,
               confirmed_context_sent_to_model: false,
@@ -349,7 +539,7 @@ describe('FindingDetailRoute', () => {
 
     expect(
       await screen.findByText(
-        'AI interpretation — llama_cpp (Qwen3.5-4B-Q4_K_M)',
+        'AI interpretation — Local AI · llama.cpp · Qwen3.5 4B (Q4_K_M)',
       ),
     ).toBeInTheDocument()
     // D-038 axis 5: evidence-metadata exposure is disclosed as its own,
@@ -416,7 +606,7 @@ describe('FindingDetailRoute', () => {
     // The rejection is disclosed, not silently swallowed.
     expect(
       screen.getByText(
-        /an AI attempt for this explanation did not produce a usable result/,
+        /an AI attempt for this analysis did not produce a usable result/,
       ),
     ).toBeInTheDocument()
     // No AI interpretation is presented, and no false whole-dataset claim.
@@ -443,6 +633,13 @@ describe('FindingDetailRoute', () => {
               provenance: 'ai_interpretation',
               provider_name: 'mock',
               model_identifier: 'mock-v1',
+              ai_provenance: {
+                deployment_label: 'Test AI',
+                runtime_label: 'Mock provider',
+                model_label: 'mock-v1',
+                quantization: null,
+                model_identifier: 'mock-v1',
+              },
             }),
           ),
       ),
@@ -454,7 +651,7 @@ describe('FindingDetailRoute', () => {
       await screen.findByText('An AI-grounded narrative.'),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('AI interpretation — mock (mock-v1)'),
+      screen.getByText('AI interpretation — Test AI · Mock provider · mock-v1'),
     ).toBeInTheDocument()
   })
 

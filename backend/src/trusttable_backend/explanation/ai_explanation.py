@@ -1,45 +1,39 @@
-"""Validated AI finding explanations (`AI-05`) — the "finding
-explanations" model call `docs/product-requirements.md` §12 names
-(`AIOperation.FINDING_EXPLANATION`, already defined by `AI-01`).
+"""Validated AI finding analysis (`AI-05`, restructured by `AI-08`) — the
+"finding explanations", "remediation" and "rule descriptions" model calls
+`docs/product-requirements.md` §12 names, made as **one** structured call
+per finding (`AIOperation.FINDING_EXPLANATION`, already defined by
+`AI-01`, unchanged).
+
+`AI-08` (`docs/decision-log.md` D-040, resolving `FUP-011`'s durable
+direction) replaces the earlier single free-prose narrative with the
+versioned `finding_analysis_v1` output contract
+(`ai_boundary.finding_analysis`): an explanation, 1-3 business-impact
+statements each labelled `evidence`/`confirmed_context`/`assumption`, 1-3
+advisory remediation steps and one *proposed* validation rule. The request
+carries the contract (so a constrained-decoding runtime can only emit
+evidence ids, columns and context fields that were actually supplied) and
+the response is validated role by role; `EVAL-AI-01`'s claim screen still
+runs over every text field as defense in depth.
 
 **Wired into a real, live HTTP route** (`GET .../findings/{finding_id}/
-explanation`, `UI-02` slice 1, `WP-063`; confirmed-context grounding
-added `UI-02` slice 2 revision, `WP-064` r2) — the route layer, not
-`analysis.service`, calls this module directly (see this module's own
-"Enabling slice" precedent discussion below for why the seam is the
-route layer, not the service layer). Nothing in this module is imported
-by `analysis.service`, no `AnalysisState` value changes, and
-`Analysis.security_exposure` is untouched — no product-visible behavior
-change for the deterministic pipeline itself; the explanation route's
-own behavior is real and live whenever `Settings.llm_provider !=
-"disabled"`.
+explanation`) — the route layer, not `analysis.service`, calls this module.
+Nothing here is imported by `analysis.service`, no `AnalysisState` value
+changes and `Analysis.security_exposure` is untouched.
 
-Unlike `deterministic.py` (this package's own deterministic-only
-sibling, which deliberately imports neither `ai_boundary` nor
-`ai_provider`), this module's entire purpose is to call a real
-`AIProvider` through `SEC-02`'s existing trust boundary —
-`ai_boundary`/`ai_provider` imports here are intentional.
-
-`AI-05`'s own backlog rejection list ("Reject: unknown evidence, unknown
-columns, incorrect numbers, removal of findings, replacement of risk
-score") needs no new enforcement code here: `ai_boundary.validation.
-validate_model_output` already enforces every one of those rules
-structurally for any `AIOperation`, and its validated schema has no
-field capable of expressing finding removal or score replacement at
-all. This module reuses that boundary unmodified.
+Unlike `deterministic.py`/`guidance.py` (this package's deterministic-only
+siblings, which deliberately import neither `ai_boundary` nor
+`ai_provider`), this module's purpose is to call a real `AIProvider`
+through `SEC-02`'s trust boundary — those imports are intentional.
 
 `_known_numeric_facts_from_evidence` mirrors `ai_benchmark.fixtures.
-_known_numeric_facts_from_evidence`'s already-proven fail-closed
-collision logic exactly, kept as its own small owned copy (this
-codebase's established per-package-helper convention — see e.g. `AI-03`'s
-`llama_cpp.py` vs. the benchmark-only `llama_cpp_http.py` adapter,
-deliberately separate) rather than importing from `ai_benchmark`, an
-unrelated package this package does not otherwise depend on.
+_known_numeric_facts_from_evidence`'s already-proven fail-closed collision
+logic, kept as this package's own small copy (the codebase's per-package
+helper convention) rather than importing from `ai_benchmark`.
 
 Retry-with-feedback and provider-error handling mirror
-`context_inference.ai_context.run_context_inference`'s already-proven
-pattern exactly (bounded retries, `ProviderError` isolated into a safe
-`provider_error` string, never raised).
+`context_inference.ai_context.run_context_inference`'s established pattern
+(bounded retries, `ProviderError` isolated into a safe `provider_error`
+string, never raised).
 
 Framework-independent besides its two deliberate seams (`ai_boundary`,
 `ai_provider`): no FastAPI/SQLAlchemy/pydantic import. Stdlib only
@@ -53,23 +47,35 @@ from dataclasses import dataclass, replace
 from typing import Final
 
 from ..ai_boundary.envelope import PromptEnvelope, build_prompt_envelope
-from ..ai_boundary.validation import RejectionReason, validate_model_output
+from ..ai_boundary.finding_analysis import (
+    build_finding_analysis_contract,
+    validate_finding_analysis_output,
+)
+from ..ai_boundary.validation import RejectionReason
 from ..ai_provider.contract import AIOperation, AIProvider, ProviderError, ProviderRequest
 from ..detectors.contract import FindingCandidate
+from ..domain.context import ConfirmationState, ContextField, DatasetContext
 from ..domain.evidence import Evidence
-from ..domain.explanation import FindingExplanation
+from ..domain.explanation import (
+    BusinessImpactStatement,
+    FindingExplanation,
+    ImpactBasis,
+    ProposedValidationRule,
+    ValidationRuleType,
+)
 from ..domain.value_objects import ColumnReference, Provenance
 
 AI_EXPLANATION_TASK: Final[str] = (
-    "Given the deterministic finding and its supporting evidence supplied "
-    "below, explain in one or two sentences what this finding means for a "
-    "business user and why it matters. Ground your answer only in the "
-    "supplied finding and evidence."
+    "Analyze the deterministic finding and its supporting evidence supplied below "
+    "for a business user: explain what it means, describe its possible business "
+    "impact, recommend remediation steps and propose one validation rule. Ground "
+    "every statement only in the supplied evidence and the supplied confirmed "
+    "context. Anything else must be labelled an assumption."
 )
 """Fixed, application-authored instruction text — never dataset-derived
-(`docs/product-requirements.md` §12, mirrors `context_inference.
-ai_context.AI_CONTEXT_TASK`'s own precedent: a single bounded call, not
-an open-ended question)."""
+(`docs/product-requirements.md` §12; mirrors `context_inference.
+ai_context.AI_CONTEXT_TASK`'s precedent: a single bounded call, not an
+open-ended question)."""
 
 DEFAULT_MAX_RETRIES: Final[int] = 2
 """Matches `context_inference.ai_context.DEFAULT_MAX_RETRIES`'s and
@@ -78,13 +84,25 @@ consistency across this codebase's independent bounded-retry call
 sites."""
 
 
+def build_finding_analysis_task(finding: FindingCandidate) -> str:
+    """The per-finding task text: the fixed instruction plus the finding's
+    detector id, category and severity. All three are closed,
+    application-defined values (a registry id and two enums), never
+    dataset-derived — which is why they may live in the trusted task text
+    while the finding's observation (built from column names) may not."""
+    return (
+        f"{AI_EXPLANATION_TASK} The finding was raised by detector "
+        f"'{finding.detector_id}' (category {finding.category.value}, "
+        f"severity {finding.severity.value})."
+    )
+
+
 def _known_numeric_facts_from_evidence(evidence: tuple[Evidence, ...]) -> dict[str, float]:
     """Derive a flat `known_numeric_facts` allow-list from the numeric
     fields of each included `Evidence.structured_payload`, aggregated by
-    original field name. See module docstring: mirrors `ai_benchmark.
-    fixtures._known_numeric_facts_from_evidence` exactly, including its
-    fail-closed collision rule (a field name with conflicting values
-    across evidence items is omitted entirely, never last-write-wins).
+    original field name, with a fail-closed collision rule (a field name
+    with conflicting values across evidence items is omitted entirely,
+    never last-write-wins).
     """
     values: dict[str, float] = {}
     ambiguous: set[str] = set()
@@ -103,35 +121,68 @@ def _known_numeric_facts_from_evidence(evidence: tuple[Evidence, ...]) -> dict[s
     return values
 
 
+_CONFIRMED_STATES: Final[frozenset[ConfirmationState]] = frozenset(
+    {ConfirmationState.CONFIRMED, ConfirmationState.CORRECTED}
+)
+
+
+def confirmed_context_for_finding_analysis(
+    dataset_context: DatasetContext | None, *, finalized: bool
+) -> dict[str, object] | None:
+    """The context payload a finding-analysis request may carry, or `None`.
+
+    `AI-08`: only fields the *user* confirmed or corrected are ever sent,
+    and only once the analysis context has been finalized. Inferred and
+    unknown fields are never sent — an inferred value must not reach the
+    model, or the user, labelled as confirmed fact. Returns `None` when
+    the context is not finalized or no field was confirmed/corrected, so a
+    caller can treat "nothing to send" and "not finalized" identically.
+
+    Each entry carries only the field's `value` and its `confirmation_state`
+    (never its inference confidence or source): what a model may rely on is
+    the user's own answer.
+    """
+    if not finalized or dataset_context is None:
+        return None
+    fields: dict[str, object] = {}
+    for field in ContextField:
+        field_value = getattr(dataset_context, field.value)
+        if field_value.confirmation_state not in _CONFIRMED_STATES:
+            continue
+        value = field_value.value
+        fields[field.value] = {
+            "value": list(value) if isinstance(value, tuple) else value,
+            "confirmation_state": field_value.confirmation_state.value,
+        }
+    return fields or None
+
+
 def build_finding_explanation_envelope(
     finding: FindingCandidate,
     evidence: tuple[Evidence, ...],
     *,
     confirmed_context: Mapping[str, object] | None = None,
 ) -> PromptEnvelope:
-    """Build the `PromptEnvelope` for a `FINDING_EXPLANATION` call about
+    """Build the `PromptEnvelope` for a finding-analysis call about
     `finding`.
 
     `evidence` (typically resolved via `analysis.service.
-    get_finding_evidence`, `WP-027`) is forwarded as `computed_evidence`
-    unchanged. This package sends zero dataset samples — disclosed, not
-    silently assumed (a finding's own evidence is already the grounding
-    a business-facing explanation needs).
+    get_finding_evidence`) is forwarded as `computed_evidence`. This
+    package sends zero dataset samples — disclosed, not silently assumed
+    (a finding's own evidence is already the grounding a business-facing
+    analysis needs).
 
-    `confirmed_context` (`UI-02` slice 2 revision, `WP-064` r2;
-    `docs/decision-log.md` D-037's "confirmed/finalized context available
-    to the explanation/enrichment path" requirement) is optional and
-    caller-supplied — typically a finalized `DatasetContext`, serialized
-    the same way `context_inference.ai_context.
-    build_context_inference_envelope` already does. Left `None` (the
-    default) whenever no context has been confirmed yet, so this
-    function's own behavior for a caller that never supplies it is
-    identical to before this revision. `PromptEnvelope.confirmed_context`
-    remains untrusted regardless (`docs/architecture.md` §7), matching
-    `build_context_inference_envelope`'s own precedent.
+    `confirmed_context` is optional and caller-supplied. **`AI-08`:** the
+    caller must pass only user-confirmed or corrected context fields
+    (never inferred or unknown ones) and only once the analysis context
+    has been finalized; this function forwards whatever it is given as
+    `PromptEnvelope.confirmed_context`, which the output validator then
+    treats as the only set of context fields a statement may cite.
+    `PromptEnvelope.confirmed_context` remains untrusted regardless
+    (`docs/architecture.md` §7).
     """
     return build_prompt_envelope(
-        task=AI_EXPLANATION_TASK,
+        task=build_finding_analysis_task(finding),
         computed_evidence=evidence,
         confirmed_context=confirmed_context,
     )
@@ -166,14 +217,8 @@ def _grounded_columns(evidence: tuple[Evidence, ...]) -> tuple[ColumnReference, 
     deduplicated in first-seen order.
 
     Deliberately not derived from the model's own `referenced_columns`
-    reply: that field is validated only as a set of already-known
-    column-key *strings* (`ai_boundary.validation`), not full
-    `ColumnReference` objects, so it cannot be safely round-tripped into
-    `FindingExplanation.referenced_columns`'s typed shape. Mirrors
-    `context_inference.ai_context._build_hypothesis`'s own precedent of
-    leaving the structured column field independent of the model's raw
-    reply — grounding stays exact against what was actually sent, not
-    what the model claims to have used.
+    reply: grounding stays exact against what was actually sent, not what
+    the model claims to have used.
     """
     seen: dict[str, ColumnReference] = {}
     for item in evidence:
@@ -182,20 +227,68 @@ def _grounded_columns(evidence: tuple[Evidence, ...]) -> tuple[ColumnReference, 
     return tuple(seen.values())
 
 
+def _string_tuple(value: object) -> tuple[str, ...]:
+    assert isinstance(value, list | tuple)  # guaranteed by validation acceptance
+    return tuple(str(item) for item in value)
+
+
 def _build_explanation(
-    narrative: str,
+    raw_output: Mapping[str, object],
     evidence: tuple[Evidence, ...],
     *,
     provider_name: str,
     model_identifier: str,
 ) -> FindingExplanation:
+    """Turn an already-validated `finding_analysis_v1` output into the
+    domain object. Only called after `validate_finding_analysis_output`
+    accepted `raw_output`, so the shapes asserted here are guaranteed."""
+    grounded = _grounded_columns(evidence)
+    column_by_key = {column.internal_key: column for column in grounded}
+
+    explanation = raw_output["explanation"]
+    assert isinstance(explanation, str)
+
+    impact_entries = raw_output["business_impact"]
+    assert isinstance(impact_entries, list | tuple)
+    impact: list[BusinessImpactStatement] = []
+    for entry in impact_entries:
+        assert isinstance(entry, Mapping)
+        assumption = entry["assumption"]
+        assert isinstance(assumption, str)
+        statement = entry["statement"]
+        assert isinstance(statement, str)
+        impact.append(
+            BusinessImpactStatement(
+                statement=statement,
+                basis=ImpactBasis(str(entry["basis"])),
+                evidence_ids=_string_tuple(entry["evidence_ids"]),
+                context_fields=_string_tuple(entry["context_fields"]),
+                assumption=assumption.strip() or None,
+            )
+        )
+
+    rule = raw_output["validation_rule"]
+    assert isinstance(rule, Mapping)
+    description = rule["description"]
+    assert isinstance(description, str)
+    rule_columns = tuple(
+        column_by_key[key] for key in _string_tuple(rule["columns"]) if key in column_by_key
+    )
+
     return FindingExplanation(
-        narrative=narrative,
+        narrative=explanation,
         provenance=Provenance.AI_INTERPRETATION,
         referenced_evidence_ids=tuple(item.evidence_id for item in evidence),
-        referenced_columns=_grounded_columns(evidence),
+        referenced_columns=grounded,
         provider_name=provider_name,
         model_identifier=model_identifier,
+        business_impact=tuple(impact),
+        remediation=_string_tuple(raw_output["remediation"]),
+        validation_rule=ProposedValidationRule(
+            rule_type=ValidationRuleType(str(rule["rule_type"])),
+            columns=rule_columns,
+            description=description,
+        ),
     )
 
 
@@ -206,24 +299,32 @@ def run_finding_explanation(
     *,
     max_retries: int = DEFAULT_MAX_RETRIES,
 ) -> FindingExplanationResult:
-    """Call `provider` for `AIOperation.FINDING_EXPLANATION` against
-    `envelope`, validating the response and retrying with feedback on
-    rejection, up to `max_retries` additional attempts. Never raises —
-    a `ProviderError` (connection failure, timeout, malformed response)
-    is isolated into a safe `provider_error` string and the call stops
-    immediately, mirroring `context_inference.ai_context.
-    run_context_inference`'s own established pattern exactly.
+    """Call `provider` once (plus bounded retries) for the structured
+    finding analysis against `envelope`, validating the response role by
+    role and retrying with feedback on rejection, up to `max_retries`
+    additional attempts. Never raises — a `ProviderError` (connection
+    failure, timeout, malformed response) is isolated into a safe
+    `provider_error` string and the call stops immediately, mirroring
+    `context_inference.ai_context.run_context_inference`.
 
-    `known_numeric_facts` is derived from `evidence` via
-    `_known_numeric_facts_from_evidence` and forwarded to
-    `validate_model_output`, so a model's numeric claims about the
-    finding are checked against what was actually sent.
+    The request carries the per-request `OutputContract`
+    (`build_finding_analysis_contract`): its schema enumerates exactly the
+    evidence ids, columns, confirmed-context fields and numeric-fact names
+    that `envelope`/`evidence` actually supply. `known_numeric_facts` is
+    derived from `evidence` and forwarded to the validator, so numeric
+    claims are checked against what was actually sent.
     """
     known_numeric_facts = _known_numeric_facts_from_evidence(evidence)
+    contract = build_finding_analysis_contract(
+        evidence=evidence,
+        context_fields=tuple(str(key) for key in envelope.confirmed_context),
+        numeric_fact_names=tuple(known_numeric_facts),
+    )
     request = ProviderRequest(
         operation=AIOperation.FINDING_EXPLANATION,
         envelope=envelope,
         known_numeric_facts=known_numeric_facts,
+        output_contract=contract,
     )
     retries_used = 0
     while True:
@@ -237,14 +338,12 @@ def run_finding_explanation(
                 provider_error=f"{type(exc).__name__}: {exc}",
                 retries_used=retries_used,
             )
-        outcome = validate_model_output(
+        outcome = validate_finding_analysis_output(
             response.raw_output, envelope, known_numeric_facts=known_numeric_facts
         )
         if outcome.accepted:
-            narrative = response.raw_output.get("narrative")
-            assert isinstance(narrative, str)  # guaranteed by validate_model_output acceptance
             explanation = _build_explanation(
-                narrative,
+                response.raw_output,
                 evidence,
                 provider_name=response.provider_name,
                 model_identifier=response.model_identifier,
@@ -272,6 +371,8 @@ __all__ = [
     "AI_EXPLANATION_TASK",
     "DEFAULT_MAX_RETRIES",
     "FindingExplanationResult",
+    "build_finding_analysis_task",
     "build_finding_explanation_envelope",
+    "confirmed_context_for_finding_analysis",
     "run_finding_explanation",
 ]

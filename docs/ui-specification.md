@@ -169,6 +169,28 @@ Sections:
 - review controls
 - technical metadata
 
+**Analysis sections (`AI-08`, `docs/decision-log.md` D-040).** Under the
+observation, one provenance line and the three sections *possible
+business impact*, *remediation* and *validation rule* render from the same
+analysis and must stay distinguishable from one another and from
+deterministic evidence:
+
+- the provenance line says either "AI interpretation — Local AI ·
+  llama.cpp · Qwen3.5 4B (Q4_K_M)" (human-readable labels only; **never**
+  a filesystem path) or "Built-in TrustTable guidance (no AI)" with the
+  reason no AI result is shown;
+- each business-impact statement carries a badge — *Evidence-backed*,
+  *From your confirmed context*, or *Conditional* (shown together with
+  "Assumes: …"); a conditional statement is never presented as a fact;
+- remediation states it is advisory and that TrustTable never changes the
+  user's data;
+- the validation rule is badged *Proposed — not active* and states that
+  TrustTable does not run or enforce it and nothing is activated
+  automatically;
+- an empty section shows an honest empty state, not a "not yet
+  available" placeholder. *Review controls* (persistent review) remains
+  the one not-yet-available section.
+
 ### 4.8 Prompt-injection warning
 
 Dedicated presentation:

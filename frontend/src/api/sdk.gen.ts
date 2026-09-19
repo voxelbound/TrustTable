@@ -198,17 +198,27 @@ export const getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdE
  * to a real HTTP response.
  *
  * When the analysis's context has been finalized (`Analysis.
- * context_finalized`, via `POST .../finalize`), the confirmed
- * `DatasetContext` is serialized into the AI envelope's
- * `confirmed_context` field, grounding the explanation in confirmed
+ * context_finalized`, via `POST .../finalize`), the fields the user
+ * *confirmed or corrected* are serialized into the AI envelope's
+ * `confirmed_context` field, grounding the analysis in confirmed
  * business facts (domain, row grain, currency behavior, etc.) in
  * addition to the finding's own evidence — D-037's "confirmed/
  * finalized context available to the explanation/enrichment path"
- * requirement. Deliberately gated on `context_finalized` rather than
+ * requirement. **`AI-08`:** inferred and unknown fields are never sent,
+ * so an inferred value cannot reach the model — or the user — labelled
+ * as confirmed. Deliberately gated on `context_finalized` rather than
  * merely `context is not None`: this is what makes `POST .../finalize`
  * a meaningful, observable action rather than a no-op flag flip.
  * Before finalize, this route's behavior is unchanged from `WP-063`
  * (evidence-grounded only).
+ *
+ * **`AI-08` — the four sections.** The response always carries an
+ * explanation, business impact, remediation and a proposed validation
+ * rule. With AI disabled, rejected or failing they come from the
+ * deterministic built-in guidance (`explanation.guidance`); an accepted
+ * structured AI response replaces all four together. The response never
+ * carries the raw configured model value — only a sanitized identifier
+ * and human-readable `ai_provenance` labels (`ai_provider.display`).
  *
  * Also returns `ai_call_status` (`WP-065`, defect fix), this
  * request's own independent AI-call disclosure — deliberately

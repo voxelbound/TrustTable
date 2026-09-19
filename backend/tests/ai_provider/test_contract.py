@@ -19,6 +19,7 @@ from trusttable_backend.ai_boundary.validation import (
 from trusttable_backend.ai_provider.contract import (
     AIOperation,
     AIProvider,
+    OutputContract,
     ProviderConnectionError,
     ProviderError,
     ProviderHealth,
@@ -139,6 +140,62 @@ def test_provider_request_accepts_explicit_retry_feedback() -> None:
         retry_feedback="unknown_evidence_id: ev-99",
     )
     assert request.retry_feedback == "unknown_evidence_id: ev-99"
+
+
+# ---------------------------------------------------------------------------
+# AI-08: OutputContract
+# ---------------------------------------------------------------------------
+
+
+def test_provider_request_has_no_output_contract_by_default() -> None:
+    request = ProviderRequest(
+        operation=AIOperation.FINDING_EXPLANATION,
+        envelope=make_envelope(),
+        known_numeric_facts={},
+    )
+    assert request.output_contract is None
+
+
+def test_provider_request_carries_an_explicit_output_contract() -> None:
+    contract = OutputContract(
+        name="c_v1", json_schema={"type": "object"}, instructions="Reply with JSON."
+    )
+    request = ProviderRequest(
+        operation=AIOperation.FINDING_EXPLANATION,
+        envelope=make_envelope(),
+        known_numeric_facts={},
+        output_contract=contract,
+    )
+    assert request.output_contract is contract
+
+
+def test_output_contract_defaults_and_boundaries() -> None:
+    contract = OutputContract(name="c", json_schema={}, instructions="i")
+    assert contract.max_output_tokens is None
+    assert contract.mock_output_factory is None
+    assert OutputContract(name="c", json_schema={}, instructions="i", max_output_tokens=1)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"name": ""}, "name"),
+        ({"instructions": ""}, "instructions"),
+        ({"max_output_tokens": 0}, "max_output_tokens"),
+        ({"max_output_tokens": -5}, "max_output_tokens"),
+    ],
+)
+def test_output_contract_rejects_invalid_fields(kwargs: dict[str, object], message: str) -> None:
+    fields: dict[str, object] = {"name": "c", "json_schema": {}, "instructions": "i"}
+    fields.update(kwargs)
+    with pytest.raises(ValueError, match=message):
+        OutputContract(**fields)  # type: ignore[arg-type]
+
+
+def test_output_contract_is_reexported_from_the_provider_contract_module() -> None:
+    from trusttable_backend.ai_boundary import output_contract
+
+    assert OutputContract is output_contract.OutputContract
 
 
 # ---------------------------------------------------------------------------

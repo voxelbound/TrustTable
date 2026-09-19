@@ -80,6 +80,20 @@ Deliver, in dependency order:
 > after `API-02` and before `AI-05` (`D-033`'s sequencing amendment).
 > Does not reopen `D-034`/`D-035`.
 
+> **Annotation (2026-09-19, `docs/decision-log.md` D-040):** `AI-08`
+> (grounded AI analysis, recommendations and deployable local-AI
+> experience) is inserted immediately before `REL-02`, by explicit
+> product direction: before `v0.2` is release-qualified, each finding's
+> AI-assisted analysis — explanation, possible business impact,
+> remediation and a proposed validation rule — must be complete,
+> structurally constrained and advisory, its provenance must not expose
+> host paths, and Linux/local-AI installation must be discoverable from
+> the README. It adds no `v0.3` scope: there is still no rule engine,
+> rule execution, persistent review or export. `REL-02` gains explicit
+> Linux-deployment acceptance requirements, including verifying the
+> Linux guide on a fresh host and publishing images, rather than that
+> path being claimed earlier.
+
 This is the first promoted portfolio release.
 
 ## v0.3 — Complete manager workflow

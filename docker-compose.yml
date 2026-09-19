@@ -28,6 +28,14 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    # `AI-08`: lets the backend container reach a `llama-server` running on
+    # the host at the documented default LLM_BASE_URL
+    # (http://host.docker.internal:8081). Docker Desktop defines this name
+    # itself; Docker Engine on Linux does not, so it is mapped explicitly to
+    # the host gateway. Harmless when AI is disabled (the default). See
+    # docs/installation-linux.md.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - path: .env
         required: false

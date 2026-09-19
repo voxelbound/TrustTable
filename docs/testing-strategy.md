@@ -115,6 +115,22 @@ Checks:
 - deterministic findings preserved
 - safe fallback after malformed output
 
+**Structured finding analysis (`AI-08`, `docs/decision-log.md` D-040).**
+The finding-analysis output is a structured contract, so these checks are
+also asserted per role — schema and bounds, evidence/column/context-field
+grounding at every level, impact statements' declared basis, ungrounded
+consequence terms and numbers in prose, advisory-only wording in
+remediation and rule text — and end to end through the real route, the
+real provider factory and the real `LlamaCppProvider` over a
+request-capturing stub (`backend/tests/api/test_finding_analysis_end_to_end.py`):
+the captured request proves what a model actually received (evidence ids,
+confirmed-only context, no raw prompt-injection excerpt, no dataset
+samples), and every malformed, hostile or failing response is shown to
+leave the full deterministic four-section result and the findings, evidence
+and trust state byte-identical. No live model is used in CI; how reliably
+a real local model fills the schema is measured in the `REL-02`
+local-AI qualification.
+
 ## 3. Prompt-injection adversarial test
 
 Synthetic value:

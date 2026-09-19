@@ -415,15 +415,45 @@ evidence-grounded explanation through it; on acceptance the AI
 explanation is returned instead, on rejection or provider error the
 deterministic explanation is returned unchanged (graceful
 degradation). When the analysis's context has been finalized
-(`POST .../finalize`), the confirmed context is also made available to
-this call, grounding the explanation further.
+(`POST .../finalize`), the context fields **the user confirmed or
+corrected** are also made available to this call, grounding the analysis
+further; inferred or unknown fields are never sent (`AI-08`, D-040).
+
+**Four-section analysis (`AI-08`, D-040).** Despite its name (kept for
+compatibility), this resource returns one finding's whole grounded
+analysis: an explanation, possible business impact, remediation and a
+proposed validation rule. When `provenance` is `"ai_interpretation"` all
+four come from a single validated, structurally constrained AI response
+(`finding_analysis_v1`); otherwise they come from TrustTable's
+deterministic built-in guidance, so every section is populated with AI
+disabled, rejected or failing. The AI-produced sections are advisory.
 
 Returns:
 
-- `narrative` — one or two sentences explaining the finding
+- `narrative` — the explanation: one or two sentences explaining the
+  finding
 - `provenance` — `"deterministic_fallback"` or `"ai_interpretation"`
-- `provider_name`, `model_identifier` — both `null` unless `provenance`
-  is `"ai_interpretation"`
+- `business_impact` — 1–3 statements, each with `statement`, a `basis`
+  (`"evidence"`, `"confirmed_context"` or `"assumption"`), `evidence_ids`,
+  `context_fields` and `assumption`. A `"assumption"` statement is a
+  conditional implication and always carries the condition it depends on;
+  a client must never present it as a fact
+- `remediation` — 1–3 advisory steps for a person. TrustTable never
+  changes uploaded data, and no step claims it did
+- `validation_rule` — a proposed rule: `rule_type` (one of the §11 /
+  `docs/product-requirements.md` §13 types), `columns`, `description`,
+  and `status`, which is always `"proposed"`. It is not run, enforced or
+  exported (the rule engine is a later item); a client must never
+  present it as active
+- `provider_name` — `null` unless `provenance` is `"ai_interpretation"`
+- `model_identifier` — `null` unless `provenance` is
+  `"ai_interpretation"`; then only a **sanitized** identifier (the final
+  path segment of `LLM_MODEL`, bounded), never a filesystem path
+- `ai_provenance` — `null` unless `provenance` is `"ai_interpretation"`;
+  then human-readable labels (`deployment_label` "Local AI",
+  `runtime_label` "llama.cpp", `model_label` "Qwen3.5 4B",
+  `quantization` "Q4_K_M", `model_identifier`). This is what a UI shows;
+  the raw configured model value never leaves the backend
 - `ai_call_status` (`WP-065`) — exactly one of `"not_configured"`
   (no AI provider configured, no attempt made), `"attempted_accepted"`,
   `"attempted_rejected"` (a provider was called but its output, and any
@@ -441,7 +471,9 @@ Returns:
   `True` on every attempted call (this finding's own bounded `Evidence`
   is always sent); `confirmed_context_sent_to_model` is additionally
   `True` only once `POST .../finalize` has been called for this
-  analysis.
+  analysis **and** at least one context field was user-confirmed or
+  corrected (so it is `False` when the user finalized without confirming
+  anything).
 - `referenced_evidence_ids`, `referenced_columns` — grounding proof,
   always derived from what was actually sent, never the model's own
   claims

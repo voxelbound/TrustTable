@@ -7,7 +7,13 @@ from __future__ import annotations
 
 import pytest
 
-from trusttable_backend.domain.explanation import FindingExplanation
+from trusttable_backend.domain.explanation import (
+    BusinessImpactStatement,
+    FindingExplanation,
+    ImpactBasis,
+    ProposedValidationRule,
+    ValidationRuleType,
+)
 from trusttable_backend.domain.value_objects import ColumnReference, Provenance
 
 
@@ -65,3 +71,139 @@ def test_finding_explanation_carries_referenced_evidence_and_columns() -> None:
     )
     assert explanation.referenced_evidence_ids == ("ev-1", "ev-2")
     assert explanation.referenced_columns == (column,)
+
+
+# ---------------------------------------------------------------------------
+# AI-08: the three further advisory sections
+# ---------------------------------------------------------------------------
+
+
+def test_the_advisory_sections_default_to_empty_for_a_bare_explanation() -> None:
+    explanation = make_explanation()
+    assert explanation.business_impact == ()
+    assert explanation.remediation == ()
+    assert explanation.validation_rule is None
+
+
+def test_impact_basis_is_a_closed_three_value_set() -> None:
+    assert {member.value for member in ImpactBasis} == {
+        "evidence",
+        "confirmed_context",
+        "assumption",
+    }
+
+
+def test_validation_rule_types_are_exactly_the_documented_product_requirement_set() -> None:
+    # docs/product-requirements.md section 13, "Supported rule types".
+    assert {member.value for member in ValidationRuleType} == {
+        "not_null",
+        "unique",
+        "accepted_values",
+        "numeric_range",
+        "date_range",
+        "regex",
+        "max_missing_percentage",
+        "approximate_equality",
+        "expression_comparison",
+        "conditional_rule",
+        "max_duplicate_percentage",
+    }
+
+
+def test_an_evidence_backed_statement_cites_evidence_and_carries_nothing_else() -> None:
+    statement = BusinessImpactStatement(
+        statement="Totals may double count.", basis=ImpactBasis.EVIDENCE, evidence_ids=("ev-1",)
+    )
+    assert statement.assumption is None
+    with pytest.raises(ValueError, match="cite evidence"):
+        BusinessImpactStatement(statement="x", basis=ImpactBasis.EVIDENCE)
+    with pytest.raises(ValueError, match="no context or assumption"):
+        BusinessImpactStatement(
+            statement="x", basis=ImpactBasis.EVIDENCE, evidence_ids=("ev-1",), assumption="if y"
+        )
+    with pytest.raises(ValueError, match="no context or assumption"):
+        BusinessImpactStatement(
+            statement="x",
+            basis=ImpactBasis.EVIDENCE,
+            evidence_ids=("ev-1",),
+            context_fields=("row_grain",),
+        )
+
+
+def test_a_context_backed_statement_cites_context_and_carries_no_assumption() -> None:
+    BusinessImpactStatement(
+        statement="x", basis=ImpactBasis.CONFIRMED_CONTEXT, context_fields=("row_grain",)
+    )
+    with pytest.raises(ValueError, match="cite confirmed context"):
+        BusinessImpactStatement(statement="x", basis=ImpactBasis.CONFIRMED_CONTEXT)
+    with pytest.raises(ValueError, match="no assumption"):
+        BusinessImpactStatement(
+            statement="x",
+            basis=ImpactBasis.CONFIRMED_CONTEXT,
+            context_fields=("row_grain",),
+            assumption="if y",
+        )
+
+
+def test_a_conditional_statement_must_state_its_assumption() -> None:
+    statement = BusinessImpactStatement(
+        statement="x", basis=ImpactBasis.ASSUMPTION, assumption="it feeds reports"
+    )
+    assert statement.assumption == "it feeds reports"
+    with pytest.raises(ValueError, match="state its assumption"):
+        BusinessImpactStatement(statement="x", basis=ImpactBasis.ASSUMPTION)
+    with pytest.raises(ValueError, match="blank"):
+        BusinessImpactStatement(statement="x", basis=ImpactBasis.ASSUMPTION, assumption="  ")
+    with pytest.raises(ValueError, match="no confirmed context"):
+        BusinessImpactStatement(
+            statement="x",
+            basis=ImpactBasis.ASSUMPTION,
+            assumption="it feeds reports",
+            context_fields=("row_grain",),
+        )
+
+
+def test_a_conditional_statement_may_cite_its_triggering_evidence() -> None:
+    statement = BusinessImpactStatement(
+        statement="x",
+        basis=ImpactBasis.ASSUMPTION,
+        assumption="it feeds reports",
+        evidence_ids=("ev-1",),
+    )
+    assert statement.evidence_ids == ("ev-1",)
+
+
+def test_an_impact_statement_must_not_be_empty() -> None:
+    with pytest.raises(ValueError, match="statement"):
+        BusinessImpactStatement(statement="", basis=ImpactBasis.ASSUMPTION, assumption="a")
+
+
+def test_a_proposed_rule_is_always_proposed_and_never_active() -> None:
+    rule = ProposedValidationRule(
+        rule_type=ValidationRuleType.NOT_NULL, columns=(), description="Values should be filled."
+    )
+    assert rule.status == "proposed"
+    assert not hasattr(rule, "active")
+    assert not hasattr(rule, "enabled")
+    with pytest.raises(AttributeError):
+        rule.status = "active"  # type: ignore[misc]
+
+
+def test_a_proposed_rule_needs_a_description() -> None:
+    with pytest.raises(ValueError, match="description"):
+        ProposedValidationRule(rule_type=ValidationRuleType.UNIQUE, columns=(), description="")
+
+
+def test_an_explanation_carries_and_validates_its_advisory_sections() -> None:
+    rule = ProposedValidationRule(
+        rule_type=ValidationRuleType.UNIQUE, columns=(), description="Rows should be unique."
+    )
+    impact = BusinessImpactStatement(statement="x", basis=ImpactBasis.ASSUMPTION, assumption="a")
+    explanation = make_explanation(
+        business_impact=(impact,), remediation=("Review the rows.",), validation_rule=rule
+    )
+    assert explanation.business_impact == (impact,)
+    assert explanation.remediation == ("Review the rows.",)
+    assert explanation.validation_rule is rule
+    with pytest.raises(ValueError, match="remediation"):
+        make_explanation(remediation=("",))

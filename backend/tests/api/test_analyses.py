@@ -51,7 +51,7 @@ class _RecordingProvider:
     back (`UI-02` slice 2 revision, `WP-064` r2)."""
 
     def __init__(self, raw_output: dict[str, object] | None = None) -> None:
-        self._raw_output = raw_output or dict(_VALID_AI_OUTPUT)
+        self._raw_output = raw_output
         self.requests: list[ProviderRequest] = []
 
     @property
@@ -63,8 +63,18 @@ class _RecordingProvider:
 
     def complete(self, request: ProviderRequest) -> ProviderResponse:
         self.requests.append(request)
+        contract = request.output_contract
+        raw_output: dict[str, object] | Any
+        if self._raw_output is not None:
+            raw_output = self._raw_output
+        elif contract is not None and contract.mock_output_factory is not None:
+            # `AI-08`: a structured-contract request (the finding analysis)
+            # gets the contract's own grounded default output.
+            raw_output = contract.mock_output_factory(request.envelope)
+        else:
+            raw_output = dict(_VALID_AI_OUTPUT)
         return ProviderResponse(
-            raw_output=self._raw_output,
+            raw_output=raw_output,
             provider_name=self.provider_name,
             model_identifier="recording-v1",
             duration_ms=1.0,
@@ -737,21 +747,47 @@ def test_get_analysis_finding_explanation_default_config_is_deterministic(
         "provenance",
         "provider_name",
         "model_identifier",
+        "ai_provenance",
         "ai_call_status",
         "evidence_sent_to_model",
         "confirmed_context_sent_to_model",
         "referenced_evidence_ids",
         "referenced_columns",
+        "business_impact",
+        "remediation",
+        "validation_rule",
     }
     assert body["finding_id"] == "0"
     assert body["narrative"]
     assert body["provenance"] == "deterministic_fallback"
     assert body["provider_name"] is None
     assert body["model_identifier"] is None
+    assert body["ai_provenance"] is None
     assert body["ai_call_status"] == "not_configured"
     assert body["evidence_sent_to_model"] is False
     assert body["confirmed_context_sent_to_model"] is False
     assert body["referenced_evidence_ids"]
+    # `AI-08`: with AI disabled the four sections are still all present and
+    # useful — deterministic built-in guidance, never a placeholder.
+    _assert_four_sections_present(body)
+    assert all(item["basis"] == "assumption" for item in body["business_impact"])
+    assert all(item["assumption"] for item in body["business_impact"])
+
+
+def _assert_four_sections_present(body: dict[str, Any]) -> None:
+    assert body["narrative"]
+    assert body["business_impact"]
+    for item in body["business_impact"]:
+        assert set(item) == {"statement", "basis", "evidence_ids", "context_fields", "assumption"}
+        assert item["statement"]
+        assert item["basis"] in {"evidence", "confirmed_context", "assumption"}
+    assert body["remediation"]
+    assert all(step for step in body["remediation"])
+    rule = body["validation_rule"]
+    assert rule is not None
+    assert set(rule) == {"rule_type", "columns", "description", "status"}
+    assert rule["status"] == "proposed"
+    assert rule["description"]
 
 
 def test_get_analysis_finding_explanation_with_mock_provider_is_ai_interpretation(
@@ -774,9 +810,17 @@ def test_get_analysis_finding_explanation_with_mock_provider_is_ai_interpretatio
     assert body["provenance"] == "ai_interpretation"
     assert body["provider_name"] == "mock"
     assert body["model_identifier"] == "mock-v1"
+    assert body["ai_provenance"] == {
+        "deployment_label": "Test AI",
+        "runtime_label": "Mock provider",
+        "model_label": "mock-v1",
+        "quantization": None,
+        "model_identifier": "mock-v1",
+    }
     assert body["ai_call_status"] == "attempted_accepted"
     assert body["evidence_sent_to_model"] is True
     assert body["confirmed_context_sent_to_model"] is False
+    _assert_four_sections_present(body)
 
 
 def test_get_analysis_finding_explanation_rejected_output_falls_back_with_status(
@@ -800,9 +844,13 @@ def test_get_analysis_finding_explanation_rejected_output_falls_back_with_status
     assert body["provenance"] == "deterministic_fallback"
     assert body["provider_name"] is None
     assert body["model_identifier"] is None
+    assert body["ai_provenance"] is None
     assert body["ai_call_status"] == "attempted_rejected"
     assert body["evidence_sent_to_model"] is True
     assert body["narrative"]
+    # The fallback is the full deterministic four-section guidance, not a
+    # partial or empty result.
+    _assert_four_sections_present(body)
 
 
 def test_get_analysis_finding_explanation_provider_error_falls_back_with_status(
@@ -826,6 +874,7 @@ def test_get_analysis_finding_explanation_provider_error_falls_back_with_status(
     assert body["ai_call_status"] == "attempted_provider_error"
     assert body["evidence_sent_to_model"] is True
     assert "simulated connection failure" not in response.text
+    _assert_four_sections_present(body)
 
 
 def _finding_with_category(client: TestClient, analysis_id: str, category: str) -> dict[str, Any]:
@@ -935,8 +984,15 @@ def test_get_analysis_finding_explanation_confirmed_context_sent_to_model_after_
     assert before_finalize.json()["evidence_sent_to_model"] is True
 
     client.get(f"/api/v1/analyses/{analysis_id}/context")
+    # `AI-08`: finalize alone never turns inferred values into confirmed
+    # facts — the user must have confirmed or corrected a field.
+    edit_response = client.put(
+        f"/api/v1/analyses/{analysis_id}/context",
+        json={"edits": {"row_grain": "One row per order"}, "expected_version": 1},
+    )
+    assert edit_response.status_code == 200
     finalize_response = client.post(
-        f"/api/v1/analyses/{analysis_id}/finalize", json={"expected_version": 1}
+        f"/api/v1/analyses/{analysis_id}/finalize", json={"expected_version": 2}
     )
     assert finalize_response.status_code == 202
 
@@ -946,6 +1002,35 @@ def test_get_analysis_finding_explanation_confirmed_context_sent_to_model_after_
     after_body = after_finalize.json()
     assert after_body["confirmed_context_sent_to_model"] is True
     assert after_body["evidence_sent_to_model"] is True
+
+
+def test_finalizing_without_confirming_anything_sends_no_context_to_the_model(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`AI-08`: `finalize` alone must not present inferred values as
+    confirmed. Nothing was confirmed or corrected, so nothing is sent and
+    the disclosure says so."""
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+    recording = _RecordingProvider()
+    monkeypatch.setattr(analyses_module, "create_provider", lambda *a, **kw: recording)
+    client.get(f"/api/v1/analyses/{analysis_id}/context")
+    finalize_response = client.post(
+        f"/api/v1/analyses/{analysis_id}/finalize", json={"expected_version": 1}
+    )
+    assert finalize_response.status_code == 202
+    recording.requests.clear()
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/explanation")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["confirmed_context_sent_to_model"] is False
+    assert body["evidence_sent_to_model"] is True
+    assert len(recording.requests) == 1
+    assert recording.requests[0].envelope.confirmed_context == {}
 
 
 def test_get_analysis_finding_explanation_unknown_analysis_returns_structured_404(
@@ -1303,8 +1388,13 @@ def test_get_analysis_finding_explanation_uses_confirmed_context_after_finalize(
     monkeypatch.setattr(analyses_module, "create_provider", lambda *a, **kw: recording)
 
     client.get(f"/api/v1/analyses/{analysis_id}/context")
+    edit_response = client.put(
+        f"/api/v1/analyses/{analysis_id}/context",
+        json={"edits": {"row_grain": "One row per order"}, "expected_version": 1},
+    )
+    assert edit_response.status_code == 200
     finalize_response = client.post(
-        f"/api/v1/analyses/{analysis_id}/finalize", json={"expected_version": 1}
+        f"/api/v1/analyses/{analysis_id}/finalize", json={"expected_version": 2}
     )
     assert finalize_response.status_code == 202
     recording.requests.clear()  # isolate the explanation call's own request
@@ -1314,8 +1404,15 @@ def test_get_analysis_finding_explanation_uses_confirmed_context_after_finalize(
     assert response.status_code == 200
     assert len(recording.requests) == 1
     confirmed_context = recording.requests[0].envelope.confirmed_context
-    assert confirmed_context
-    assert "probable_domain" in confirmed_context
+    # Only the field the user confirmed/corrected is sent; the inferred
+    # `probable_domain` (still `CALCULATED`, never confirmed) is not.
+    assert set(confirmed_context) == {"row_grain"}
+    assert confirmed_context["row_grain"]["value"] == "One row per order"  # type: ignore[index]
+    assert confirmed_context["row_grain"]["confirmation_state"] in {  # type: ignore[index]
+        "confirmed",
+        "corrected",
+    }
+    assert "probable_domain" not in confirmed_context
 
 
 def test_get_analysis_finding_explanation_ignores_unfinalized_context(

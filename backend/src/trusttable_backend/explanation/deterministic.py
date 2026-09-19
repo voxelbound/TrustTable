@@ -20,6 +20,7 @@ from __future__ import annotations
 from ..detectors.contract import FindingCandidate
 from ..domain.explanation import FindingExplanation
 from ..domain.value_objects import Provenance
+from .guidance import build_deterministic_guidance
 
 _SEVERITY_FRAMING = {
     "critical": "This is a critical-severity finding that likely requires immediate attention.",
@@ -43,7 +44,12 @@ def build_deterministic_explanation(finding: FindingCandidate) -> FindingExplana
     the finding's own `evidence_ids`/`affected_columns` exactly — a
     deterministic explanation cannot reference anything beyond what the
     finding itself already carries.
+
+    `AI-08`: also carries the built-in guidance (`guidance.py`) — the
+    conditional business impact, advisory remediation and proposed rule —
+    so the four Finding Detail sections are useful with no AI at all.
     """
+    guidance = build_deterministic_guidance(finding)
     framing = _SEVERITY_FRAMING.get(
         finding.severity.value, "This finding was flagged during analysis."
     )
@@ -56,6 +62,9 @@ def build_deterministic_explanation(finding: FindingCandidate) -> FindingExplana
         provenance=Provenance.DETERMINISTIC_FALLBACK,
         referenced_evidence_ids=finding.evidence_ids,
         referenced_columns=finding.affected_columns,
+        business_impact=guidance.business_impact,
+        remediation=guidance.remediation,
+        validation_rule=guidance.validation_rule,
     )
 
 

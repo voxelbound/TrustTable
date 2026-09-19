@@ -453,10 +453,66 @@ Acceptance:
 > reports are `v0.3` deliverables, `docs/release-plan.md`), so that half of
 > this acceptance line is owed by the `v0.3` report package.
 
+## AI-08 — Grounded AI analysis, recommendations and deployable local-AI experience
+
+Inserted before `REL-02` by explicit product direction (2026-09-19, see
+`docs/decision-log.md` D-040 and the dated annotation on D-033): before `v0.2`
+is release-qualified, the AI-assisted finding experience must be complete and
+deployable.
+
+For each finding, one coherent, grounded, **advisory** analysis with four
+sections — explanation, possible business impact, remediation recommendation,
+proposed validation rule — from a versioned, structurally constrained AI output
+contract (`finding_analysis_v1`) validated role by role, with deterministic
+built-in guidance for all 13 detectors so the same four sections are useful when
+AI is disabled, rejected or failing.
+
+Delivers:
+
+- the structured output contract, sent to `llama.cpp` as a JSON-schema
+  `response_format`, and a role-aware validator that keeps `EVAL-AI-01`'s claim
+  screen as defense in depth (the durable structured-output direction for this
+  surface — see D-040 for what remains lexical);
+- business-impact statements labelled evidence-backed, confirmed-context-backed
+  or a conditional assumption; remediation that never mutates data; a proposed
+  validation rule that is never active;
+- only user-confirmed or corrected context, and only once finalized, as grounding;
+- normal provenance as a human-readable identity ("Local AI · llama.cpp ·
+  Qwen3.5 4B") with no absolute host path in the API or UI;
+- first-class Linux and local-AI installation documentation
+  (`docs/installation-linux.md`) and the Docker host-gateway mapping that makes
+  the documented `LLM_BASE_URL` resolve on Linux.
+
+Does **not** deliver `REM-01`, `RULE-01`/`RULE-02`, `REV-01` or `EXP-01`: there is
+no rule engine, no rule execution or activation, no persistent review, no export.
+The proposed rule is text, not an executable rule; `RULE-02`'s "validate and
+execute before offering" remains a `v0.3` requirement.
+
 ## REL-02 — v0.2 package
 
 The real local-inference provider (runtime selected via the human
 decision gate — D-033) and AI-disabled operation both pass.
+
+**Linux deployment acceptance requirements (added 2026-09-19 with `AI-08`).**
+`docs/installation-linux.md` documents the Linux install and states plainly that
+a GitHub/GHCR-only install is not supported today, because
+`docker compose up --build` builds both images from source and therefore needs
+the container base-image registry, PyPI and npm. `REL-02` verifies that guide
+rather than inventing the path, and must not close until:
+
+- versioned backend and frontend images are published to GHCR (a protected
+  release action, taken only with explicit authority) and the Compose file has a
+  **pull-only** path that needs no build step and no PyPI/npm/base-image access;
+- on a **fresh Linux host** that can reach only GitHub and GHCR, with a GGUF model
+  provisioned offline (no Hugging Face access at runtime), the guide's commands
+  are followed verbatim and its verification steps pass for backend, frontend and
+  model connectivity, with AI disabled and with `llama-server` on the host;
+- the guide is updated to the verified commands and any unverified statement in it
+  is removed or marked;
+- the local-AI qualification records how reliably the baseline model
+  (Qwen3.5-4B-Q4_K_M) fills the `finding_analysis_v1` structured contract (how often
+  a finding falls back to built-in guidance) and the per-finding latency and
+  suitable `LLM_TIMEOUT_SECONDS` on baseline hardware — measured, not asserted.
 
 # Complete manager workflow
 
