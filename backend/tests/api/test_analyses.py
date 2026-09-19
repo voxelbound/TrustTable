@@ -31,7 +31,7 @@ from trusttable_backend.ai_provider.contract import (
     ProviderRequest,
     ProviderResponse,
 )
-from trusttable_backend.analysis import AnalysisStore, create_analysis
+from trusttable_backend.analysis import AnalysisStore, create_analysis, get_finding_evidence
 from trusttable_backend.config import get_settings
 from trusttable_backend.request_context import REQUEST_ID_HEADER
 
@@ -870,6 +870,50 @@ def test_get_analysis_finding_explanation_ai_call_status_independent_of_security
     detail_body = detail_response.json()
     assert detail_body["security_exposure"]["model_provider_enabled"] is False
     assert detail_body["security_exposure"]["sample_transmission_enabled"] is False
+
+
+def test_get_analysis_finding_explanation_preserves_canonical_evidence_when_sanitizing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`WP-065` r4, D-038 axis 4 real-payload proof, end-to-end through
+    the actual HTTP route (complementing `ai_boundary/test_prompt.py`'s
+    and `ai_provider/test_llama_cpp.py`'s own lower-level proofs): for a
+    real `ai_processing_security` demo finding with an accepted mock
+    explanation, `evidence_sent_to_model` is genuinely `True` (bounded
+    non-raw metadata was sent) while `security_exposure` stays `False`
+    — and, independently, the canonical local `Evidence` object
+    reachable through `analysis.service.get_finding_evidence` (the same
+    object `ai_boundary.prompt._serialize_evidence` redacts *a copy
+    of*, never mutates) still carries its own real
+    `truncated_sample_prefix` value, unaffected by the AI-bound
+    sanitization — proving the fix only touches the outgoing AI
+    payload, never TrustTable's own retained evidence."""
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+    finding_item = _finding_with_category(client, analysis_id, "ai_processing_security")
+    finding_id = finding_item["finding_id"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+
+    explanation_response = client.get(
+        f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/explanation"
+    )
+
+    assert explanation_response.status_code == 200
+    body = explanation_response.json()
+    assert body["ai_call_status"] == "attempted_accepted"
+    assert body["evidence_sent_to_model"] is True
+
+    # White-box: the canonical local Evidence, reached the same way the
+    # explanation route itself reaches it, still carries the real raw
+    # excerpt — the fix never touches this object.
+    store: AnalysisStore = client.app.state.analysis_store  # type: ignore[attr-defined]
+    evidence_items = get_finding_evidence(store, analysis_id, finding_id)
+    security_pattern_items = [
+        item for item in evidence_items if item.evidence_type.value == "security_pattern"
+    ]
+    assert security_pattern_items, "expected at least one security_pattern evidence item"
+    assert security_pattern_items[0].structured_payload.get("truncated_sample_prefix")
 
 
 def test_get_analysis_finding_explanation_confirmed_context_sent_to_model_after_finalize(
