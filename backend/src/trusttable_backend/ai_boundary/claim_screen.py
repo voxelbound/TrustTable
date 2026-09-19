@@ -30,6 +30,16 @@ Five closed claim families are recognized (`CLAIM_FAMILY_IDS`):
 
 Design constraints (each covered by tests):
 
+- **Recognizes a class of claims, not a list of phrasings.** Fixed
+  patterns cover distinctive shapes ("you can ignore the findings", "no
+  data quality issues were found"), and a token-window matcher covers the
+  open-ended part: a whole-dataset subject (`dataset`, `data`, `file`,
+  `all rows`, `every record`, ...) linked by a copula or preposition to a
+  positive assessment within a short window, so "is in perfect condition",
+  "is of excellent quality", "All rows are valid" and the inverted "Not
+  only is the dataset perfect" are all recognized. The tests prove this
+  over a cross product of subjects, linking frames and adjectives, not
+  only over listed examples.
 - **Bounded and non-catastrophic.** Every pattern uses only small, fixed
   quantifiers and simple alternations; no unbounded nested quantifiers.
   The *whole* narrative is screened (never truncated), so padding a claim
@@ -40,9 +50,13 @@ Design constraints (each covered by tests):
   markdown/punctuation/whitespace to single spaces, so trivial obfuscation
   does not evade the patterns.
 - **Negation is narrow, never a global escape hatch.** "is not perfect" is
-  accepted because the negator sits inside the copula gap; "do not ignore
-  the findings" is accepted because the negator is immediately adjacent to
-  the verb. A "not" elsewhere in the sentence does not exempt a claim.
+  accepted because the negator sits between the subject and the positive
+  word; "do not ignore the findings" is accepted because the negator is
+  immediately adjacent to the verb. A "not" elsewhere in the sentence does
+  not exempt a claim ("Not only is the dataset perfect" is screened), and
+  neither does a cheap hedge insertion such as "in some sense". Honest
+  hedges ("only partly clean") and column scoping ("the data in the
+  quantity column is valid") do stop the match.
 - **Biased toward rejecting.** A false positive degrades safely to the
   deterministic explanation (`docs/product-requirements.md` §5.7); a false
   negative is the real risk. The one deliberate exemption is a "no issues
@@ -152,14 +166,11 @@ _QUALITY_ADJ = (
     r"(?:error|issue|problem|defect|fault|flaw)[- ]free|clean|valid|accurate|correct|"
     r"reliable|trustworthy|trusted|sound|fine|okay|ok|good|excellent|high[- ]quality)"
 )
-_STRONG_ADJ = (
-    r"(?:perfect|flawless|pristine|spotless|immaculate|impeccable|faultless|"
-    r"(?:error|issue|problem|defect)[- ]free)"
-)
 
 _ISSUE_NOUN = (
-    r"(?:issues?|problems?|errors?|defects?|flaws?|concerns?|anomalies|"
-    r"inconsistenc(?:y|ies)|quality\s+(?:issues?|problems?|concerns?))"
+    r"(?:issues?|problems?|errors?|defects?|flaws?|concerns?|anomalies|mistakes?|faults?|"
+    r"inconsistenc(?:y|ies)|irregularit(?:y|ies)|discrepanc(?:y|ies)|deficienc(?:y|ies)|"
+    r"blemish(?:es)?|quality\s+(?:issues?|problems?|concerns?))"
 )
 _ISSUE_MODIFIER = (
     r"(?:(?:known|apparent|obvious|significant|major|serious|material|remaining|real|"
@@ -218,15 +229,15 @@ _PATTERNS: Final[tuple[_Pattern, ...]] = (
         CLAIM_FAMILY_DATASET_PERFECTION,
         r"\b" + _SUBJECT + r"\s+" + _COPULA + r"\s+" + _INTENSIFIER + _QUALITY_ADJ + r"\b",
     ),
+    # (Possessive "the dataset's perfect" and attributive "a perfect dataset"
+    # forms are handled by the token-window matcher below, which — unlike a
+    # bare pattern — honors an adjacent negation such as "not a perfect
+    # dataset".)
     _compile(
         CLAIM_FAMILY_DATASET_PERFECTION,
-        r"\b" + _SUBJECT + r"'s\s+" + _INTENSIFIER + _STRONG_ADJ + r"\b",
-    ),
-    _compile(
-        CLAIM_FAMILY_DATASET_PERFECTION,
-        r"\b"
-        + _STRONG_ADJ
-        + r"\s+(?:quality\s+)?(?:dataset|data\s?set|data|file|table|spreadsheet|worksheet)\b",
+        r"\b(?:all|everything)\s+(?:is|looks?|seems?|appears?)\s+"
+        r"(?:to\s+be\s+)?(?:well|good|fine|clear|great|perfect|okay|ok|in\s+order)\b"
+        r"|\beverything\s+checks\s+out\b",
     ),
     # 2. no_issues_claim ---------------------------------------------
     _compile(
@@ -291,7 +302,8 @@ _PATTERNS: Final[tuple[_Pattern, ...]] = (
         CLAIM_FAMILY_DISREGARD_FINDINGS,
         r"\b(?:no\s+need\s+to\s+(?:worry|fix|address|review|investigate|check|act|do\s+anything)"
         r"|nothing\s+(?:to\s+(?:worry|fix|address|fear|do)|for\s+you\s+to\s+(?:do|worry|fix))"
-        r"|do\s+not\s+worry|don't\s+worry|nothing\s+is\s+wrong|nothing\s+wrong)\b",
+        r"|do\s+not\s+worry|don't\s+worry|nothing\s+is\s+wrong|nothing\s+wrong"
+        r"|nothing\s+(?:to\s+see|of\s+concern|concerning|unusual))\b",
     ),
     # 4. score_override_claim ----------------------------------------
     _compile(
@@ -330,7 +342,318 @@ _PATTERNS: Final[tuple[_Pattern, ...]] = (
         r"(?:use|trust|rely\s+on|proceed\s+with)\s+"
         r"(?:it|this|the\s+data(?:set)?|this\s+data(?:set)?|the\s+file)\b",
     ),
+    _compile(
+        CLAIM_FAMILY_FITNESS_ASSURANCE,
+        r"\b(?:good|ready)\s+to\s+go\b"
+        r"|\bgo\s+ahead\s+and\s+(?:use|trust|rely\s+on)\b"
+        r"|\bfeel\s+free\s+to\s+(?:use|trust|rely\s+on)\b"
+        r"|\bno\s+reason\s+not\s+to\s+(?:use|trust|rely\s+on)\b"
+        r"|\bcan\s+(?:be\s+)?(?:safely\s+|confidently\s+|fully\s+|completely\s+)?"
+        r"(?:trusted|relied\s+(?:on|upon))\b",
+    ),
+    # 3 (continued). Passive and adjectival dismissal of deterministic results.
+    _compile(
+        CLAIM_FAMILY_DISREGARD_FINDINGS,
+        r"\b"
+        + _DETERMINISTIC_NOUN
+        + r"\s+(?:(?:can|may|could|should|might|will|would|are|is|were|was)\s+)?"
+        r"(?:(?:safely|simply|just|all|be|being|been|now)\s+){0,3}"
+        r"(?:ignored|disregarded|dismissed|overlooked|discarded|skipped|overridden|"
+        r"overruled|bypassed|suppressed)\b",
+    ),
+    _compile(
+        CLAIM_FAMILY_DISREGARD_FINDINGS,
+        r"\b(?:findings?|warnings?|alerts?|flags?|detections?|issues?|results?)\s+"
+        r"(?:are|is|were|was)\s+"
+        r"(?:(?:all|just|merely|simply|mostly|probably|likely|really|completely|entirely|"
+        r"totally|essentially)\s+){0,3}"
+        r"(?:false\s+(?:positives?|alarms?)|irrelevant|unimportant|meaningless|noise|spurious|"
+        r"not\s+(?:important|relevant|a\s+concern|worth\s+(?:reviewing|worrying|attention|"
+        r"your\s+time)))\b",
+    ),
+    _compile(
+        CLAIM_FAMILY_DISREGARD_FINDINGS,
+        r"\bno\s+(?:further\s+|additional\s+|more\s+)?"
+        r"(?:action|review|attention|follow-up|follow\s+up|fix|fixes|remediation)\s+"
+        r"(?:is\s+|are\s+)?(?:required|needed|necessary|warranted|called\s+for)\b"
+        r"|\b(?:don't|do\s+not|no\s+need\s+to)\s+bother\b"
+        r"|\bpay\s+no\s+(?:attention|heed)\s+to\b"
+        r"|\b(?:needn't|need\s+not)\s+worry\b"
+        r"|\bnothing\s+to\s+(?:be\s+)?(?:concerned|worried)\s+about\b",
+    ),
+    # 4 (continued). Wider trust/quality and overall-risk assertions.
+    _compile(
+        CLAIM_FAMILY_SCORE_OVERRIDE,
+        r"\b(?:trust|quality|reliability|overall)\s+"
+        r"(?:score|rating|level|assessment|label)\s+"
+        r"(?:is|should\s+be|must\s+be|has\s+been|was|is\s+now|of|to)\s+"
+        r"(?:(?:now|actually|really|effectively|very)\s+)?"
+        r"(?:high|great|good|strong|top|full)\b",
+    ),
+    _compile(
+        CLAIM_FAMILY_SCORE_OVERRIDE,
+        r"\b(?:overall|dataset|data)\s+risk(?:\s+(?:score|level|rating))?\s+"
+        r"(?:is|should\s+be|has\s+been|was|is\s+now|of|to)\s+"
+        r"(?:(?:now|actually|really|effectively|very)\s+)?"
+        r"(?:low|minimal|lowest)\b",
+    ),
 )
+
+
+# --- Token-window matcher --------------------------------------------------
+#
+# Fixed-adjacency patterns alone are too narrow: "the dataset is in perfect
+# condition", "the data is of excellent quality" and "all rows are valid" all
+# assert the same false whole-dataset claim while sharing no exact phrasing
+# with the patterns above. This matcher therefore recognizes the *class*: a
+# whole-dataset subject, linked by a copula/preposition, to a positive
+# assessment within a short window, with negation, column scoping and
+# partial quantifiers acting as barriers. It is linear in the narrative's
+# length (each subject scans at most `_WINDOW` tokens) and is only ever
+# additive to the patterns above.
+
+_WINDOW: Final[int] = 6
+
+_SUBJECT_MASS: Final[frozenset[str]] = frozenset(
+    {
+        "dataset",
+        "data",
+        "file",
+        "table",
+        "spreadsheet",
+        "worksheet",
+        "workbook",
+        "csv",
+        "sheet",
+        "everything",
+    }
+)
+_SUBJECT_PLURAL: Final[frozenset[str]] = frozenset(
+    {"records", "rows", "entries", "values", "observations"}
+)
+_SUBJECT_SINGULAR: Final[frozenset[str]] = frozenset({"row", "record", "entry", "value"})
+_DEFINITE: Final[frozenset[str]] = frozenset(
+    {"the", "this", "that", "these", "those", "your", "our", "its", "my"}
+)
+_UNIVERSAL: Final[frozenset[str]] = frozenset(
+    {"all", "every", "each", "entire", "whole", "any", "both"}
+)
+
+_LINKS: Final[frozenset[str]] = frozenset(
+    {
+        "is", "are", "was", "were", "be", "been", "being", "am",
+        "look", "looks", "looked", "appear", "appears", "appeared",
+        "seem", "seems", "seemed", "remain", "remains", "remained",
+        "stay", "stays", "has", "have", "had", "of", "in", "as",
+        "contains", "contain", "shows", "show", "exhibits", "displays",
+        "holds", "includes",
+    }
+)  # fmt: skip
+
+# Tokens that end a subject's scan: negation, "far/less than", exceptions,
+# column/field/cell scoping and partial quantifiers. Hitting one means the
+# nearby positive word is not an unqualified whole-dataset assertion.
+_NEGATION: Final[frozenset[str]] = frozenset(
+    {
+        "not", "no", "never", "nor", "neither", "cannot", "can't", "cant",
+        "isn't", "aren't", "wasn't", "weren't", "don't", "doesn't", "didn't",
+        "hardly", "barely", "far", "less", "without", "except", "apart", "aside",
+        "unless",
+    }
+)  # fmt: skip
+_COLUMN_MARKERS: Final[frozenset[str]] = frozenset(
+    {"column", "columns", "field", "fields", "cell", "cells"}
+)
+# Honest hedges: "partly clean" is not a whole-dataset perfection claim.
+_HEDGES: Final[frozenset[str]] = frozenset({"partly", "partially", "somewhat", "only", "merely"})
+# Partial quantifiers restrict a *different* noun phrase only when they occur
+# before the linking verb ("the file, some rows of which are valid"). After
+# the link they are not barriers, so a cheap "in some sense" insertion cannot
+# hide a claim ("the dataset is, in some sense, perfect").
+_PARTIAL_QUANTIFIERS: Final[frozenset[str]] = frozenset(
+    {
+        "some", "few", "several", "one", "two", "three", "four", "five",
+        "single", "first", "last", "remaining", "other", "another",
+    }
+)  # fmt: skip
+_BARRIERS: Final[frozenset[str]] = _NEGATION | _HEDGES | _COLUMN_MARKERS
+
+_POSITIVE: Final[frozenset[str]] = frozenset(
+    {
+        "perfect", "perfectly", "flawless", "flawlessly", "pristine", "spotless",
+        "immaculate", "impeccable", "faultless", "unblemished", "exemplary", "ideal",
+        "superb", "outstanding", "exceptional", "excellent", "great", "fantastic",
+        "wonderful", "terrific", "clean", "valid", "accurate", "correct", "reliable",
+        "trustworthy", "trusted", "sound", "healthy", "fine", "okay", "ok", "good",
+        "error-free", "issue-free", "problem-free", "defect-free", "fault-free",
+        "flaw-free", "top-notch", "high-quality", "top-quality", "good-quality",
+    }
+)  # fmt: skip
+_POSITIVE_BIGRAMS: Final[frozenset[tuple[str, str]]] = frozenset(
+    {
+        ("high", "quality"), ("top", "quality"), ("good", "quality"), ("top", "notch"),
+        ("error", "free"), ("issue", "free"), ("problem", "free"), ("defect", "free"),
+        ("fault", "free"), ("flaw", "free"), ("all", "good"), ("all", "clear"),
+    }
+)  # fmt: skip
+# Strong perfection words that also count when they *precede* the subject
+# ("a flawless dataset").
+_STRONG: Final[frozenset[str]] = frozenset(
+    {
+        "perfect", "flawless", "pristine", "spotless", "immaculate", "impeccable",
+        "faultless", "unblemished", "error-free", "issue-free", "problem-free",
+        "defect-free", "fault-free", "flaw-free",
+    }
+)  # fmt: skip
+
+_ISSUE_NOUNS: Final[frozenset[str]] = frozenset(
+    {
+        "issue", "issues", "problem", "problems", "error", "errors", "defect", "defects",
+        "flaw", "flaws", "concern", "concerns", "anomaly", "anomalies", "mistake",
+        "mistakes", "fault", "faults", "inconsistency", "inconsistencies",
+        "irregularity", "irregularities", "discrepancy", "discrepancies",
+        "deficiency", "deficiencies", "blemish", "blemishes",
+    }
+)  # fmt: skip
+_ISSUE_MODIFIERS: Final[frozenset[str]] = frozenset(
+    {
+        "known", "apparent", "obvious", "significant", "major", "serious", "material",
+        "remaining", "real", "actual", "data", "quality", "detected", "reported",
+        "single", "any", "a", "even", "one", "visible", "noticeable", "notable",
+    }
+)  # fmt: skip
+_COLUMN_SCOPE_MARKERS: Final[frozenset[str]] = frozenset({"column", "columns", "field", "fields"})
+_SCOPING_PREPOSITIONS: Final[frozenset[str]] = frozenset(
+    {"in", "for", "within", "inside", "on", "with", "of", "regarding", "about"}
+)
+
+
+def _subject_span(tokens: list[str], index: int) -> tuple[int, bool] | None:
+    """If a whole-dataset subject starts at `index`, return `(end, possessive)`
+    where `end` is the index just past it; otherwise `None`."""
+    token = tokens[index]
+    possessive = token.endswith("'s")
+    base = token[:-2] if possessive else token
+    previous = tokens[index - 1] if index >= 1 else ""
+    previous_two = tokens[index - 2] if index >= 2 else ""
+    if base == "data" and index + 1 < len(tokens) and tokens[index + 1] == "set":
+        return index + 2, False
+    if base in _SUBJECT_MASS:
+        return index + 1, possessive
+    if base in _SUBJECT_PLURAL:
+        definite_or_universal = previous in _DEFINITE or previous in _UNIVERSAL
+        of_the = previous in _DEFINITE and previous_two in _UNIVERSAL | {"of"}
+        if definite_or_universal or of_the:
+            return index + 1, possessive
+    if base in _SUBJECT_SINGULAR and previous in _UNIVERSAL:
+        return index + 1, possessive
+    return None
+
+
+def _is_positive_at(tokens: list[str], index: int) -> bool:
+    token = tokens[index]
+    if token in _POSITIVE:
+        return True
+    following = tokens[index + 1] if index + 1 < len(tokens) else ""
+    if (token, following) in _POSITIVE_BIGRAMS:
+        return True
+    # "in order" (but not the ubiquitous "in order to").
+    third = tokens[index + 2] if index + 2 < len(tokens) else ""
+    return token == "in" and following == "order" and third != "to"
+
+
+def _column_scoped_after(tokens: list[str], start: int) -> bool:
+    """True when the tokens right after a "no issues" noun scope it to a
+    named column ("no issues in the quantity column")."""
+    if start >= len(tokens) or tokens[start] not in _SCOPING_PREPOSITIONS:
+        return False
+    return any(token in _COLUMN_SCOPE_MARKERS for token in tokens[start + 1 : start + 6])
+
+
+def _issue_free_at(tokens: list[str], index: int) -> bool:
+    """True when an "absence of problems" phrase starts at `index`
+    ("no errors", "without any issues", "free of defects", "not a single
+    mistake") and is not scoped to a named column."""
+    token = tokens[index]
+    count = len(tokens)
+    if token in {"no", "zero", "nil", "without", "lacking", "lacks"}:
+        cursor = index + 1
+    elif token in {"devoid", "free"} and index + 1 < count and tokens[index + 1] in {"of", "from"}:
+        cursor = index + 2
+    elif token == "not" and tokens[index + 1 : index + 3] == ["a", "single"]:
+        cursor = index + 3
+    else:
+        return False
+    skipped = 0
+    while cursor < count and tokens[cursor] in _ISSUE_MODIFIERS and skipped < 3:
+        cursor += 1
+        skipped += 1
+    if cursor < count and tokens[cursor] in _ISSUE_NOUNS:
+        return not _column_scoped_after(tokens, cursor + 1)
+    return False
+
+
+def _strong_precedes(tokens: list[str], index: int) -> bool:
+    """True for an attributive perfection word right before the subject
+    ("a flawless dataset"), unless it is negated ("not a perfect dataset")."""
+    for back in (1, 2):
+        position = index - back
+        if position < 0:
+            return False
+        if tokens[position] in _STRONG:
+            window = tokens[max(0, position - 3) : position]
+            return not any(token in _NEGATION for token in window)
+    return False
+
+
+_COPULA_LINKS: Final[frozenset[str]] = frozenset(
+    {"is", "are", "was", "were", "look", "looks", "seem", "seems", "appear", "appears",
+     "remain", "remains"}
+)  # fmt: skip
+_DETERMINERS: Final[frozenset[str]] = _DEFINITE | _UNIVERSAL
+
+
+def _copula_before(tokens: list[str], index: int) -> bool:
+    """True for the inverted form "is the dataset perfect" / "Not only is the
+    dataset perfect": a copula directly before the subject (skipping only
+    determiners) already links it to what follows."""
+    for back in (1, 2):
+        position = index - back
+        if position < 0:
+            return False
+        token = tokens[position]
+        if token in _COPULA_LINKS:
+            return True
+        if token not in _DETERMINERS:
+            return False
+    return False
+
+
+def _token_window_families(tokens: list[str]) -> set[str]:
+    matched: set[str] = set()
+    for index in range(len(tokens)):
+        span = _subject_span(tokens, index)
+        if span is None:
+            continue
+        end, possessive = span
+        if _strong_precedes(tokens, index):
+            matched.add(CLAIM_FAMILY_DATASET_PERFECTION)
+        linked = possessive or _copula_before(tokens, index)
+        for position in range(end, min(end + _WINDOW, len(tokens))):
+            token = tokens[position]
+            if linked and _issue_free_at(tokens, position):
+                matched.add(CLAIM_FAMILY_NO_ISSUES)
+                break
+            if token in _BARRIERS:
+                break
+            if not linked and token in _PARTIAL_QUANTIFIERS:
+                break
+            if token in _LINKS:
+                linked = True
+            if linked and _is_positive_at(tokens, position):
+                matched.add(CLAIM_FAMILY_DATASET_PERFECTION)
+                break
+    return matched
 
 
 def screen_narrative(narrative: str) -> frozenset[str]:
@@ -353,6 +676,7 @@ def screen_narrative(narrative: str) -> frozenset[str]:
                 continue
             matched.add(pattern.family)
             break
+    matched |= _token_window_families(normalized.split(" "))
     return frozenset(matched)
 
 
