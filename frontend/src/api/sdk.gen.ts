@@ -210,6 +210,14 @@ export const getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdE
  * Before finalize, this route's behavior is unchanged from `WP-063`
  * (evidence-grounded only).
  *
+ * Also returns `ai_call_status` (`WP-065`, defect fix), this
+ * request's own independent AI-call disclosure — deliberately
+ * distinct from `provenance` alone (which cannot distinguish "no
+ * provider configured" from "a provider was tried and failed") and
+ * from `Analysis.security_exposure` (the deterministic pipeline's own,
+ * unrelated, permanently-`False` raw-sample-exposure posture; see
+ * `docs/decision-log.md` D-038).
+ *
  * Same `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` semantics as the
  * sibling finding routes.
  */

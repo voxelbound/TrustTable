@@ -50,6 +50,19 @@ deliberately never call `CTX-02`'s AI augmentation) actually invokes an
 `AI-01`/`AI-02`/`AI-03` provider, matching `docs/product-requirements.md`
 §5.7's "graceful AI-disabled operation" requirement structurally.
 
+**This guarantee is scoped to this module only (`WP-065`, defect fix;
+`docs/decision-log.md` D-038).** A separate, later, optional per-request
+AI enrichment layer *does* exist and does invoke a real provider when
+`Settings.llm_provider != "disabled"` — `api.v1.analyses.
+get_analysis_finding_explanation` (`AI-05`/`UI-02`, `WP-061`/`WP-063`)
+and `get_analysis_context`'s first-call augmentation (`UI-02` slice 2
+revision, `WP-064`). Both live in the API route layer, deliberately not
+here, and neither ever mutates `Analysis.security_exposure` or any
+value this module computes — see those routes' own docstrings and
+`docs/architecture.md` §6's two-phase model (D-037) for why the route
+layer, not this service module, is the correct seam for that optional
+call.
+
 Framework-independent besides its `context_inference` seam (`CTX-01`'s
 `infer_dataset_context`, `CTX-03`'s `generate_guided_questions` — both
 themselves deterministic, no `ai_boundary`/`ai_provider` import in

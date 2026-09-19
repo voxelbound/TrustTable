@@ -206,6 +206,7 @@ export function makeFindingExplanationResponse(
     provenance: 'deterministic_fallback',
     provider_name: null,
     model_identifier: null,
+    ai_call_status: 'not_configured',
     referenced_evidence_ids: ['validity.future_dates.evidence.order_date'],
     referenced_columns: [
       { original_name: 'order_date', internal_key: 'order_date', ordinal: 3 },
