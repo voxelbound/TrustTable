@@ -157,6 +157,29 @@ def confirmed_context_for_finding_analysis(
     return fields or None
 
 
+PROVIDER_EVIDENCE_ALIAS_PREFIX: Final[str] = "evidence_"
+"""Prefix of the neutral evidence ids a provider sees (`evidence_1`,
+`evidence_2`, ...)."""
+
+
+def provider_evidence_view(evidence: tuple[Evidence, ...]) -> tuple[Evidence, ...]:
+    """`evidence` with each item's id replaced by a neutral positional alias.
+
+    A canonical evidence id can embed dataset content: for example
+    `InconsistentCapitalizationDetector` builds it from the *normalized cell
+    value* (`...evidence.notes.<normalized value>`), so sending it would send
+    the value. The provider therefore only ever sees `evidence_1`,
+    `evidence_2`, ...; the alias-to-real mapping is applied afterwards when
+    an accepted answer is turned into the domain object. Everything else
+    about the evidence is unchanged here — the payload allow-list and the
+    column metadata policy are applied by `ai_boundary.prompt`.
+    """
+    return tuple(
+        replace(item, evidence_id=f"{PROVIDER_EVIDENCE_ALIAS_PREFIX}{position}")
+        for position, item in enumerate(evidence, start=1)
+    )
+
+
 def build_finding_explanation_envelope(
     finding: FindingCandidate,
     evidence: tuple[Evidence, ...],
@@ -167,10 +190,12 @@ def build_finding_explanation_envelope(
     `finding`.
 
     `evidence` (typically resolved via `analysis.service.
-    get_finding_evidence`) is forwarded as `computed_evidence`. This
-    package sends zero dataset samples — disclosed, not silently assumed
-    (a finding's own evidence is already the grounding a business-facing
-    analysis needs).
+    get_finding_evidence`) is forwarded as `computed_evidence` **in its
+    provider view** (`provider_evidence_view`: neutral evidence ids, and
+    `ai_boundary.prompt` then forwards only computed facts from each
+    payload). This package sends zero dataset samples — disclosed, not
+    silently assumed (a finding's own evidence is already the grounding a
+    business-facing analysis needs).
 
     `confirmed_context` is optional and caller-supplied. **`AI-08`:** the
     caller must pass only user-confirmed or corrected context fields
@@ -183,7 +208,7 @@ def build_finding_explanation_envelope(
     """
     return build_prompt_envelope(
         task=build_finding_analysis_task(finding),
-        computed_evidence=evidence,
+        computed_evidence=provider_evidence_view(evidence),
         confirmed_context=confirmed_context,
     )
 
@@ -235,13 +260,16 @@ def _string_tuple(value: object) -> tuple[str, ...]:
 def _build_explanation(
     raw_output: Mapping[str, object],
     evidence: tuple[Evidence, ...],
+    alias_to_real: Mapping[str, str],
     *,
     provider_name: str,
     model_identifier: str,
 ) -> FindingExplanation:
     """Turn an already-validated `finding_analysis_v1` output into the
     domain object. Only called after `validate_finding_analysis_output`
-    accepted `raw_output`, so the shapes asserted here are guaranteed."""
+    accepted `raw_output`, so the shapes asserted here are guaranteed.
+    `alias_to_real` maps the neutral evidence ids the provider saw back to
+    the canonical ones the rest of the application uses."""
     grounded = _grounded_columns(evidence)
     column_by_key = {column.internal_key: column for column in grounded}
 
@@ -261,7 +289,9 @@ def _build_explanation(
             BusinessImpactStatement(
                 statement=statement,
                 basis=ImpactBasis(str(entry["basis"])),
-                evidence_ids=_string_tuple(entry["evidence_ids"]),
+                evidence_ids=tuple(
+                    alias_to_real[alias] for alias in _string_tuple(entry["evidence_ids"])
+                ),
                 context_fields=_string_tuple(entry["context_fields"]),
                 assumption=assumption.strip() or None,
             )
@@ -307,16 +337,29 @@ def run_finding_explanation(
     `provider_error` string and the call stops immediately, mirroring
     `context_inference.ai_context.run_context_inference`.
 
+    `evidence` is the canonical evidence; `envelope` must have been built
+    from it by `build_finding_explanation_envelope`, so its
+    `computed_evidence` is the same items in provider view (neutral ids).
+
     The request carries the per-request `OutputContract`
     (`build_finding_analysis_contract`): its schema enumerates exactly the
-    evidence ids, columns, confirmed-context fields and numeric-fact names
-    that `envelope`/`evidence` actually supply. `known_numeric_facts` is
-    derived from `evidence` and forwarded to the validator, so numeric
-    claims are checked against what was actually sent.
+    provider-visible evidence ids, columns, confirmed-context fields and
+    numeric-fact names. `known_numeric_facts` is derived from `evidence`
+    and forwarded to the validator, so numeric claims are checked against
+    what was actually sent.
     """
+    if len(envelope.computed_evidence) != len(evidence):
+        raise ValueError(
+            "run_finding_explanation: envelope.computed_evidence must be the provider view "
+            "of `evidence` (build it with build_finding_explanation_envelope)"
+        )
+    alias_to_real = {
+        seen.evidence_id: real.evidence_id
+        for seen, real in zip(envelope.computed_evidence, evidence, strict=True)
+    }
     known_numeric_facts = _known_numeric_facts_from_evidence(evidence)
     contract = build_finding_analysis_contract(
-        evidence=evidence,
+        evidence=envelope.computed_evidence,
         context_fields=tuple(str(key) for key in envelope.confirmed_context),
         numeric_fact_names=tuple(known_numeric_facts),
     )
@@ -345,6 +388,7 @@ def run_finding_explanation(
             explanation = _build_explanation(
                 response.raw_output,
                 evidence,
+                alias_to_real,
                 provider_name=response.provider_name,
                 model_identifier=response.model_identifier,
             )
@@ -370,9 +414,11 @@ def run_finding_explanation(
 __all__ = [
     "AI_EXPLANATION_TASK",
     "DEFAULT_MAX_RETRIES",
+    "PROVIDER_EVIDENCE_ALIAS_PREFIX",
     "FindingExplanationResult",
     "build_finding_analysis_task",
     "build_finding_explanation_envelope",
     "confirmed_context_for_finding_analysis",
+    "provider_evidence_view",
     "run_finding_explanation",
 ]
