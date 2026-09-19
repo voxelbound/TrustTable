@@ -164,6 +164,13 @@ _ADVERSARIAL_CORPUS: list[tuple[str, str, bool]] = [
     ("all-rows-valid-cites-evidence", "All rows are valid.", True),
     ("inverted-form", "Not only is the dataset perfect, it is also complete.", True),
     ("passive-dismissal-cites-evidence", "The findings can be safely ignored.", True),
+    # Active verb-object forms an independent reviewer showed the second cut
+    # still missed: the claim is asserted by an actor's verb, not a copula.
+    ("found-no-issues-cites-evidence", "The analysis found no issues in the dataset.", True),
+    ("passes-all-quality-checks", "The dataset passes all quality checks.", False),
+    ("meets-all-standards-cites-evidence", "The dataset meets all quality standards.", True),
+    ("did-not-find-any-problems", "We did not find any problems in the data.", True),
+    ("verified-with-no-problems", "The data was verified with no problems.", False),
     (
         "padded-with-benign-prefix",
         "The quantity column has some negative values worth reviewing. " * 300

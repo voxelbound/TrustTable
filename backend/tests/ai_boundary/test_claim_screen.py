@@ -465,6 +465,180 @@ def test_additional_honest_statements_are_not_screened(text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Active verb-object and negated-detection shapes (second independent review).
+# ---------------------------------------------------------------------------
+
+# The second reviewer's counterexamples: the claim is asserted by an actor's
+# verb, not by a copula on a dataset subject.
+_ACTIVE_VERB_COUNTEREXAMPLES: list[str] = [
+    "The analysis found no issues in the dataset.",
+    "The dataset passes all quality checks.",
+    "The dataset meets all quality standards.",
+    "The data was verified with no problems.",
+    "The file was validated without any errors.",
+    "The dataset has been validated.",
+    "We did not find any issues in the dataset.",
+    "The scan failed to detect any problems.",
+    "The checks turned up no defects at all.",
+    "There aren't any issues with this data.",
+    "The dataset checks out.",
+]
+
+
+@pytest.mark.parametrize("text", _ACTIVE_VERB_COUNTEREXAMPLES)
+def test_active_verb_object_absence_and_passing_claims_are_screened(text: str) -> None:
+    assert screen_narrative(text), text
+
+
+_VERB_ACTORS: list[str] = [
+    "The analysis",
+    "The scan",
+    "The validation",
+    "Our checks",
+    "We",
+    "The model",
+    "The detectors",
+]
+_FOUND_VERBS: list[str] = [
+    "found",
+    "detected",
+    "identified",
+    "observed",
+    "discovered",
+    "noticed",
+    "encountered",
+    "revealed",
+]
+_NEGATED_DETECTION_FRAMES: list[str] = [
+    "did not find any",
+    "could not detect any",
+    "didn't identify any",
+    "failed to find any",
+    "was unable to observe any",
+    "never noticed any",
+    "does not show any",
+    "cannot see a single",
+]
+_ISSUE_WORDS: list[str] = [
+    "issues",
+    "problems",
+    "errors",
+    "defects",
+    "mistakes",
+    "anomalies",
+    "irregularities",
+]
+_SINGULAR_ISSUE_WORDS: list[str] = [
+    "issue",
+    "problem",
+    "error",
+    "defect",
+    "mistake",
+    "anomaly",
+    "irregularity",
+]
+_WHOLE_DATASET_TAILS: list[str] = [
+    " in the dataset.",
+    " in this file.",
+    " anywhere.",
+    " in the data.",
+    ".",
+]
+_PASSING_VERBS: list[str] = ["passes", "passed", "meets", "satisfies", "clears"]
+_PASSING_OBJECTS: list[str] = [
+    "all quality checks",
+    "every validation check",
+    "all checks",
+    "all tests",
+    "all quality standards",
+    "all requirements",
+    "every rule",
+    "all validation rules",
+]
+
+
+def test_every_active_absence_claim_combination_is_screened() -> None:
+    """Class-level proof for the "no issues" family: any actor, any detection
+    verb, any issue noun and any whole-dataset tail — in the active
+    verb-object form and in the negated-detection form."""
+    active = [
+        f"{actor} {verb} no {noun}{tail}"
+        for actor in _VERB_ACTORS
+        for verb in _FOUND_VERBS
+        for noun in _ISSUE_WORDS
+        for tail in _WHOLE_DATASET_TAILS
+    ]
+    negated = [
+        f"{actor} {frame} {_SINGULAR_ISSUE_WORDS[index] if frame.endswith('a single') else noun}"
+        f"{tail}"
+        for actor in _VERB_ACTORS
+        for frame in _NEGATED_DETECTION_FRAMES
+        for index, noun in enumerate(_ISSUE_WORDS)
+        for tail in _WHOLE_DATASET_TAILS
+    ]
+    missed = [text for text in active + negated if not screen_narrative(text)]
+    assert missed == []
+
+
+def test_every_passing_claim_combination_is_screened() -> None:
+    subjects = ["The dataset", "This data", "The file", "The spreadsheet", "Everything"]
+    missed = [
+        f"{subject} {verb} {obj}."
+        for subject in subjects
+        for verb in _PASSING_VERBS
+        for obj in _PASSING_OBJECTS
+        if not screen_narrative(f"{subject} {verb} {obj}.")
+    ]
+    assert missed == []
+
+
+def test_honest_hedged_negated_and_column_scoped_detection_statements_are_not_screened() -> None:
+    """The same actors and verbs, honestly qualified, are left alone: an
+    "other" issue implies one exists, a detection scoped to a named column is
+    not a whole-dataset claim, and finding issues (or failing checks) is the
+    opposite of the claim."""
+    flagged = []
+    for actor in _VERB_ACTORS:
+        for verb in _FOUND_VERBS:
+            for noun in _ISSUE_WORDS:
+                for text in (
+                    f"{actor} {verb} no other {noun} in the dataset.",
+                    f"{actor} {verb} no {noun} in the quantity column.",
+                    f"{actor} {verb} {noun} in the dataset.",
+                    f"{actor} did not find any {noun} in the quantity column.",
+                    f"{actor} did not find any other {noun}.",
+                ):
+                    if screen_narrative(text):
+                        flagged.append(text)
+    for verb in _PASSING_VERBS:
+        for obj in _PASSING_OBJECTS:
+            for text in (
+                f"The dataset does not {verb.rstrip('esd')} {obj}.",
+                f"The dataset did not pass {obj}.",
+                f"The dataset fails {obj}.",
+            ):
+                if screen_narrative(text):
+                    flagged.append(text)
+    assert flagged == []
+
+
+_EVEN_MORE_NEGATIVE_CONTROLS: list[str] = [
+    "The line-total check passes for most rows, but two rows fail it.",
+    "This row passes the percentage range check, yet the tax value is invalid.",
+    "The analysis found duplicate rows in the dataset.",
+    "The scan detected two negative quantities and one future date.",
+    "No further columns were found to be empty.",
+    "The file was parsed and 300 rows were read.",
+    "The validation flagged three issues that need review.",
+]
+
+
+@pytest.mark.parametrize("text", _EVEN_MORE_NEGATIVE_CONTROLS)
+def test_more_honest_detection_statements_are_not_screened(text: str) -> None:
+    assert screen_narrative(text) == frozenset(), text
+
+
+# ---------------------------------------------------------------------------
 # Documented limits (docs/decision-log.md D-039): asserted so they stay honest.
 # ---------------------------------------------------------------------------
 
