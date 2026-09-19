@@ -171,6 +171,11 @@ _ADVERSARIAL_CORPUS: list[tuple[str, str, bool]] = [
     ("meets-all-standards-cites-evidence", "The dataset meets all quality standards.", True),
     ("did-not-find-any-problems", "We did not find any problems in the data.", True),
     ("verified-with-no-problems", "The data was verified with no problems.", False),
+    # The third reviewer's modifier-insertion and superlative counterexamples.
+    ("passes-numbered-modified-checks", "The dataset passes all 12 automated checks.", False),
+    ("passes-every-single-check-cites-evidence", "The dataset passed every single check.", True),
+    ("highest-quality-cites-evidence", "The dataset is of the highest quality.", True),
+    ("best-possible-shape", "The data is in the best possible shape.", False),
     (
         "padded-with-benign-prefix",
         "The quantity column has some negative values worth reviewing. " * 300

@@ -75,6 +75,17 @@ Design constraints (each covered by tests):
   *priority* score of 100 is the worst case, not a reassurance, so score
   claims are only screened in the direction that reassures.
 
+What is structural and what is enumerated (stated so the coverage is not
+overclaimed): grammatical shape is generalized structurally — copular,
+prepositional ("in perfect condition"), passive, active verb-object and
+negated-detection forms; arbitrary modifiers, numerals and quantifier
+phrases between the parts ("passes all 12 automated quality checks",
+"every single record"); negation, hedges, "other" and column scope as
+barriers. The *vocabulary* of positive assessments, issue nouns, check
+nouns and passing verbs is enumerated — broad, and covered by an
+independently authored thesaurus test, but finite. An evaluative word that
+is on none of the lists is the residual gap.
+
 Documented limitation: this is a lexical screen. A sufficiently creative
 paraphrase can evade it, cross-script homoglyphs are not folded, and it
 screens English only. It does not replace deterministic authority and
@@ -152,7 +163,7 @@ _DETERMINER = (
     r"provided|given)\s+){0,3}"
 )
 _SUBJECT_NOUN = (
-    r"(?:dataset|data\s?set|data|file|table|spreadsheet|worksheet|records|everything)"
+    r"(?:dataset|data\s?set|data|file|table|spreadsheet|worksheet|everything)"
     r"(?:\s+quality)?"
 )
 _SUBJECT = _DETERMINER + _SUBJECT_NOUN
@@ -246,15 +257,10 @@ _PATTERNS: Final[tuple[_Pattern, ...]] = (
         r"(?:to\s+be\s+)?(?:well|good|fine|clear|great|perfect|okay|ok|in\s+order)\b"
         r"|\beverything\s+checks\s+out\b",
     ),
-    # 3-forms of "the passing / checking out" assurance (perfection family).
-    _compile(
-        CLAIM_FAMILY_DATASET_PERFECTION,
-        _NEGATOR + r"(?:pass(?:es|ed)?|meets?|met|satisf(?:y|ies|ied)|clears?|cleared)\s+"
-        r"(?:all|every|each|any)\s+(?:(?:of\s+)?(?:the|our|its|these|those)\s+)?"
-        r"(?:(?:quality|validation|data\s+quality|integrity)\s+)?"
-        r"(?:checks?|tests?|validations?|standards?|requirements?|rules?|criteria|audits?)\b",
-        negatable=True,
-    ),
+    # "Passes / meets all checks, tests, standards, rules" is handled by the
+    # token-window matcher below (a universal quantifier and a check noun with
+    # arbitrary modifiers between, honoring negation, "other" and a trailing
+    # "except ..."); only the bare "passes validation" form stays here.
     _compile(
         CLAIM_FAMILY_DATASET_PERFECTION,
         _NEGATOR + r"(?:passes|passed)\s+(?:validation|quality\s+control|the\s+audit|inspection)\b",
@@ -508,6 +514,11 @@ _POSITIVE: Final[frozenset[str]] = frozenset(
         "verified", "validated", "certified", "approved", "vetted",
         "error-free", "issue-free", "problem-free", "defect-free", "fault-free",
         "flaw-free", "top-notch", "high-quality", "top-quality", "good-quality",
+        "first-rate", "first-class", "top-tier", "world-class", "unrivaled", "unrivalled",
+        "unmatched", "unimpeachable", "extraordinary", "remarkable", "stellar", "splendid",
+        "magnificent", "marvelous", "marvellous", "brilliant", "textbook", "robust",
+        "solid", "polished", "irreproachable", "blameless", "untainted", "uncorrupted",
+        "pure", "gold-standard", "squeaky-clean",
     }
 )  # fmt: skip
 _POSITIVE_BIGRAMS: Final[frozenset[tuple[str, str]]] = frozenset(
@@ -515,6 +526,23 @@ _POSITIVE_BIGRAMS: Final[frozenset[tuple[str, str]]] = frozenset(
         ("high", "quality"), ("top", "quality"), ("good", "quality"), ("top", "notch"),
         ("error", "free"), ("issue", "free"), ("problem", "free"), ("defect", "free"),
         ("fault", "free"), ("flaw", "free"), ("all", "good"), ("all", "clear"),
+        ("top", "tier"), ("first", "rate"), ("first", "class"), ("world", "class"),
+        ("gold", "standard"), ("squeaky", "clean"),
+    }
+)  # fmt: skip
+# Superlatives are praise only when they qualify quality ("of the highest
+# quality", "in the best possible shape") or directly follow a copula ("is
+# the best"); otherwise "the dataset's highest value" would be flagged.
+_POSITIVE_CONTEXTUAL: Final[frozenset[str]] = frozenset(
+    {
+        "highest", "best", "finest", "greatest", "utmost", "superior", "supreme",
+        "premium", "optimal", "optimum", "prime",
+    }
+)  # fmt: skip
+_QUALITY_NOUNS: Final[frozenset[str]] = frozenset(
+    {
+        "quality", "condition", "shape", "standard", "standards", "state", "form",
+        "grade", "order", "caliber", "calibre", "possible", "available",
     }
 )  # fmt: skip
 # Strong perfection words that also count when they *precede* the subject
@@ -555,26 +583,47 @@ def _subject_span(tokens: list[str], index: int) -> tuple[int, bool] | None:
     token = tokens[index]
     possessive = token.endswith("'s")
     base = token[:-2] if possessive else token
-    previous = tokens[index - 1] if index >= 1 else ""
-    previous_two = tokens[index - 2] if index >= 2 else ""
     if base == "data" and index + 1 < len(tokens) and tokens[index + 1] == "set":
         return index + 2, False
     if base in _SUBJECT_MASS:
         return index + 1, possessive
-    if base in _SUBJECT_PLURAL:
-        definite_or_universal = previous in _DEFINITE or previous in _UNIVERSAL
-        of_the = previous in _DEFINITE and previous_two in _UNIVERSAL | {"of"}
-        if definite_or_universal or of_the:
-            return index + 1, possessive
-    if base in _SUBJECT_SINGULAR and previous in _UNIVERSAL:
+    if base in _SUBJECT_PLURAL and _determiner_before(tokens, index, _DETERMINERS):
+        return index + 1, possessive
+    if base in _SUBJECT_SINGULAR and _determiner_before(tokens, index, _UNIVERSAL):
         return index + 1, possessive
     return None
+
+
+def _determiner_before(tokens: list[str], index: int, allowed: frozenset[str]) -> bool:
+    """True when a determiner from `allowed` precedes the noun at `index`,
+    allowing up to two modifiers in between ("every single record", "all 300
+    rows") but not a partial count ("the two rows", "some rows")."""
+    for back in (1, 2, 3):
+        position = index - back
+        if position < 0:
+            return False
+        token = tokens[position]
+        if token in allowed:
+            return True
+        # "every single" and "every last" are emphatic universals, not counts.
+        emphatic = token in {"single", "last"} and tokens[max(0, position - 1)] in _UNIVERSAL
+        if token in _BARRIERS or (token in _PARTIAL_QUANTIFIERS and not emphatic):
+            return False
+    return False
 
 
 def _is_positive_at(tokens: list[str], index: int) -> bool:
     token = tokens[index]
     if token in _POSITIVE:
         return True
+    if token in _POSITIVE_CONTEXTUAL:
+        if any(nearby in _QUALITY_NOUNS for nearby in tokens[index + 1 : index + 3]):
+            return True
+        previous = tokens[index - 1] if index >= 1 else ""
+        previous_two = tokens[index - 2] if index >= 2 else ""
+        return previous in _COPULA_LINKS or (
+            previous in _DETERMINERS and previous_two in _COPULA_LINKS
+        )
     following = tokens[index + 1] if index + 1 < len(tokens) else ""
     if (token, following) in _POSITIVE_BIGRAMS:
         return True
@@ -627,6 +676,73 @@ def _strong_precedes(tokens: list[str], index: int) -> bool:
     return False
 
 
+# A passing/complying verb followed by a universal quantifier and a check noun
+# is an assurance ("passes all automated quality checks", "meets every single
+# requirement"), with arbitrary modifiers or numerals in between.
+_PASSING_VERBS: Final[frozenset[str]] = frozenset(
+    {
+        "pass", "passes", "passed", "passing", "meet", "meets", "met", "meeting",
+        "satisfy", "satisfies", "satisfied", "satisfying", "clear", "clears", "cleared",
+        "comply", "complies", "complied", "conform", "conforms", "conformed",
+        "survive", "survives", "survived",
+    }
+)  # fmt: skip
+_PASSING_QUANTIFIERS: Final[frozenset[str]] = frozenset(
+    {"all", "every", "each", "any", "both", "entire", "full", "complete", "everything"}
+)
+_CHECK_NOUNS: Final[frozenset[str]] = frozenset(
+    {
+        "check", "checks", "test", "tests", "validation", "validations", "standard",
+        "standards", "requirement", "requirements", "rule", "rules", "criteria",
+        "criterion", "audit", "audits", "inspection", "inspections", "verification",
+        "verifications", "control", "controls", "specification", "specifications",
+        "spec", "specs", "threshold", "thresholds", "benchmark", "benchmarks",
+    }
+)  # fmt: skip
+_EXCEPTION_WORDS: Final[frozenset[str]] = frozenset(
+    {"except", "apart", "aside", "save", "excluding", "besides"}
+)
+
+
+def _passing_assurance_at(tokens: list[str], index: int) -> bool:
+    """True when the passing verb at `index` takes a universal quantifier and
+    then a check noun, with negation, "other/remaining" and a trailing
+    exception all defusing it ("does not pass all checks", "passes all other
+    checks", "passes all checks except one")."""
+    if any(token in _NEGATION for token in tokens[max(0, index - 3) : index]):
+        return False
+    count = len(tokens)
+    for quantifier_at in range(index + 1, min(index + 5, count)):
+        token = tokens[quantifier_at]
+        if token in _NEGATION:
+            return False
+        if token not in _PASSING_QUANTIFIERS:
+            continue
+        for noun_at in range(quantifier_at + 1, min(quantifier_at + 9, count)):
+            candidate = tokens[noun_at]
+            if candidate in {"other", "remaining"} or candidate in _NEGATION:
+                break
+            if candidate in _CHECK_NOUNS:
+                trailing = tokens[noun_at + 1 : noun_at + 4]
+                if not any(word in _EXCEPTION_WORDS for word in trailing):
+                    return True
+                break
+    return False
+
+
+def _check_noun_follows(tokens: list[str], start: int) -> bool:
+    """True when a check noun appears soon after a *whole-dataset subject's*
+    passing verb, with no negation or exception in between."""
+    for position in range(start, min(start + _WINDOW, len(tokens))):
+        token = tokens[position]
+        if token in _NEGATION or token in _EXCEPTION_WORDS or token in {"other", "remaining"}:
+            return False
+        if token in _CHECK_NOUNS:
+            trailing = tokens[position + 1 : position + 4]
+            return not any(word in _EXCEPTION_WORDS for word in trailing)
+    return False
+
+
 _COPULA_LINKS: Final[frozenset[str]] = frozenset(
     {"is", "are", "was", "were", "look", "looks", "seem", "seems", "appear", "appears",
      "remain", "remains"}
@@ -669,11 +785,20 @@ def _token_window_families(tokens: list[str]) -> set[str]:
                 break
             if not linked and token in _PARTIAL_QUANTIFIERS:
                 break
+            if token in _PASSING_VERBS and _check_noun_follows(tokens, position + 1):
+                matched.add(CLAIM_FAMILY_DATASET_PERFECTION)
+                break
             if token in _LINKS:
                 linked = True
             if linked and _is_positive_at(tokens, position):
                 matched.add(CLAIM_FAMILY_DATASET_PERFECTION)
                 break
+    # Subject-free: any passing verb + universal quantifier + check noun.
+    if any(
+        token in _PASSING_VERBS and _passing_assurance_at(tokens, index)
+        for index, token in enumerate(tokens)
+    ):
+        matched.add(CLAIM_FAMILY_DATASET_PERFECTION)
     return matched
 
 
