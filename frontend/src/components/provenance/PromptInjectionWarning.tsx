@@ -27,7 +27,20 @@ export interface PromptInjectionWarningProps {
  * (`docs/ui-specification.md` §4.8). Renders only already-safe,
  * pre-computed text (`display_safe_summary`) — never a raw dataset
  * value — and never asserts malicious intent as fact (§4.8's own
- * constraint). */
+ * constraint).
+ *
+ * **Scope note (`WP-065`, defect fix; `docs/decision-log.md` D-038):**
+ * every field below (`securityExposure`, "sent to a model", "rejected-
+ * output status") describes only whether *this finding's own flagged
+ * raw dataset value* was sent to a model as part of the deterministic
+ * detection pipeline — it is permanently "No" today because no
+ * detector ever does this. It is not, and must never be read as, a
+ * general "was AI used for this analysis" claim: a separate, optional,
+ * per-request AI explanation (this screen's own "Explanation" section,
+ * `AI-05`/`UI-02`) can independently call a real configured provider
+ * for the very same finding, using only bounded evidence — never this
+ * flagged raw value. The copy below is written to keep that scope
+ * explicit rather than implying AI is disabled altogether. */
 export function PromptInjectionWarning({
   affectedColumns,
   evidenceSummaries,
@@ -82,18 +95,22 @@ export function PromptInjectionWarning({
       </div>
 
       <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
-        <dt className="font-medium">Sent to model</dt>
+        <dt className="font-medium">This flagged content sent to a model</dt>
         <dd>{sentToModel ? 'Yes, for this analysis' : 'No'}</dd>
-        <dt className="font-medium">Model location</dt>
+        <dt className="font-medium">Where a model would run, if sent</dt>
         <dd>
           {securityExposure.model_provider_enabled
             ? 'A configured AI model'
-            : 'No AI model is configured'}
+            : 'Not applicable for this exposure path'}
         </dd>
-        <dt className="font-medium">Rejected-output status</dt>
+        <dt className="font-medium">
+          This flagged content&apos;s own rejected-output status
+        </dt>
         <dd>
-          Not applicable — no AI/LLM call was made for this analysis; AI is
-          disabled.
+          Not applicable — this flagged content is never itself sent to any
+          model by the deterministic detection pipeline, independent of whether
+          an AI provider is configured elsewhere for other features (see the
+          Explanation section above, when present).
         </dd>
       </dl>
 
@@ -121,7 +138,7 @@ export function PromptInjectionWarning({
       <p className="mt-3 text-sm">
         This does not confirm malicious intent. It flags content that matches
         patterns commonly used in prompt-injection attempts so it can be
-        reviewed before any AI feature is enabled.
+        reviewed, regardless of whether any AI feature is currently configured.
       </p>
     </Alert>
   )

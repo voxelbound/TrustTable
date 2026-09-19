@@ -100,6 +100,22 @@ class SecurityExposureState:
     model exposure" requirement. Not the full `Analysis` aggregate
     (deferred to `DB-01`/`API-01`) — a minimal, disclosed, forward-
     compatible slice.
+
+    **Scope boundary (`WP-065`, defect fix; `docs/decision-log.md`
+    D-038):** this describes only the deterministic detection pipeline's
+    own posture at finding-generation time — specifically, whether *this
+    finding's own flagged/raw dataset value* would be (or was) sent to a
+    model as part of computing it (`docs/domain-model.md` §15
+    `PromptInjectionRisk`'s "sent-to-model state"). It is permanently
+    `False`/`False` today because no detector in `v0.1`/`v0.2` ever
+    transmits dataset content to a model. It does **not** describe, and
+    must never be conflated with, a separate, later, optional per-
+    request AI enrichment call (for example `GET .../findings/
+    {finding_id}/explanation`, `AI-05`/`UI-02`) — that call's own status
+    is disclosed independently (see `FindingExplanationResponse.
+    ai_call_status`) and is driven by `Settings.llm_provider`, not by
+    this field. See `docs/architecture.md` §6/§7's two-phase model
+    (D-037).
     """
 
     model_provider_enabled: bool

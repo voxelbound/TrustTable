@@ -392,12 +392,19 @@ framework-independent by taking plain arguments rather than `Settings`.
 client for `llama.cpp`'s `llama-server` OpenAI-compatible endpoint —
 reuses `build_safe_prompt` unmodified, never calls
 `validate_model_output` itself (that stays a future caller's own
-responsibility, exactly like `DisabledProvider`/`MockProvider`). No
-FastAPI route, application service, or analysis-pipeline calls any
-provider yet — tested against stub/fake and `httpx.MockTransport`
-only, no live-model execution in CI, the same precedent `DET-01` set
-ahead of `DET-02`'s real detectors and `WP-044`'s benchmark-only
-adapter already proved for this exact transport.
+responsibility, exactly like `DisabledProvider`/`MockProvider`).
+
+**Updated (`WP-065`, defect fix — corrects a stale claim left behind
+after `UI-02` shipped, `WP-063`/`WP-064`):** two real FastAPI routes now
+call a provider through this interface when `Settings.llm_provider !=
+"disabled"` — `api.v1.analyses.get_analysis_finding_explanation`
+(`AI-05`/`UI-02` slice 1) and `get_analysis_context`'s first-call
+augmentation (`UI-02` slice 2). Both live in the API route layer, not
+`analysis.service`, which still never imports `ai_boundary`/
+`ai_provider` and still never touches `Analysis.security_exposure` —
+see §6's two-phase model and `docs/decision-log.md` D-037/D-038. CI
+still exercises only stub/fake and `httpx.MockTransport`/real
+`disabled`/`mock` providers, never a live model.
 
 **Forward-looking design note (2026-09-13, `CHG-002`, not yet
 implemented):** the `v0.2` design session established that the eventual
@@ -737,13 +744,20 @@ exception text or a stack trace in the response body (`docs/api-specification.md
 **Two-phase model (`docs/decision-log.md` D-037, `v0.2`):** Phase 1 is
 the existing deterministic pipeline, unchanged — it already runs to
 completion unattended, with no pause, and is shipped exactly as shown
-below. Phase 2 is the **approved architecture for the remaining `v0.2`
-implementation** (`UI-02`): a second, optional, additive pass over that
-already-completed analysis, never a gate on it. Phase 2 itself is
-**not yet shipped** — `UI-02` is the package that wires `CTX-01`–
-`CTX-03`/`API-02`/`AI-05`'s already-built enabling slices to real API
-routes and a UI; until then, no HTTP route, enrichment record, or
-frontend screen for it exists.
+below. Phase 2 is a second, optional, additive pass over that
+already-completed analysis, never a gate on it.
+
+**Updated (`WP-065`, defect fix):** Phase 2 is now **shipped** —
+`UI-02` (both slices, `WP-063`/`WP-064`) wired `CTX-01`–`CTX-03`/
+`API-02`/`AI-05`'s enabling slices to real API routes and a UI:
+`GET .../findings/{finding_id}/explanation` (grounded finding
+explanations, `WP-063`) and `GET .../context`'s first-call AI
+augmentation plus `PUT .../context`/`GET .../questions`/
+`POST .../questions/{id}/answer`/`POST .../finalize` (the Context
+screen, `WP-064`). Both routes call a real provider only when
+`Settings.llm_provider != "disabled"` (default remains `"disabled"`)
+and gracefully fall back to the deterministic/heuristic result on
+rejection or provider error. Still open: `EVAL-AI-01`, `REL-02`.
 
 ```text
 Phase 1 — deterministic baseline (blocking within itself, unattended,
@@ -768,15 +782,15 @@ COMPLETED  ←  fully valid, reviewable, and exportable with zero
               alter historic deterministic profile facts" invariant)
 
 Phase 2 — optional enrichment (additive, does not alter Phase 1
-output; approved target architecture, real routes/UI/enrichment
-record not yet implemented)
+output; shipped, `UI-02`, `WP-063`/`WP-064`)
 
-Context confirmation and guided questions (optional, user-driven)
+Context confirmation and guided questions (optional, user-driven,
+real routes: `GET`/`PUT .../context`, `GET .../questions`,
+`POST .../questions/{id}/answer`, `POST .../finalize`)
    ↓
-Additive validated AI/context enrichment — for example grounded
-explanations and provenance, produced once `UI-02` wires the
-already-built `CTX-01`–`CTX-03`/`API-02`/`AI-05` enabling slices to
-real routes
+Additive validated AI/context enrichment — grounded explanations
+(`GET .../findings/{finding_id}/explanation`) and first-call context
+augmentation, both calling a real provider only when configured
    ↓
 (review and export continue to apply to the Phase 1 baseline, enriched
  where Phase 2 was performed)

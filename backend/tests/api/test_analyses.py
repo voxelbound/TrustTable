@@ -26,8 +26,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 import trusttable_backend.api.v1.analyses as analyses_module
-from trusttable_backend.ai_provider.contract import ProviderRequest, ProviderResponse
-from trusttable_backend.analysis import AnalysisStore, create_analysis
+from trusttable_backend.ai_provider.contract import (
+    ProviderConnectionError,
+    ProviderRequest,
+    ProviderResponse,
+)
+from trusttable_backend.analysis import AnalysisStore, create_analysis, get_finding_evidence
 from trusttable_backend.config import get_settings
 from trusttable_backend.request_context import REQUEST_ID_HEADER
 
@@ -65,6 +69,43 @@ class _RecordingProvider:
             model_identifier="recording-v1",
             duration_ms=1.0,
         )
+
+
+class _RejectingProvider:
+    """`AIProvider`-protocol test double whose output never validates
+    (missing required `narrative`), forcing `run_finding_explanation`'s
+    retry-exhaustion/rejection path (`WP-065`, defect fix)."""
+
+    @property
+    def provider_name(self) -> str:
+        return "rejecting"
+
+    def health_check(self) -> Any:
+        raise NotImplementedError
+
+    def complete(self, request: ProviderRequest) -> ProviderResponse:
+        return ProviderResponse(
+            raw_output={"schema_version": "1", "provenance": "ai_interpretation"},
+            provider_name=self.provider_name,
+            model_identifier="rejecting-v1",
+            duration_ms=1.0,
+        )
+
+
+class _ErroringProvider:
+    """`AIProvider`-protocol test double whose `complete()` always raises
+    a `ProviderError`, forcing the isolated-provider-error path
+    (`WP-065`, defect fix)."""
+
+    @property
+    def provider_name(self) -> str:
+        return "erroring"
+
+    def health_check(self) -> Any:
+        raise NotImplementedError
+
+    def complete(self, request: ProviderRequest) -> ProviderResponse:
+        raise ProviderConnectionError("simulated connection failure")
 
 
 _KNOWN_TRUST_LABELS = {
@@ -679,7 +720,11 @@ def test_get_analysis_finding_explanation_default_config_is_deterministic(
 ) -> None:
     """Default config (`llm_provider="disabled"`, unchanged) — the
     response is the deterministic explanation, provider fields both
-    `null`."""
+    `null`, `ai_call_status` (`WP-065`) discloses that no AI call was
+    even attempted (distinct from a call that was attempted and
+    failed/was rejected), and `evidence_sent_to_model`/
+    `confirmed_context_sent_to_model` (`WP-065` r4, D-038 axis 5) are
+    both `False` — nothing was sent since no attempt was made."""
     created = _create_demo_analysis(client)["analysis"]
 
     response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/0/explanation")
@@ -692,6 +737,9 @@ def test_get_analysis_finding_explanation_default_config_is_deterministic(
         "provenance",
         "provider_name",
         "model_identifier",
+        "ai_call_status",
+        "evidence_sent_to_model",
+        "confirmed_context_sent_to_model",
         "referenced_evidence_ids",
         "referenced_columns",
     }
@@ -700,6 +748,9 @@ def test_get_analysis_finding_explanation_default_config_is_deterministic(
     assert body["provenance"] == "deterministic_fallback"
     assert body["provider_name"] is None
     assert body["model_identifier"] is None
+    assert body["ai_call_status"] == "not_configured"
+    assert body["evidence_sent_to_model"] is False
+    assert body["confirmed_context_sent_to_model"] is False
     assert body["referenced_evidence_ids"]
 
 
@@ -708,7 +759,10 @@ def test_get_analysis_finding_explanation_with_mock_provider_is_ai_interpretatio
 ) -> None:
     """`LLM_PROVIDER=mock` (real `MockProvider`, real factory) — the
     response is the AI-interpretation explanation, provider fields
-    populated."""
+    populated, `ai_call_status == "attempted_accepted"` (`WP-065`), and
+    `evidence_sent_to_model is True`/`confirmed_context_sent_to_model
+    is False` (`WP-065` r4, D-038 axis 5 — evidence was sent on this
+    attempt, no context was finalized yet)."""
     created = _create_demo_analysis(client)["analysis"]
     monkeypatch.setenv("LLM_PROVIDER", "mock")
     get_settings.cache_clear()
@@ -720,6 +774,178 @@ def test_get_analysis_finding_explanation_with_mock_provider_is_ai_interpretatio
     assert body["provenance"] == "ai_interpretation"
     assert body["provider_name"] == "mock"
     assert body["model_identifier"] == "mock-v1"
+    assert body["ai_call_status"] == "attempted_accepted"
+    assert body["evidence_sent_to_model"] is True
+    assert body["confirmed_context_sent_to_model"] is False
+
+
+def test_get_analysis_finding_explanation_rejected_output_falls_back_with_status(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A provider that is called but never produces a validated output
+    still returns the deterministic explanation unchanged (existing
+    fallback contract), but `ai_call_status` (`WP-065`) now distinguishes
+    this "attempted and rejected" outcome from "never attempted"
+    (`not_configured`) — the exact ambiguity `provenance` alone cannot
+    express."""
+    created = _create_demo_analysis(client)["analysis"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+    monkeypatch.setattr(analyses_module, "create_provider", lambda *a, **kw: _RejectingProvider())
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/0/explanation")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provenance"] == "deterministic_fallback"
+    assert body["provider_name"] is None
+    assert body["model_identifier"] is None
+    assert body["ai_call_status"] == "attempted_rejected"
+    assert body["evidence_sent_to_model"] is True
+    assert body["narrative"]
+
+
+def test_get_analysis_finding_explanation_provider_error_falls_back_with_status(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A provider whose `complete()` raises a `ProviderError` still
+    returns the deterministic explanation unchanged, with
+    `ai_call_status == "attempted_provider_error"` (`WP-065`) —
+    distinguished from both `not_configured` and `attempted_rejected`.
+    No raw exception text reaches the response body."""
+    created = _create_demo_analysis(client)["analysis"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+    monkeypatch.setattr(analyses_module, "create_provider", lambda *a, **kw: _ErroringProvider())
+
+    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/0/explanation")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provenance"] == "deterministic_fallback"
+    assert body["ai_call_status"] == "attempted_provider_error"
+    assert body["evidence_sent_to_model"] is True
+    assert "simulated connection failure" not in response.text
+
+
+def _finding_with_category(client: TestClient, analysis_id: str, category: str) -> dict[str, Any]:
+    items = client.get(f"/api/v1/analyses/{analysis_id}/findings").json()["items"]
+    for item in items:
+        if item["category"] == category:
+            return item  # type: ignore[no-any-return]
+    raise AssertionError(f"expected at least one demo finding in category {category!r}")
+
+
+def test_get_analysis_finding_explanation_ai_call_status_independent_of_security_exposure(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Semantic proof (`WP-065`'s own `semantic.proof`): for a real
+    `ai_processing_security` (prompt-injection) finding, an accepted AI
+    explanation's `ai_call_status`/`provider_name`/`model_identifier`
+    are genuinely independent of that same finding's own
+    `security_exposure.model_provider_enabled` — the deterministic
+    pipeline's unrelated, permanently-`False` raw-sample-exposure
+    posture never varies with, and is never derived from, this
+    per-request enrichment call's own outcome."""
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+    finding_item = _finding_with_category(client, analysis_id, "ai_processing_security")
+    finding_id = finding_item["finding_id"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+
+    explanation_response = client.get(
+        f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/explanation"
+    )
+    detail_response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}")
+
+    assert explanation_response.status_code == 200
+    explanation_body = explanation_response.json()
+    assert explanation_body["ai_call_status"] == "attempted_accepted"
+    assert explanation_body["provider_name"] == "mock"
+    assert explanation_body["model_identifier"] == "mock-v1"
+    assert explanation_body["evidence_sent_to_model"] is True
+
+    assert detail_response.status_code == 200
+    detail_body = detail_response.json()
+    assert detail_body["security_exposure"]["model_provider_enabled"] is False
+    assert detail_body["security_exposure"]["sample_transmission_enabled"] is False
+
+
+def test_get_analysis_finding_explanation_preserves_canonical_evidence_when_sanitizing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`WP-065` r4, D-038 axis 4 real-payload proof, end-to-end through
+    the actual HTTP route (complementing `ai_boundary/test_prompt.py`'s
+    and `ai_provider/test_llama_cpp.py`'s own lower-level proofs): for a
+    real `ai_processing_security` demo finding with an accepted mock
+    explanation, `evidence_sent_to_model` is genuinely `True` (bounded
+    non-raw metadata was sent) while `security_exposure` stays `False`
+    — and, independently, the canonical local `Evidence` object
+    reachable through `analysis.service.get_finding_evidence` (the same
+    object `ai_boundary.prompt._serialize_evidence` redacts *a copy
+    of*, never mutates) still carries its own real
+    `truncated_sample_prefix` value, unaffected by the AI-bound
+    sanitization — proving the fix only touches the outgoing AI
+    payload, never TrustTable's own retained evidence."""
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+    finding_item = _finding_with_category(client, analysis_id, "ai_processing_security")
+    finding_id = finding_item["finding_id"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+
+    explanation_response = client.get(
+        f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/explanation"
+    )
+
+    assert explanation_response.status_code == 200
+    body = explanation_response.json()
+    assert body["ai_call_status"] == "attempted_accepted"
+    assert body["evidence_sent_to_model"] is True
+
+    # White-box: the canonical local Evidence, reached the same way the
+    # explanation route itself reaches it, still carries the real raw
+    # excerpt — the fix never touches this object.
+    store: AnalysisStore = client.app.state.analysis_store  # type: ignore[attr-defined]
+    evidence_items = get_finding_evidence(store, analysis_id, finding_id)
+    security_pattern_items = [
+        item for item in evidence_items if item.evidence_type.value == "security_pattern"
+    ]
+    assert security_pattern_items, "expected at least one security_pattern evidence item"
+    assert security_pattern_items[0].structured_payload.get("truncated_sample_prefix")
+
+
+def test_get_analysis_finding_explanation_confirmed_context_sent_to_model_after_finalize(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`confirmed_context_sent_to_model` (`WP-065` r4, D-038 axis 5)
+    becomes `True` only once `POST .../finalize` has actually been
+    called for this analysis — before finalize, evidence alone is sent
+    (mirrors `test_get_analysis_finding_explanation_ignores_unfinalized_
+    context`'s own established envelope-level proof, now asserted at
+    the disclosed-field level a real UI consumes)."""
+    created = _create_demo_analysis(client)["analysis"]
+    analysis_id = created["analysis_id"]
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+
+    before_finalize = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/explanation")
+    assert before_finalize.json()["confirmed_context_sent_to_model"] is False
+    assert before_finalize.json()["evidence_sent_to_model"] is True
+
+    client.get(f"/api/v1/analyses/{analysis_id}/context")
+    finalize_response = client.post(
+        f"/api/v1/analyses/{analysis_id}/finalize", json={"expected_version": 1}
+    )
+    assert finalize_response.status_code == 202
+
+    after_finalize = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/explanation")
+
+    assert after_finalize.status_code == 200
+    after_body = after_finalize.json()
+    assert after_body["confirmed_context_sent_to_model"] is True
+    assert after_body["evidence_sent_to_model"] is True
 
 
 def test_get_analysis_finding_explanation_unknown_analysis_returns_structured_404(

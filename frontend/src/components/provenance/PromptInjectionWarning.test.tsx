@@ -44,7 +44,48 @@ describe('PromptInjectionWarning', () => {
     )
 
     expect(screen.getByText('No')).toBeInTheDocument()
-    expect(screen.getByText('No AI model is configured')).toBeInTheDocument()
+    expect(
+      screen.getByText('Not applicable for this exposure path'),
+    ).toBeInTheDocument()
+  })
+
+  it('WP-065: reports the positive sent-to-model/configured-model boundary', () => {
+    render(
+      <PromptInjectionWarning
+        affectedColumns={[{ original_name: 'notes' }]}
+        evidenceSummaries={[]}
+        securityExposure={{
+          model_provider_enabled: true,
+          sample_transmission_enabled: true,
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Yes, for this analysis')).toBeInTheDocument()
+    expect(screen.getByText('A configured AI model')).toBeInTheDocument()
+  })
+
+  it('WP-065: rejected-output status never claims AI is disabled outright, and scopes every field to this finding’s own flagged content', () => {
+    render(
+      <PromptInjectionWarning
+        affectedColumns={[{ original_name: 'notes' }]}
+        evidenceSummaries={[]}
+        securityExposure={{
+          model_provider_enabled: false,
+          sample_transmission_enabled: false,
+        }}
+      />,
+    )
+
+    expect(screen.queryByText(/AI is disabled/)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /this flagged content is never itself sent to any model/,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('This flagged content sent to a model'),
+    ).toBeInTheDocument()
   })
 
   it('AC-05: never asserts malicious intent as fact', () => {

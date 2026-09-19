@@ -11,6 +11,37 @@ import {
 const PROMPT_INJECTION_CATEGORY = 'ai_processing_security'
 const REPRESENTATIVE_SAMPLE_TYPE = 'representative_sample'
 
+/** `ai_call_status`'s closed set (`WP-065`, defect fix). Kept as a
+ * small local union rather than importing the generated enum type, to
+ * mirror this file's existing informal-typing convention for other
+ * response string fields. */
+type AiCallStatus =
+  | 'not_configured'
+  | 'attempted_accepted'
+  | 'attempted_rejected'
+  | 'attempted_provider_error'
+
+/** Describes this specific request's own AI-call outcome
+ * (`ai_call_status`), deliberately never a claim about whether AI is
+ * used anywhere else on the screen or on this analysis in general —
+ * that ambiguity, and its resulting contradiction with
+ * `PromptInjectionWarning`'s unrelated `security_exposure`-derived
+ * fields, is exactly what `WP-065` fixes. See
+ * `docs/decision-log.md` D-038. */
+function explanationCallStatusLabel(status: AiCallStatus): string {
+  switch (status) {
+    case 'attempted_accepted':
+      return ''
+    case 'attempted_rejected':
+      return 'an AI attempt for this explanation did not produce a usable result'
+    case 'attempted_provider_error':
+      return 'an AI attempt for this explanation could not complete'
+    case 'not_configured':
+    default:
+      return 'no AI provider is configured for this explanation'
+  }
+}
+
 /** The Finding detail screen (`docs/ui-specification.md` §4.7), plus the
  * dedicated Prompt-injection warning presentation (§4.8) for findings in
  * the `ai_processing_security` category (`UI-01`, extending — consumes
@@ -21,7 +52,19 @@ const REPRESENTATIVE_SAMPLE_TYPE = 'representative_sample'
  * `OverviewRoute.tsx` already established for its own unbuilt sections —
  * `REM-01`/`RULE-01`/`REV-01` are later, unimplemented backlog items;
  * the backend does not compute this content yet (`WP-027`'s own Recorded
- * assumption 4), so no placeholder value is fabricated here either. */
+ * assumption 4), so no placeholder value is fabricated here either.
+ *
+ * **`WP-065` (defect fix):** Technical metadata's former generic "AI
+ * model enabled" row (sourced from `finding.security_exposure`) was
+ * removed — it read as a global "was AI used" claim while, for the same
+ * finding, the Explanation section above could show a genuinely
+ * accepted AI interpretation, and `security_exposure` is in fact a
+ * narrow, prompt-injection-specific, always-`False`-today signal (see
+ * `docs/decision-log.md` D-038). The Explanation section's own
+ * provenance line is now the single accurate place this screen
+ * discloses per-request AI-call status; `PromptInjectionWarning` below
+ * remains the accurate place for this finding's own raw-content
+ * exposure, reworded for the same reason. */
 export function FindingDetailRoute() {
   const { analysisId, findingId } = useParams<{
     analysisId: string
@@ -157,7 +200,20 @@ export function FindingDetailRoute() {
             {explanation.provider_name && explanation.model_identifier
               ? ` — ${explanation.provider_name} (${explanation.model_identifier})`
               : null}
+            {explanation.provenance !== 'ai_interpretation'
+              ? ` — ${explanationCallStatusLabel(explanation.ai_call_status as AiCallStatus)}`
+              : null}
           </p>
+          {explanation.evidence_sent_to_model && (
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              This finding&apos;s evidence was sent to the model for this
+              request
+              {explanation.confirmed_context_sent_to_model
+                ? ', along with your confirmed dataset context'
+                : ''}
+              . The full raw dataset is never sent.
+            </p>
+          )}
         </section>
       )}
 
@@ -305,10 +361,6 @@ export function FindingDetailRoute() {
           <dd>{finding.priority_score}</dd>
           <dt className="font-medium">Affected rows</dt>
           <dd>{finding.affected_row_count}</dd>
-          <dt className="font-medium">AI model enabled</dt>
-          <dd>
-            {finding.security_exposure.model_provider_enabled ? 'Yes' : 'No'}
-          </dd>
         </dl>
       </section>
     </div>
