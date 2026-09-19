@@ -223,7 +223,155 @@ describe('FindingDetailRoute', () => {
     expect(
       screen.getByText('This is a medium-severity finding worth reviewing.'),
     ).toBeInTheDocument()
-    expect(screen.getByText('Deterministic (no AI)')).toBeInTheDocument()
+    expect(screen.getByText(/Deterministic \(no AI\)/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/no AI provider is configured for this explanation/),
+    ).toBeInTheDocument()
+    // D-038 axis 5: nothing was sent to a model, since no attempt was made.
+    expect(
+      screen.queryByText(/evidence was sent to the model/),
+    ).not.toBeInTheDocument()
+  })
+
+  it('WP-065: distinguishes an attempted-and-rejected AI explanation from never-attempted, without claiming AI is disabled', async () => {
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/explanation',
+        () =>
+          HttpResponse.json(
+            makeFindingExplanationResponse({
+              ai_call_status: 'attempted_rejected',
+              evidence_sent_to_model: true,
+            }),
+          ),
+      ),
+    )
+
+    renderDetail()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Explanation' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Deterministic \(no AI\)/)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /an AI attempt for this explanation did not produce a usable result/,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /This finding's evidence was sent to the model for this request/,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('WP-065: distinguishes an attempted-and-errored AI explanation with its own status text', async () => {
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/explanation',
+        () =>
+          HttpResponse.json(
+            makeFindingExplanationResponse({
+              ai_call_status: 'attempted_provider_error',
+            }),
+          ),
+      ),
+    )
+
+    renderDetail()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Explanation' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/an AI attempt for this explanation could not complete/),
+    ).toBeInTheDocument()
+  })
+
+  it('WP-065 r4: no rendered string claims no AI call was made or no AI model is configured while an accepted AI explanation is shown for an ai_processing_security finding, the removed generic "AI model enabled" row is gone, and evidence-sent-to-model (D-038 axis 5) is disclosed', async () => {
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId',
+        () =>
+          HttpResponse.json(
+            makeFindingDetailResponse({
+              category: 'ai_processing_security',
+              detector_id: 'security.possible_llm_prompt_injection',
+              calculated_observation:
+                "Column 'notes' has 1 value(s) with possible instruction-like content.",
+            }),
+          ),
+      ),
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/evidence',
+        () =>
+          HttpResponse.json(
+            makeFindingEvidenceListResponse({
+              items: [
+                {
+                  evidence_id:
+                    'security.possible_llm_prompt_injection.evidence.notes',
+                  evidence_type: 'security_pattern',
+                  display_safe_summary:
+                    "Column 'notes' has 1 value(s) with possible instruction-like content.",
+                  affected_columns: [
+                    {
+                      original_name: 'notes',
+                      internal_key: 'notes',
+                      ordinal: 9,
+                    },
+                  ],
+                  affected_row_count: 1,
+                  scope: 'full',
+                },
+              ],
+            }),
+          ),
+      ),
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/explanation',
+        () =>
+          HttpResponse.json(
+            makeFindingExplanationResponse({
+              narrative: 'An AI-grounded narrative.',
+              provenance: 'ai_interpretation',
+              provider_name: 'llama_cpp',
+              model_identifier: 'Qwen3.5-4B-Q4_K_M',
+              ai_call_status: 'attempted_accepted',
+              evidence_sent_to_model: true,
+              confirmed_context_sent_to_model: false,
+            }),
+          ),
+      ),
+    )
+
+    renderDetail()
+
+    expect(
+      await screen.findByText(
+        'AI interpretation — llama_cpp (Qwen3.5-4B-Q4_K_M)',
+      ),
+    ).toBeInTheDocument()
+    // D-038 axis 5: evidence-metadata exposure is disclosed as its own,
+    // distinct signal whenever an AI attempt was made.
+    expect(
+      screen.getByText(
+        /This finding's evidence was sent to the model for this request/,
+      ),
+    ).toBeInTheDocument()
+    // No AI-call-status claim anywhere on the page.
+    expect(screen.queryByText(/no AI call was made/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/AI is disabled/)).not.toBeInTheDocument()
+    expect(screen.queryByText('AI model enabled')).not.toBeInTheDocument()
+    // PromptInjectionWarning's own separate fields (D-038 axis 4) must
+    // not read as a general "no AI configured" claim either — the exact
+    // contradiction the fresh-context semantic review caught in r3.
+    expect(
+      screen.queryByText(/No AI model is configured/),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Not applicable for this exposure path'),
+    ).toBeInTheDocument()
   })
 
   it('UI-02 slice 1 (WP-063): renders AI interpretation with model-location text when a provider produced the explanation', async () => {
