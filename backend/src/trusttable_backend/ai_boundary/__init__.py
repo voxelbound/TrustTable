@@ -9,6 +9,12 @@ pure domain-layer logic exercised by synthetic test fixtures.
 
 from __future__ import annotations
 
+from .claim_screen import (
+    CLAIM_FAMILY_IDS,
+    CLAIM_SCREEN_VERSION,
+    normalize_narrative,
+    screen_narrative,
+)
 from .envelope import (
     DEFAULT_MAX_SAMPLE_COUNT,
     DEFAULT_MAX_SAMPLE_VALUE_LENGTH,
@@ -28,6 +34,8 @@ from .validation import (
 )
 
 __all__ = [
+    "CLAIM_FAMILY_IDS",
+    "CLAIM_SCREEN_VERSION",
     "DEFAULT_MAX_SAMPLE_COUNT",
     "DEFAULT_MAX_SAMPLE_VALUE_LENGTH",
     "MODEL_OUTPUT_SCHEMA_VERSION",
@@ -42,5 +50,7 @@ __all__ = [
     "build_safe_prompt",
     "build_untrusted_samples",
     "default_redaction_hook",
+    "normalize_narrative",
+    "screen_narrative",
     "validate_model_output",
 ]

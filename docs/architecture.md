@@ -854,8 +854,9 @@ Output validation verifies:
 - numeric claims
 - allowed severity and provenance
 - absence of unsupported control fields
+- absence of unsupported whole-dataset claims and of instructions to disregard deterministic results (a bounded, closed lexical screen over the narrative — `docs/decision-log.md` D-039)
 
-The deterministic trust score and findings remain authoritative.
+The deterministic trust score and findings remain authoritative. The claim screen is defense in depth on top of that structural guarantee, not a replacement for it: it exists so a false whole-dataset assertion cannot be presented as an accepted AI interpretation beside the findings that contradict it. Its limits (lexical, English-only, evadable by a creative paraphrase, biased toward rejecting so that a false positive falls back to the deterministic explanation) are documented in D-039.
 
 ## 8. Persistence
 

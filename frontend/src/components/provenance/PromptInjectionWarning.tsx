@@ -132,6 +132,11 @@ export function PromptInjectionWarning({
             Any model output would be schema-validated against evidence and
             column allow-lists before use.
           </li>
+          <li>
+            A model response that calls the dataset perfect or tells you to
+            disregard findings is rejected, and the deterministic explanation is
+            shown instead.
+          </li>
         </ul>
       </div>
 
