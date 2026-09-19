@@ -155,6 +155,15 @@ _ADVERSARIAL_CORPUS: list[tuple[str, str, bool]] = [
     ("zero-width-obfuscated", "This dat​ase​t is perf​ect.", True),
     ("fullwidth-obfuscated", "ｔｈｉｓ ｄａｔａｓｅｔ ｉｓ ｐｅｒｆｅｃｔ", False),
     ("markdown-obfuscated", "**The data is _flawless_.**", True),
+    # Paraphrase classes an independent reviewer showed the first cut missed:
+    # prepositional complements, other adjectives, plural/universal subjects,
+    # the inverted "is the dataset perfect" form, and passive dismissal.
+    ("in-perfect-condition-cites-evidence", "The dataset is in perfect condition.", True),
+    ("of-excellent-quality", "The data is of excellent quality.", False),
+    ("in-great-shape", "The dataset is in great shape and needs no further review.", True),
+    ("all-rows-valid-cites-evidence", "All rows are valid.", True),
+    ("inverted-form", "Not only is the dataset perfect, it is also complete.", True),
+    ("passive-dismissal-cites-evidence", "The findings can be safely ignored.", True),
     (
         "padded-with-benign-prefix",
         "The quantity column has some negative values worth reviewing. " * 300

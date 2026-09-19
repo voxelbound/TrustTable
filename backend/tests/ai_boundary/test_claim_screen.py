@@ -286,6 +286,208 @@ def test_matching_is_bounded_on_pathological_input(text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Class-level coverage: the screen recognizes a *class* of claims, not a list.
+# ---------------------------------------------------------------------------
+
+# The independent reviewer's counterexamples: phrasings that share no exact
+# wording with any fixed pattern but assert the same false claim.
+_REVIEWER_COUNTEREXAMPLES: list[str] = [
+    "The dataset is in perfect condition.",
+    "The dataset is of excellent quality.",
+    "The data is in great shape.",
+    "The dataset is great.",
+    "All rows are valid.",
+]
+
+# A broader corpus written independently of the implementation, spanning
+# prepositional complements, adjectives, plural/universal subjects, absence
+# of problems, passive/adjectival dismissal, fitness and score assurances.
+_BROADER_POSITIVE: list[str] = [
+    # whole-dataset perfection / validity
+    "The file is in pristine condition.",
+    "The dataset appears to be in excellent shape.",
+    "The data remains in good order.",
+    "This spreadsheet is impeccable.",
+    "The dataset is exemplary.",
+    "All records are valid.",
+    "Every row is correct.",
+    "The entries are accurate.",
+    "The values are all clean.",
+    "The whole table is trustworthy.",
+    "Everything looks great.",
+    "All is well with this data.",
+    "Everything checks out.",
+    "This is a flawless data set.",
+    "The dataset is, for the most part, perfect.",
+    "The dataset is, in some sense, perfect.",
+    "Not only is the dataset perfect, it is also complete.",
+    # absence of problems
+    "The dataset has zero mistakes.",
+    "The data contains no irregularities.",
+    "The file is without any problems.",
+    "The data has not a single error.",
+    "The dataset is devoid of defects.",
+    "There are no problems whatsoever.",
+    "No errors were found anywhere.",
+    "The dataset shows no anomalies.",
+    "Nothing is wrong with the data.",
+    # dismissal of deterministic results
+    "The findings can be safely ignored.",
+    "These warnings should be dismissed.",
+    "The alerts are false positives.",
+    "No further action is required.",
+    "Don't bother reviewing these.",
+    "Pay no attention to the flags.",
+    "The results are meaningless noise.",
+    "Nothing to see here.",
+    "You needn't worry about it.",
+    # fitness and score assurances
+    "The data is good to go.",
+    "You can rely on this dataset.",
+    "Feel free to trust the data.",
+    "This dataset can be trusted.",
+    "The trust level is high.",
+    "Overall risk is low.",
+    "The quality score is great.",
+]
+
+
+@pytest.mark.parametrize("text", _REVIEWER_COUNTEREXAMPLES + _BROADER_POSITIVE)
+def test_paraphrase_classes_beyond_the_fixed_phrasings_are_screened(text: str) -> None:
+    assert screen_narrative(text), text
+
+
+_CLASS_SUBJECTS: list[str] = [
+    "The dataset",
+    "This data",
+    "The whole file",
+    "The spreadsheet",
+    "This table",
+    "All rows",
+    "Every record",
+    "The entries",
+    "Everything",
+]
+_CLASS_POSITIVE_ADJECTIVES: list[str] = [
+    "perfect",
+    "flawless",
+    "pristine",
+    "excellent",
+    "great",
+    "superb",
+    "outstanding",
+    "valid",
+    "clean",
+    "accurate",
+    "reliable",
+    "trustworthy",
+    "error-free",
+    "impeccable",
+]
+_CLASS_POSITIVE_FRAMES: list[str] = [
+    "{s} is {a}.",
+    "{s} looks {a}.",
+    "{s} appears to be {a}.",
+    "{s} seems {a}.",
+    "{s} remains {a}.",
+    "{s} was {a}.",
+    "{s} is in {a} condition.",
+    "{s} is in {a} shape.",
+    "{s} is of {a} quality.",
+    "{s} is, in some sense, {a}.",
+    "{s} is really very {a}.",
+    "Overall, {s} is {a}.",
+]
+# Honest hedges, negation and column-scoped statements about the same words.
+_CLASS_QUALIFIED_FRAMES: list[str] = [
+    "{s} is not {a}.",
+    "{s} is far from {a}.",
+    "{s} is hardly {a}.",
+    "{s} is never {a}.",
+    "{s} is not entirely {a}.",
+    "{s} is only partly {a}.",
+    "{s} is somewhat {a}, with caveats.",
+]
+_CLASS_COLUMN_SCOPED_FRAMES: list[str] = [
+    "The data in the quantity column is {a}.",
+    "The values in this column are {a}.",
+]
+
+
+def test_every_subject_frame_and_adjective_combination_is_screened() -> None:
+    """Class-level proof: the screen covers the whole cross product of
+    whole-dataset subjects, linking frames and positive assessments — not
+    only the phrasings a person happened to list."""
+    missed = [
+        frame.format(s=subject, a=adjective)
+        for subject in _CLASS_SUBJECTS
+        for adjective in _CLASS_POSITIVE_ADJECTIVES
+        for frame in _CLASS_POSITIVE_FRAMES
+        if not screen_narrative(frame.format(s=subject, a=adjective))
+    ]
+    assert missed == []
+
+
+def test_negated_hedged_and_column_scoped_combinations_are_not_screened() -> None:
+    """The same subjects and adjectives, honestly qualified, are left alone —
+    so the widening did not turn the screen into a blanket rejection."""
+    flagged = [
+        frame.format(s=subject, a=adjective)
+        for subject in _CLASS_SUBJECTS
+        for adjective in _CLASS_POSITIVE_ADJECTIVES
+        for frame in _CLASS_QUALIFIED_FRAMES
+        if screen_narrative(frame.format(s=subject, a=adjective))
+    ]
+    flagged += [
+        frame.format(a=adjective)
+        for adjective in _CLASS_POSITIVE_ADJECTIVES
+        for frame in _CLASS_COLUMN_SCOPED_FRAMES
+        if screen_narrative(frame.format(a=adjective))
+    ]
+    assert flagged == []
+
+
+_MORE_NEGATIVE_CONTROLS: list[str] = [
+    "This is not a perfect dataset, and the findings below explain why.",
+    "The dataset is only partly clean.",
+    "The file is not valid CSV.",
+    "The dataset has one column that is valid.",
+    "The findings should not be ignored.",
+    "The alerts are not false positives.",
+    "These warnings are important and should be reviewed.",
+    "This is far from a perfect dataset.",
+]
+
+
+@pytest.mark.parametrize("text", _MORE_NEGATIVE_CONTROLS)
+def test_additional_honest_statements_are_not_screened(text: str) -> None:
+    assert screen_narrative(text) == frozenset(), text
+
+
+# ---------------------------------------------------------------------------
+# Documented limits (docs/decision-log.md D-039): asserted so they stay honest.
+# ---------------------------------------------------------------------------
+
+
+def test_documented_false_positive_a_hedged_denial_is_still_screened() -> None:
+    """Deliberately biased toward rejecting: an honest "does not mean ... is
+    perfect" hedge is screened, because a leading "not" is not allowed to
+    exempt a claim ("Not only is the dataset perfect" must stay screened). The
+    cost is a fall back to the deterministic explanation, which is safe."""
+    assert screen_narrative("This does not mean the dataset is perfect.")
+
+
+def test_documented_limitation_a_creative_paraphrase_can_evade_the_screen() -> None:
+    """The screen is lexical, not semantic. This phrasing asserts a clean bill
+    of health with none of the recognized shapes and is not screened today.
+    Deterministic authority, not this screen, is the guarantee; when the
+    screen is extended to catch it, update this test with the new coverage."""
+    assert screen_narrative("I could not find a single thing to criticise about this file.") == (
+        frozenset()
+    )
+
+
+# ---------------------------------------------------------------------------
 # Structural guarantees: framework-independent, no dynamic execution.
 # ---------------------------------------------------------------------------
 
