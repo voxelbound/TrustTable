@@ -46,7 +46,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Final
 
-from ..ai_boundary.envelope import PromptEnvelope, build_prompt_envelope
+from ..ai_boundary.envelope import (
+    PROVIDER_EVIDENCE_ALIAS_PREFIX,
+    PromptEnvelope,
+    build_prompt_envelope,
+    provider_evidence_view,
+)
 from ..ai_boundary.finding_analysis import (
     build_finding_analysis_contract,
     validate_finding_analysis_output,
@@ -157,29 +162,6 @@ def confirmed_context_for_finding_analysis(
     return fields or None
 
 
-PROVIDER_EVIDENCE_ALIAS_PREFIX: Final[str] = "evidence_"
-"""Prefix of the neutral evidence ids a provider sees (`evidence_1`,
-`evidence_2`, ...)."""
-
-
-def provider_evidence_view(evidence: tuple[Evidence, ...]) -> tuple[Evidence, ...]:
-    """`evidence` with each item's id replaced by a neutral positional alias.
-
-    A canonical evidence id can embed dataset content: for example
-    `InconsistentCapitalizationDetector` builds it from the *normalized cell
-    value* (`...evidence.notes.<normalized value>`), so sending it would send
-    the value. The provider therefore only ever sees `evidence_1`,
-    `evidence_2`, ...; the alias-to-real mapping is applied afterwards when
-    an accepted answer is turned into the domain object. Everything else
-    about the evidence is unchanged here — the payload allow-list and the
-    column metadata policy are applied by `ai_boundary.prompt`.
-    """
-    return tuple(
-        replace(item, evidence_id=f"{PROVIDER_EVIDENCE_ALIAS_PREFIX}{position}")
-        for position, item in enumerate(evidence, start=1)
-    )
-
-
 def build_finding_explanation_envelope(
     finding: FindingCandidate,
     evidence: tuple[Evidence, ...],
@@ -190,9 +172,10 @@ def build_finding_explanation_envelope(
     `finding`.
 
     `evidence` (typically resolved via `analysis.service.
-    get_finding_evidence`) is forwarded as `computed_evidence` **in its
-    provider view** (`provider_evidence_view`: neutral evidence ids, and
-    `ai_boundary.prompt` then forwards only computed facts from each
+    get_finding_evidence`) is forwarded as `computed_evidence`;
+    `build_prompt_envelope` stores it **in its provider view**
+    (`ai_boundary.envelope.provider_evidence_view`: neutral evidence ids,
+    and `ai_boundary.prompt` then forwards only computed facts from each
     payload). This package sends zero dataset samples — disclosed, not
     silently assumed (a finding's own evidence is already the grounding a
     business-facing analysis needs).
@@ -208,7 +191,7 @@ def build_finding_explanation_envelope(
     """
     return build_prompt_envelope(
         task=build_finding_analysis_task(finding),
-        computed_evidence=provider_evidence_view(evidence),
+        computed_evidence=evidence,
         confirmed_context=confirmed_context,
     )
 
