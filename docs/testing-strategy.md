@@ -144,6 +144,8 @@ Additional negative controls:
 - security documentation quoting injection language
 - harmless use of the word “ignore”
 
+**Status (v0.2, `EVAL-AI-01`):** every assertion above is exercised end to end against the real routes and the real provider factory in `backend/tests/security/test_prompt_injection_adversarial_evaluation.py`, using a compromised provider double that obeys the injected instruction — including variants that cite *real* evidence IDs, which a grounding-only check would accept. "Unsupported ‘dataset is perfect’ output is rejected" is enforced by the bounded claim screen in the model-output validator (`docs/decision-log.md` D-039); the evaluation also proves deterministic findings, evidence, severity and the trust assessment are byte-for-byte unchanged and that the user sees the deterministic fallback. "Report records risk and protections" is evaluated on the v0.2 surface that exists — the explanation response's `ai_call_status`/`evidence_sent_to_model` and the Finding Detail protections list. The exported Markdown report and its security section are v0.3 deliverables, so asserting the applied protections in the **exported report** is carried to the v0.3 report package and is **not yet satisfied**.
+
 ## 4. Migration testing
 
 Test:

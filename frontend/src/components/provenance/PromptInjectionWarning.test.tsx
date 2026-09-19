@@ -127,6 +127,30 @@ describe('PromptInjectionWarning', () => {
     ).toBeInTheDocument()
   })
 
+  it('EVAL-AI-01: lists the unsupported-claim rejection protection alongside the schema-validation one', () => {
+    render(
+      <PromptInjectionWarning
+        affectedColumns={[{ original_name: 'notes' }]}
+        evidenceSummaries={[]}
+        securityExposure={{
+          model_provider_enabled: false,
+          sample_transmission_enabled: false,
+        }}
+      />,
+    )
+
+    expect(
+      screen.getByText(
+        'Any model output would be schema-validated against evidence and column allow-lists before use.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'A model response that calls the dataset perfect or tells you to disregard findings is rejected, and the deterministic explanation is shown instead.',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('renders a fallback when no affected column or evidence summary is available', () => {
     render(
       <PromptInjectionWarning
