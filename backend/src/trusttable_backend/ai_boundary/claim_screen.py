@@ -19,8 +19,14 @@ a score. The screen exists so a false whole-dataset assertion cannot be
 Five closed claim families are recognized (`CLAIM_FAMILY_IDS`):
 
 - `dataset_perfection_claim` — a dataset-level subject asserted perfect,
-  clean, valid, accurate, reliable, and similar.
-- `no_issues_claim` — an assertion that no data-quality issues exist.
+  clean, valid, accurate, reliable, verified, and similar, or said to pass
+  or meet all checks, tests, standards or rules.
+- `no_issues_claim` — an assertion that no data-quality issues exist, in
+  any grammatical shape and whoever asserts it: passive ("no issues were
+  found"), active ("the analysis found no issues"), negated detection ("did
+  not find any issues", "failed to detect any problems"), or "without/free
+  of". "No *other* issues" is not matched (an issue exists), and a
+  statement scoped to a named column is exempt.
 - `disregard_findings_instruction` — an instruction or assurance to ignore,
   dismiss or override deterministic findings, scores, risk or evidence.
 - `score_override_claim` — an assertion that a trust/quality score is
@@ -168,7 +174,7 @@ _QUALITY_ADJ = (
 )
 
 _ISSUE_NOUN = (
-    r"(?:issues?|problems?|errors?|defects?|flaws?|concerns?|anomalies|mistakes?|faults?|"
+    r"(?:issues?|problems?|errors?|defects?|flaws?|concerns?|anomal(?:y|ies)|mistakes?|faults?|"
     r"inconsistenc(?:y|ies)|irregularit(?:y|ies)|discrepanc(?:y|ies)|deficienc(?:y|ies)|"
     r"blemish(?:es)?|quality\s+(?:issues?|problems?|concerns?))"
 )
@@ -176,12 +182,13 @@ _ISSUE_MODIFIER = (
     r"(?:(?:known|apparent|obvious|significant|major|serious|material|remaining|real|"
     r"actual|data|quality|data\s+quality|detected|reported)\s+){0,3}"
 )
-_ZERO_INTENSIFIER = r"(?:absolutely\s+|virtually\s+|essentially\s+)?"
 # A "no issues" statement explicitly scoped to a named column is not a
 # whole-dataset claim (the one deliberate exemption; see module docstring).
+# Up to four intervening words are allowed ("no issues were found in the
+# quantity column"); every quantifier is bounded.
 _NOT_COLUMN_SCOPED = (
-    r"(?!\s+(?:in|for|within|inside|on|with|of)\s+(?:(?:the|this|that|its|a|an)\s+)?"
-    r"(?:\w+\s+){0,3}columns?\b)"
+    r"(?!(?:\s+\w+){0,4}\s+(?:in|for|within|inside|on|with|of|regarding|about)\s+"
+    r"(?:(?:the|this|that|its|a|an)\s+)?(?:\w+\s+){0,3}columns?\b)"
 )
 
 # Negators recognized only when *adjacent* to the claim verb/phrase. A
@@ -239,21 +246,33 @@ _PATTERNS: Final[tuple[_Pattern, ...]] = (
         r"(?:to\s+be\s+)?(?:well|good|fine|clear|great|perfect|okay|ok|in\s+order)\b"
         r"|\beverything\s+checks\s+out\b",
     ),
-    # 2. no_issues_claim ---------------------------------------------
+    # 3-forms of "the passing / checking out" assurance (perfection family).
     _compile(
-        CLAIM_FAMILY_NO_ISSUES,
-        r"\b(?:no|zero|not\s+a\s+single)\s+"
-        + _ISSUE_MODIFIER
-        + _ISSUE_NOUN
-        + r"\s+(?:(?:was|were|is|are|has\s+been|have\s+been)\s+)?"
-        r"(?:found|detected|identified|observed|present|exist|exists|remain|remains|reported)\b"
-        + _NOT_COLUMN_SCOPED,
+        CLAIM_FAMILY_DATASET_PERFECTION,
+        _NEGATOR + r"(?:pass(?:es|ed)?|meets?|met|satisf(?:y|ies|ied)|clears?|cleared)\s+"
+        r"(?:all|every|each|any)\s+(?:(?:of\s+)?(?:the|our|its|these|those)\s+)?"
+        r"(?:(?:quality|validation|data\s+quality|integrity)\s+)?"
+        r"(?:checks?|tests?|validations?|standards?|requirements?|rules?|criteria|audits?)\b",
+        negatable=True,
     ),
     _compile(
+        CLAIM_FAMILY_DATASET_PERFECTION,
+        _NEGATOR + r"(?:passes|passed)\s+(?:validation|quality\s+control|the\s+audit|inspection)\b",
+        negatable=True,
+    ),
+    _compile(
+        CLAIM_FAMILY_DATASET_PERFECTION,
+        r"\b(?:dataset|data|file|table|spreadsheet|worksheet|everything)\s+checks\s+out\b",
+    ),
+    # 2. no_issues_claim ---------------------------------------------
+    # Subject-free and verb-free: "no issues" is the claim whoever asserts it
+    # and however it is phrased — passive ("no issues were found"), active
+    # ("the analysis found no issues"), or negated detection ("did not find
+    # any issues"). "no *other* issues" is an honest hedge (an issue exists)
+    # and is not matched; a statement scoped to a named column is exempt.
+    _compile(
         CLAIM_FAMILY_NO_ISSUES,
-        r"\bthere\s+(?:are|is|were|was)\s+"
-        + _ZERO_INTENSIFIER
-        + r"(?:no|zero)\s+"
+        r"\b(?:no|zero|nil|not\s+a\s+single|not\s+one)\s+"
         + _ISSUE_MODIFIER
         + _ISSUE_NOUN
         + r"\b"
@@ -261,30 +280,31 @@ _PATTERNS: Final[tuple[_Pattern, ...]] = (
     ),
     _compile(
         CLAIM_FAMILY_NO_ISSUES,
-        r"\b"
-        + _SUBJECT
-        + r"\s+(?:has|have|contains?|shows?|exhibits?|displays?)\s+"
-        + _ZERO_INTENSIFIER
-        + r"(?:no|zero)\s+"
+        r"\b(?:without|lacking|lacks?|devoid\s+of|free\s+(?:of|from))\s+"
+        r"(?:(?:any|a\s+single|even\s+one)\s+)?"
         + _ISSUE_MODIFIER
         + _ISSUE_NOUN
-        + r"\b",
+        + r"\b"
+        + _NOT_COLUMN_SCOPED,
     ),
     _compile(
         CLAIM_FAMILY_NO_ISSUES,
-        r"\b(?:no|zero)\s+(?:data\s+)?quality\s+(?:issues?|problems?|concerns?)\b"
-        r"|\b(?:no|zero)\s+data\s+(?:issues?|problems?|errors?)\b",
+        r"\b(?:(?:did|does|do|could|would|can|will|has|have|had)(?:\s+not|n't)|cannot|won't|"
+        r"never|fail(?:s|ed)?\s+to|unable\s+to|(?:was|were)\s+unable\s+to)\s+"
+        r"(?:(?:yet|ever|actually|really)\s+)?"
+        r"(?:find|found|detect(?:ed)?|identif(?:y|ied)|see|saw|seen|observe[d]?|notice[d]?|"
+        r"discover(?:ed)?|encounter(?:ed)?|locate[d]?|reveal(?:ed)?|uncover(?:ed)?|"
+        r"show(?:ed|n)?|contain(?:ed)?|have|had|exhibit(?:ed)?|turn(?:ed)?\s+up)\s+"
+        r"(?:any|a\s+single|even\s+one)\s+"
+        + _ISSUE_MODIFIER
+        + _ISSUE_NOUN
+        + r"\b"
+        + _NOT_COLUMN_SCOPED,
     ),
     _compile(
         CLAIM_FAMILY_NO_ISSUES,
-        r"\b"
-        + _SUBJECT
-        + r"\s+(?:is|are|looks?|appears?|remains?)\s+"
-        + _INTENSIFIER
-        + r"(?:free\s+(?:of|from)|devoid\s+of|without)\s+(?:any\s+)?"
-        + _ISSUE_MODIFIER
-        + _ISSUE_NOUN
-        + r"\b",
+        r"\bthere\s+(?:aren't|isn't|weren't|wasn't|are\s+not|is\s+not|were\s+not|was\s+not)\s+"
+        r"any\s+" + _ISSUE_MODIFIER + _ISSUE_NOUN + r"\b" + _NOT_COLUMN_SCOPED,
     ),
     # 3. disregard_findings_instruction -------------------------------
     _compile(
@@ -485,6 +505,7 @@ _POSITIVE: Final[frozenset[str]] = frozenset(
         "superb", "outstanding", "exceptional", "excellent", "great", "fantastic",
         "wonderful", "terrific", "clean", "valid", "accurate", "correct", "reliable",
         "trustworthy", "trusted", "sound", "healthy", "fine", "okay", "ok", "good",
+        "verified", "validated", "certified", "approved", "vetted",
         "error-free", "issue-free", "problem-free", "defect-free", "fault-free",
         "flaw-free", "top-notch", "high-quality", "top-quality", "good-quality",
     }
