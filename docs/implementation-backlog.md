@@ -438,6 +438,21 @@ Acceptance:
 - report records protection
 - safe fallback shown
 
+> **Annotation (2026-09-19, `D-039`):** implemented for `v0.2`. The
+> evaluation runs end to end against the real routes and provider factory
+> (`backend/tests/security/test_prompt_injection_adversarial_evaluation.py`)
+> and found that `SEC-02`'s validator was purely structural, so a
+> schema-valid narrative-only "this dataset is perfect" output would have
+> been accepted; a bounded, closed claim screen was added to the validator
+> (`docs/decision-log.md` D-039). "Report records protection" is satisfied
+> on the surface that exists in `v0.2` — the explanation response's
+> `ai_call_status`/`evidence_sent_to_model` and the Finding Detail
+> protections list. **Carried forward, not silently dropped:** asserting
+> the applied protections in the *exported* report cannot be done before
+> the report exists (Markdown/JSON/YAML export and a security section in
+> reports are `v0.3` deliverables, `docs/release-plan.md`), so that half of
+> this acceptance line is owed by the `v0.3` report package.
+
 ## REL-02 — v0.2 package
 
 The real local-inference provider (runtime selected via the human

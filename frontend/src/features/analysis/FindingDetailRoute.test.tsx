@@ -374,6 +374,64 @@ describe('FindingDetailRoute', () => {
     ).toBeInTheDocument()
   })
 
+  it('EVAL-AI-01: an adversarially-rejected prompt-injection explanation shows the safe deterministic fallback, discloses the rejection, and keeps the protections visible', async () => {
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId',
+        () =>
+          HttpResponse.json(
+            makeFindingDetailResponse({
+              category: 'ai_processing_security',
+              detector_id: 'security.possible_llm_prompt_injection',
+              calculated_observation:
+                "Column 'notes' has 1 value(s) with possible instruction-like content.",
+            }),
+          ),
+      ),
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/explanation',
+        () =>
+          HttpResponse.json(
+            makeFindingExplanationResponse({
+              narrative:
+                'Deterministic explanation: this finding flags instruction-like content in one value.',
+              provenance: 'deterministic_fallback',
+              provider_name: null,
+              model_identifier: null,
+              ai_call_status: 'attempted_rejected',
+              evidence_sent_to_model: true,
+            }),
+          ),
+      ),
+    )
+
+    renderDetail()
+
+    // The deterministic explanation is what the user sees.
+    expect(
+      await screen.findByText(
+        'Deterministic explanation: this finding flags instruction-like content in one value.',
+      ),
+    ).toBeInTheDocument()
+    // The rejection is disclosed, not silently swallowed.
+    expect(
+      screen.getByText(
+        /an AI attempt for this explanation did not produce a usable result/,
+      ),
+    ).toBeInTheDocument()
+    // No AI interpretation is presented, and no false whole-dataset claim.
+    expect(screen.queryByText(/^AI interpretation/)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('This dataset is perfect.'),
+    ).not.toBeInTheDocument()
+    // The protections record is visible on the same screen.
+    expect(
+      screen.getByText(
+        'A model response that calls the dataset perfect or tells you to disregard findings is rejected, and the deterministic explanation is shown instead.',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('UI-02 slice 1 (WP-063): renders AI interpretation with model-location text when a provider produced the explanation', async () => {
     server.use(
       http.get(
