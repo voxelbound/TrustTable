@@ -204,6 +204,16 @@ export function FindingDetailRoute() {
               ? ` — ${explanationCallStatusLabel(explanation.ai_call_status as AiCallStatus)}`
               : null}
           </p>
+          {explanation.evidence_sent_to_model && (
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              This finding&apos;s evidence was sent to the model for this
+              request
+              {explanation.confirmed_context_sent_to_model
+                ? ', along with your confirmed dataset context'
+                : ''}
+              . The full raw dataset is never sent.
+            </p>
+          )}
         </section>
       )}
 

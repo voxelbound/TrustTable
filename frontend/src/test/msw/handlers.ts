@@ -207,6 +207,8 @@ export function makeFindingExplanationResponse(
     provider_name: null,
     model_identifier: null,
     ai_call_status: 'not_configured',
+    evidence_sent_to_model: false,
+    confirmed_context_sent_to_model: false,
     referenced_evidence_ids: ['validity.future_dates.evidence.order_date'],
     referenced_columns: [
       { original_name: 'order_date', internal_key: 'order_date', ordinal: 3 },

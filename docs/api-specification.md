@@ -432,6 +432,16 @@ Returns:
   of `provenance` alone, which cannot distinguish "never attempted"
   from "attempted and failed", and deliberately independent of a
   finding's own `security_exposure` (§13) — see D-038.
+- `evidence_sent_to_model`, `confirmed_context_sent_to_model` (`WP-065`
+  r4) — booleans disclosing D-038's axis 5 (finding/evidence/context
+  metadata exposure) for this specific request, independent of
+  `ai_call_status` (axes 1-3) and `security_exposure` (axis 4, raw
+  dataset-sample exposure — never reflected here). Both `False` when
+  `ai_call_status == "not_configured"`; `evidence_sent_to_model` is
+  `True` on every attempted call (this finding's own bounded `Evidence`
+  is always sent); `confirmed_context_sent_to_model` is additionally
+  `True` only once `POST .../finalize` has been called for this
+  analysis.
 - `referenced_evidence_ids`, `referenced_columns` — grounding proof,
   always derived from what was actually sent, never the model's own
   claims

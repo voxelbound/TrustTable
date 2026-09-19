@@ -45,7 +45,7 @@ describe('PromptInjectionWarning', () => {
 
     expect(screen.getByText('No')).toBeInTheDocument()
     expect(
-      screen.getByText('No AI model is configured for this exposure path'),
+      screen.getByText('Not applicable for this exposure path'),
     ).toBeInTheDocument()
   })
 

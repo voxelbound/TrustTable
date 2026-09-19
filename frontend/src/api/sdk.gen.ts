@@ -218,6 +218,13 @@ export const getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdE
  * unrelated, permanently-`False` raw-sample-exposure posture; see
  * `docs/decision-log.md` D-038).
  *
+ * Also returns `evidence_sent_to_model`/`confirmed_context_sent_to_model`
+ * (`WP-065` r4, closing a semantic-review `FAIL`) — D-038's axis 5
+ * ("finding/evidence/context metadata exposure"), independent of
+ * `ai_call_status` (axes 1-3) and `Analysis.security_exposure`
+ * (axis 4, raw dataset-sample exposure — never carried here regardless
+ * of these two fields' values).
+ *
  * Same `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` semantics as the
  * sibling finding routes.
  */

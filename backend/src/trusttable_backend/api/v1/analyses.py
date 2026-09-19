@@ -379,7 +379,12 @@ def _row_context_response(window: RowContextWindow) -> RowContextResponse:
 
 
 def _finding_explanation_response(
-    finding_id: str, explanation: FindingExplanation, *, ai_call_status: str
+    finding_id: str,
+    explanation: FindingExplanation,
+    *,
+    ai_call_status: str,
+    evidence_sent_to_model: bool,
+    confirmed_context_sent_to_model: bool,
 ) -> FindingExplanationResponse:
     return FindingExplanationResponse(
         finding_id=finding_id,
@@ -388,6 +393,8 @@ def _finding_explanation_response(
         provider_name=explanation.provider_name,
         model_identifier=explanation.model_identifier,
         ai_call_status=ai_call_status,
+        evidence_sent_to_model=evidence_sent_to_model,
+        confirmed_context_sent_to_model=confirmed_context_sent_to_model,
         referenced_evidence_ids=list(explanation.referenced_evidence_ids),
         referenced_columns=[_column_reference(column) for column in explanation.referenced_columns],
     )
@@ -436,6 +443,13 @@ def get_analysis_finding_explanation(
     unrelated, permanently-`False` raw-sample-exposure posture; see
     `docs/decision-log.md` D-038).
 
+    Also returns `evidence_sent_to_model`/`confirmed_context_sent_to_model`
+    (`WP-065` r4, closing a semantic-review `FAIL`) — D-038's axis 5
+    ("finding/evidence/context metadata exposure"), independent of
+    `ai_call_status` (axes 1-3) and `Analysis.security_exposure`
+    (axis 4, raw dataset-sample exposure — never carried here regardless
+    of these two fields' values).
+
     Same `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` semantics as the
     sibling finding routes.
     """
@@ -445,6 +459,8 @@ def get_analysis_finding_explanation(
     evidence = get_finding_evidence(store, analysis_id, finding_id)
     explanation = build_deterministic_explanation(finding)
     ai_call_status = "not_configured"
+    evidence_sent_to_model = False
+    confirmed_context_sent_to_model = False
 
     settings = get_settings()
     if settings.llm_provider != "disabled":
@@ -463,6 +479,8 @@ def get_analysis_finding_explanation(
             finding, evidence, confirmed_context=confirmed_context
         )
         result = run_finding_explanation(provider, envelope, evidence)
+        evidence_sent_to_model = True
+        confirmed_context_sent_to_model = confirmed_context is not None
         if result.accepted and result.explanation is not None:
             explanation = result.explanation
             ai_call_status = "attempted_accepted"
@@ -471,7 +489,13 @@ def get_analysis_finding_explanation(
         else:
             ai_call_status = "attempted_rejected"
 
-    return _finding_explanation_response(finding_id, explanation, ai_call_status=ai_call_status)
+    return _finding_explanation_response(
+        finding_id,
+        explanation,
+        ai_call_status=ai_call_status,
+        evidence_sent_to_model=evidence_sent_to_model,
+        confirmed_context_sent_to_model=confirmed_context_sent_to_model,
+    )
 
 
 # --- Context confirmation (`API-02`, `UI-02` slice 2, `WP-064`) --------
