@@ -76,15 +76,30 @@ Design constraints (each covered by tests):
   claims are only screened in the direction that reassures.
 
 What is structural and what is enumerated (stated so the coverage is not
-overclaimed): grammatical shape is generalized structurally — copular,
-prepositional ("in perfect condition"), passive, active verb-object and
-negated-detection forms; arbitrary modifiers, numerals and quantifier
-phrases between the parts ("passes all 12 automated quality checks",
-"every single record"); negation, hedges, "other" and column scope as
-barriers. The *vocabulary* of positive assessments, issue nouns, check
-nouns and passing verbs is enumerated — broad, and covered by an
-independently authored thesaurus test, but finite. An evaluative word that
-is on none of the lists is the residual gap.
+overclaimed). The recognized *shapes* are these, and only these:
+
+- a whole-dataset subject, linked by a copula, preposition or "came back"
+  to a positive assessment ("is in perfect condition", "of the highest
+  quality", "All rows are valid", "the inverted: Not only is it perfect");
+- a passing verb, a universal quantifier and a check noun in either order
+  ("passes all 12 automated checks", "All checks came back clean");
+- "no <issue noun>" in passive, active and negated-detection form ("no
+  issues were found", "the analysis found no issues", "did not find any
+  issues"), plus "nothing was found/flagged" and "no checks failed";
+- an instruction or assurance to ignore, dismiss or override findings, in
+  imperative, passive and adjectival form.
+
+Within those shapes, arbitrary modifiers, numerals and quantifier phrases
+between the parts are handled structurally, and negation, hedges, "other",
+a trailing exception and column scope act as barriers. The *vocabulary* of
+positive assessments, issue nouns, check nouns, passing verbs and
+outcomes is enumerated — broad, and covered by an independently authored
+thesaurus test, but finite.
+
+Not covered: a construction with none of those anchors, such as an
+assurance with no whole-dataset subject, listed check or issue noun, or
+listed evaluative word ("this is as good as data gets", "I have never seen
+a cleaner file"), an idiom or metaphor, or non-English text.
 
 Documented limitation: this is a lexical screen. A sufficiently creative
 paraphrase can evade it, cross-script homoglyphs are not folded, and it
@@ -186,6 +201,7 @@ _QUALITY_ADJ = (
 
 _ISSUE_NOUN = (
     r"(?:issues?|problems?|errors?|defects?|flaws?|concerns?|anomal(?:y|ies)|mistakes?|faults?|"
+    r"failures?|"
     r"inconsistenc(?:y|ies)|irregularit(?:y|ies)|discrepanc(?:y|ies)|deficienc(?:y|ies)|"
     r"blemish(?:es)?|quality\s+(?:issues?|problems?|concerns?))"
 )
@@ -306,6 +322,19 @@ _PATTERNS: Final[tuple[_Pattern, ...]] = (
         + _ISSUE_NOUN
         + r"\b"
         + _NOT_COLUMN_SCOPED,
+    ),
+    _compile(
+        CLAIM_FAMILY_NO_ISSUES,
+        r"\b(?:nothing|none)\s+(?:(?:was|were|is|are|has\s+been|had\s+been|got)\s+)?"
+        r"(?:found|flagged|detected|identified|reported|discovered|wrong|amiss|off|"
+        r"failing|failed|broken)\b"
+        r"(?!(?:\s+\w+){0,3}\s+(?:except|apart|aside|but)\b)" + _NOT_COLUMN_SCOPED,
+    ),
+    _compile(
+        CLAIM_FAMILY_NO_ISSUES,
+        r"\b(?:no\s+|none\s+of\s+(?:the|our|these)\s+)"
+        r"(?:checks?|tests?|rules?|validations?|criteria|audits?)\s+"
+        r"(?:failed|fail|failing|flagged|raised|triggered)\b",
     ),
     _compile(
         CLAIM_FAMILY_NO_ISSUES,
@@ -471,6 +500,7 @@ _LINKS: Final[frozenset[str]] = frozenset(
         "look", "looks", "looked", "appear", "appears", "appeared",
         "seem", "seems", "seemed", "remain", "remains", "remained",
         "stay", "stays", "has", "have", "had", "of", "in", "as",
+        "came", "come", "comes", "turned", "turns", "ended", "stands", "stood",
         "contains", "contain", "shows", "show", "exhibits", "displays",
         "holds", "includes",
     }
@@ -730,6 +760,44 @@ def _passing_assurance_at(tokens: list[str], index: int) -> bool:
     return False
 
 
+_PASS_OUTCOMES: Final[frozenset[str]] = frozenset(
+    {
+        "passed", "pass", "passes", "passing", "satisfied", "met", "cleared", "succeeded",
+        "clean", "green", "fine", "ok", "okay", "successful", "positive", "perfect",
+        "compliant",
+    }
+)  # fmt: skip
+
+
+def _inverted_passing_assurance_at(tokens: list[str], index: int) -> bool:
+    """True for the inverted/passive order: a universal quantifier, then a
+    check noun at `index`, then a passing outcome ("all 12 quality checks
+    passed", "every rule was satisfied", "all checks came back clean"). The
+    same defusers apply: negation before the quantifier ("not all checks
+    passed"), "other/remaining", and a trailing exception."""
+    count = len(tokens)
+    quantifier_at = -1
+    for position in range(index - 1, max(-1, index - 9), -1):
+        token = tokens[position]
+        if token in _PASSING_QUANTIFIERS:
+            quantifier_at = position
+            break
+        if token in _NEGATION or token in {"other", "remaining"}:
+            return False
+    if quantifier_at < 0:
+        return False
+    if any(token in _NEGATION for token in tokens[max(0, quantifier_at - 3) : quantifier_at]):
+        return False
+    for position in range(index + 1, min(index + 7, count)):
+        token = tokens[position]
+        if token in _NEGATION or token in _EXCEPTION_WORDS:
+            return False
+        if token in _PASS_OUTCOMES:
+            trailing = tokens[position + 1 : position + 4]
+            return not any(word in _EXCEPTION_WORDS for word in trailing)
+    return False
+
+
 def _check_noun_follows(tokens: list[str], start: int) -> bool:
     """True when a check noun appears soon after a *whole-dataset subject's*
     passing verb, with no negation or exception in between."""
@@ -793,12 +861,14 @@ def _token_window_families(tokens: list[str]) -> set[str]:
             if linked and _is_positive_at(tokens, position):
                 matched.add(CLAIM_FAMILY_DATASET_PERFECTION)
                 break
-    # Subject-free: any passing verb + universal quantifier + check noun.
-    if any(
-        token in _PASSING_VERBS and _passing_assurance_at(tokens, index)
-        for index, token in enumerate(tokens)
-    ):
-        matched.add(CLAIM_FAMILY_DATASET_PERFECTION)
+    # Subject-free: a passing verb + universal quantifier + check noun, in
+    # either order ("passes all checks" / "all checks passed").
+    for index, token in enumerate(tokens):
+        if (token in _PASSING_VERBS and _passing_assurance_at(tokens, index)) or (
+            token in _CHECK_NOUNS and _inverted_passing_assurance_at(tokens, index)
+        ):
+            matched.add(CLAIM_FAMILY_DATASET_PERFECTION)
+            break
     return matched
 
 
