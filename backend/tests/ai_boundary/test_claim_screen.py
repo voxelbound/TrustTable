@@ -854,6 +854,79 @@ def test_partial_counts_are_not_whole_dataset_subjects(text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Passive and inverted shapes (fourth independent review).
+# ---------------------------------------------------------------------------
+
+_PASSIVE_INVERTED_COUNTEREXAMPLES: list[str] = [
+    "All 12 automated quality checks passed.",
+    "Every validation rule was satisfied.",
+    "All checks came back clean.",
+    "Everything came back clean.",
+    "Nothing was found in the data.",
+    "Nothing was flagged.",
+    "No checks failed.",
+    "None of the checks failed.",
+    "Nothing failed.",
+    "There were no failures.",
+]
+
+
+@pytest.mark.parametrize("text", _PASSIVE_INVERTED_COUNTEREXAMPLES)
+def test_passive_and_inverted_assurances_are_screened(text: str) -> None:
+    assert screen_narrative(text), text
+
+
+_INVERTED_OUTCOMES: list[str] = [
+    "passed",
+    "were satisfied",
+    "came back clean",
+    "succeeded",
+    "are green",
+    "were met",
+    "came out fine",
+]
+
+
+def test_every_inverted_passing_combination_is_screened() -> None:
+    missed = [
+        text
+        for quantifier in _INDEPENDENT_QUANTIFIERS
+        for modifier in _INDEPENDENT_CHECK_MODIFIERS
+        for noun in _INDEPENDENT_CHECK_NOUNS
+        for outcome in _INVERTED_OUTCOMES
+        if not screen_narrative(text := f"{quantifier.capitalize()} {modifier}{noun} {outcome}.")
+    ]
+    assert missed == []
+
+
+def test_qualified_inverted_passing_statements_are_not_screened() -> None:
+    flagged = []
+    for quantifier in _INDEPENDENT_QUANTIFIERS:
+        for noun in _INDEPENDENT_CHECK_NOUNS:
+            for outcome in _INVERTED_OUTCOMES:
+                for text in (
+                    f"Not {quantifier} {noun} {outcome}.",
+                    f"All other {noun} {outcome}.",
+                    f"{quantifier.capitalize()} {noun} {outcome} except one.",
+                    f"{quantifier.capitalize()} {noun} failed.",
+                    f"No {noun} {outcome}.",
+                ):
+                    if screen_narrative(text):
+                        flagged.append(text)
+    assert flagged == []
+
+
+def test_absence_statements_that_are_hedged_or_column_scoped_are_not_screened() -> None:
+    for text in (
+        "Nothing was found in the quantity column.",
+        "Nothing was found except one duplicate row.",
+        "Nothing else was flagged.",
+        "Some checks failed and the rest passed.",
+    ):
+        assert screen_narrative(text) == frozenset(), text
+
+
+# ---------------------------------------------------------------------------
 # Documented limits (docs/decision-log.md D-039): asserted so they stay honest.
 # ---------------------------------------------------------------------------
 
@@ -874,6 +947,18 @@ def test_documented_limitation_a_creative_paraphrase_can_evade_the_screen() -> N
     assert screen_narrative("I could not find a single thing to criticise about this file.") == (
         frozenset()
     )
+
+
+def test_documented_limitation_constructions_with_no_recognized_anchor_are_not_screened() -> None:
+    """The module docstring lists what is not covered: a construction with
+    none of the recognized shapes (no whole-dataset subject, listed check or
+    issue noun, or listed evaluative word). These are asserted, not hidden;
+    when one is caught by an extension, move it into a positive test."""
+    for text in (
+        "This is as good as data gets.",
+        "I have never seen a cleaner file.",
+    ):
+        assert screen_narrative(text) == frozenset(), text
 
 
 # ---------------------------------------------------------------------------
