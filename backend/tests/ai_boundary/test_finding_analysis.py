@@ -651,6 +651,42 @@ def test_numbers_from_confirmed_context_are_grounded() -> None:
     assert check(output, envelope) == (True, ())
 
 
+def raw_content_evidence() -> Evidence:
+    """Evidence whose canonical payload holds raw dataset content that the
+    provider-bound serialization withholds (`serialize_evidence_for_provider`)."""
+    return make_evidence(
+        payload={
+            "negative_count": 2,
+            "rows": 300,
+            "distinct_casings": ["Customer revenue 777", "CUSTOMER REVENUE 777"],
+            "truncated_sample_prefix": "Fraud audit penalties 4242",
+        }
+    )
+
+
+def test_content_the_provider_was_never_shown_does_not_ground_a_term() -> None:
+    envelope = make_envelope((raw_content_evidence(),))
+    # "revenue" and "customer" appear only in withheld raw content.
+    for text in ("This affects customer revenue.", "There may be fraud and audit penalties."):
+        output = mutated(lambda o, t=text: o.update(explanation=t))
+        accepted, reasons = check(output, envelope)
+        assert not accepted and R.UNSUPPORTED_IMPACT_CLAIM in reasons, text
+
+
+def test_content_the_provider_was_never_shown_does_not_ground_a_number() -> None:
+    envelope = make_envelope((raw_content_evidence(),))
+    for number in ("777", "4242"):
+        output = mutated(lambda o, n=number: o.update(explanation=f"About {n} rows differ."))
+        accepted, reasons = check(output, envelope)
+        assert not accepted and R.UNKNOWN_NUMERIC_CLAIM in reasons, number
+
+
+def test_what_the_provider_was_shown_still_grounds_terms_and_numbers() -> None:
+    envelope = make_envelope((raw_content_evidence(),))
+    output = mutated(lambda o: o.update(explanation="2 of 300 rows in quantity hold negatives."))
+    assert check(output, envelope) == (True, ())
+
+
 # --- declared numeric_claims ------------------------------------------------
 
 

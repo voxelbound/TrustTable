@@ -136,6 +136,11 @@ Mitigations:
   was changed or a rule activated; nothing AI produces is executed or
   applied
 - only user-confirmed or corrected context is ever sent to a model
+- provider-bound evidence is an allow-list of computed facts: no dataset
+  cell value, and no evidence id derived from one, is sent to a model
+  (`AI-08`, D-040); column names are sent as untrusted metadata data,
+  never as instructions, and a hostile header cannot change a finding,
+  its evidence, severity or the trust score
 
 ### 3.5 Local data leakage
 

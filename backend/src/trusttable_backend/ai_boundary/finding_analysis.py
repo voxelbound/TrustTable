@@ -74,6 +74,7 @@ from .claim_screen import (
 )
 from .envelope import PromptEnvelope
 from .output_contract import OutputContract
+from .prompt import serialize_evidence_for_provider
 from .validation import RejectionReason, ValidationOutcome
 
 FINDING_ANALYSIS_SCHEMA_VERSION: Final[str] = "finding_analysis_v1"
@@ -506,13 +507,19 @@ class _Grounding:
                 numbers.extend(_numbers_in(scalar))
 
         for item in envelope.computed_evidence:
-            take(item.evidence_id)
-            take(item.display_safe_summary)
-            numbers.append(float(len(item.affected_row_references)))
-            for column in item.affected_columns:
-                take(column.original_name)
-                take(column.internal_key)
-            for scalar in _walk_scalars(dict(item.structured_payload)):
+            # Ground only in what the provider was actually shown (the
+            # allow-listed serialization), never in the canonical evidence:
+            # a term or number that appears only in withheld raw content —
+            # a flagged cell's excerpt, a raw casing — must not count as
+            # "supplied", or a model could pass validation on knowledge it
+            # was never given.
+            sent = serialize_evidence_for_provider(item)
+            take(sent["evidence_id"])
+            take(sent["display_safe_summary"])
+            numbers.append(float(sent["affected_row_count"]))
+            for column_key in sent["affected_columns"]:
+                take(column_key)
+            for scalar in _walk_scalars(sent["structured_payload"]):
                 take(scalar)
         for scalar in _walk_scalars(dict(envelope.confirmed_context)):
             take(scalar)
