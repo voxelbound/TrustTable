@@ -113,14 +113,12 @@ def structured_output(**overrides: object) -> dict[str, Any]:
         "explanation": "2 duplicate rows were found, so some records are repeated.",
         "business_impact": [
             {
-                "basis": "evidence",
                 "statement": "Repeated rows can be counted more than once in totals.",
                 "evidence_ids": ["evidence_1"],
                 "context_fields": [],
-                "assumption": "",
+                "assumption": "the rows are summed in totals",
             },
             {
-                "basis": "assumption",
                 "statement": "Order counts may be overstated in reports.",
                 "evidence_ids": [],
                 "context_fields": [],
@@ -326,12 +324,15 @@ def test_accepted_result_carries_all_four_sections() -> None:
     explanation = result.explanation
     assert explanation is not None
     assert explanation.narrative == "2 duplicate rows were found, so some records are repeated."
+    # TrustTable derives the basis: neither statement cites confirmed context,
+    # so both are conditional — even though the first cites evidence, which
+    # relates a statement to the finding but never establishes a consequence.
     assert [item.basis for item in explanation.business_impact] == [
-        ImpactBasis.EVIDENCE,
+        ImpactBasis.ASSUMPTION,
         ImpactBasis.ASSUMPTION,
     ]
     assert explanation.business_impact[0].evidence_ids == ("ev-1",)
-    assert explanation.business_impact[0].assumption is None
+    assert explanation.business_impact[0].assumption == "the rows are summed in totals"
     assert explanation.business_impact[1].assumption == "the rows feed order-count reporting"
     assert explanation.remediation == (
         "Check whether the repeated rows are true duplicates.",
@@ -676,11 +677,10 @@ def test_context_backed_statement_is_accepted_only_for_a_field_that_was_sent() -
         output = copy.deepcopy(structured_output())
         output["business_impact"].append(
             {
-                "basis": "confirmed_context",
                 "statement": "Each order should appear on exactly one row.",
                 "evidence_ids": [],
                 "context_fields": [field],
-                "assumption": "",
+                "assumption": "orders are counted per row",
             }
         )
         return output

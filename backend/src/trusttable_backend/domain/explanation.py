@@ -15,9 +15,10 @@ the three further sections the Finding Detail screen presents next to the
 explanation, each with its own semantic role so it can be validated and
 rendered separately:
 
-- `business_impact` — statements each labelled with an `ImpactBasis`
-  (`evidence`, `confirmed_context` or `assumption`), so a possible
-  consequence is never presented as a fact;
+- `business_impact` — *potential*-impact statements, each stating its
+  condition and carrying an `ImpactBasis` that TrustTable derives (informed
+  by confirmed context, or conditional), so a possible consequence is never
+  presented as a fact and no model can award itself the label;
 - `remediation` — advisory steps only; nothing here mutates source data;
 - `validation_rule` — a `ProposedValidationRule`, a proposal that is never
   active or authoritative (`status` is always `"proposed"`).
@@ -57,16 +58,21 @@ _ALLOWED_EXPLANATION_PROVENANCE = frozenset(
 
 
 class ImpactBasis(StrEnum):
-    """What a business-impact statement rests on. Closed set.
+    """How a business-impact statement is *presented*. Closed set, and
+    **derived by TrustTable — never chosen by a model**.
 
-    - `EVIDENCE`: follows directly from the finding's computed evidence.
-    - `CONFIRMED_CONTEXT`: relies on dataset context the user confirmed or
-      corrected (never on an inferred value).
+    There is deliberately no "evidence" member: the deterministic evidence
+    establishes what was found in the data, not what that costs a business,
+    so no free-text consequence can be presented as evidence-backed.
+
+    - `CONFIRMED_CONTEXT`: the statement cites dataset context the user
+      confirmed or corrected (never an inferred value), so it is shown as
+      *informed by* that context. It is still a potential impact with its
+      condition stated — never an established fact.
     - `ASSUMPTION`: only a possible consequence; the condition that must
       hold is stated with it. Never presented as a fact.
     """
 
-    EVIDENCE = "evidence"
     CONFIRMED_CONTEXT = "confirmed_context"
     ASSUMPTION = "assumption"
 
@@ -90,46 +96,51 @@ class ValidationRuleType(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class BusinessImpactStatement:
-    """One possible business implication of a finding, with the basis it
-    rests on.
+    """One *potential* business implication of a finding.
 
-    Invariants (what keeps a possibility from reading as a fact):
+    Every statement states the condition under which it would hold
+    (`assumption`, required): none is ever presented as an established fact.
+    `basis` says only whether the statement cites confirmed context, and is
+    derived by `derive_impact_basis` from the fields that were actually sent,
+    not asserted by whoever wrote the statement.
 
-    - `EVIDENCE` statements cite at least one evidence id and carry no
-      assumption or context field;
-    - `CONFIRMED_CONTEXT` statements cite at least one context field and
-      carry no assumption;
-    - `ASSUMPTION` statements state their assumption and cite no context
-      field. Evidence ids are optional there (what triggered the
-      possibility).
+    Invariants:
+
+    - every statement states its assumption;
+    - `CONFIRMED_CONTEXT` statements cite at least one context field;
+    - `ASSUMPTION` statements cite no context field.
+    Evidence ids are optional in both cases (what the statement relates to).
     """
 
     statement: str
     basis: ImpactBasis
     evidence_ids: tuple[str, ...] = ()
     context_fields: tuple[str, ...] = ()
-    assumption: str | None = None
+    assumption: str = ""
 
     def __post_init__(self) -> None:
         if not self.statement:
             raise ValueError("BusinessImpactStatement.statement must not be empty")
-        if self.assumption is not None and not self.assumption.strip():
-            raise ValueError("BusinessImpactStatement.assumption must not be blank when set")
-        if self.basis is ImpactBasis.EVIDENCE:
-            if not self.evidence_ids:
-                raise ValueError("An evidence-backed statement must cite evidence")
-            if self.context_fields or self.assumption is not None:
-                raise ValueError("An evidence-backed statement carries no context or assumption")
-        elif self.basis is ImpactBasis.CONFIRMED_CONTEXT:
+        if not self.assumption.strip():
+            raise ValueError("A potential-impact statement must state its assumption")
+        if self.basis is ImpactBasis.CONFIRMED_CONTEXT:
             if not self.context_fields:
-                raise ValueError("A context-backed statement must cite confirmed context fields")
-            if self.assumption is not None:
-                raise ValueError("A context-backed statement carries no assumption")
-        else:
-            if self.assumption is None:
-                raise ValueError("A conditional statement must state its assumption")
-            if self.context_fields:
-                raise ValueError("A conditional statement cites no confirmed context field")
+                raise ValueError("A context-informed statement must cite confirmed context fields")
+        elif self.context_fields:
+            raise ValueError("A conditional statement cites no confirmed context field")
+
+
+def derive_impact_basis(context_fields: tuple[str, ...]) -> ImpactBasis:
+    """The presentation basis TrustTable can establish for a statement.
+
+    Conservative by construction: a statement is shown as informed by
+    confirmed context only if it cites at least one context field (callers
+    validate that each cited field is one that was actually sent, and only
+    confirmed or corrected fields of a finalized context ever are); every
+    other statement is a conditional assumption. Nothing here reads the
+    statement's prose, so no wording can raise a statement's standing.
+    """
+    return ImpactBasis.CONFIRMED_CONTEXT if context_fields else ImpactBasis.ASSUMPTION
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,4 +216,5 @@ __all__ = [
     "ImpactBasis",
     "ProposedValidationRule",
     "ValidationRuleType",
+    "derive_impact_basis",
 ]

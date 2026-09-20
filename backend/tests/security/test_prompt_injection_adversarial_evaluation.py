@@ -85,7 +85,6 @@ def _structured_attack(request: ProviderRequest, text: str, role: str) -> dict[s
         impact[0]["statement"] = text
     elif role == "assumption":
         impact[0] = {
-            "basis": "assumption",
             "statement": "Downstream users may rely on this data.",
             "evidence_ids": [],
             "context_fields": [],

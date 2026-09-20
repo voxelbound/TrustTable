@@ -10,19 +10,23 @@ import {
   ValidationRuleSection,
 } from './FindingGuidanceSections'
 
-const EVIDENCE: BusinessImpactStatementResponse = {
-  statement: 'Repeated rows can be counted twice in totals.',
-  basis: 'evidence',
+// The reviewer's exact counterexample: free-text consequences the deterministic
+// evidence does not establish. Whatever the model wrote, TrustTable derived a
+// conditional basis for it, and the UI has no "Evidence-backed" badge to give.
+const INVENTED: BusinessImpactStatementResponse = {
+  statement:
+    'This will cause the company to lose money and damage its reputation.',
+  basis: 'assumption',
   evidence_ids: ['ev-1'],
   context_fields: [],
-  assumption: null,
+  assumption: 'the flagged rows are used in reports',
 }
 const CONTEXT: BusinessImpactStatementResponse = {
   statement: 'Each order should appear on one row.',
   basis: 'confirmed_context',
   evidence_ids: [],
   context_fields: ['row_grain', 'primary_entity'],
-  assumption: null,
+  assumption: 'orders are counted per row',
 }
 const ASSUMPTION: BusinessImpactStatementResponse = {
   statement: 'Order counts may be overstated.',
@@ -43,10 +47,10 @@ const RULE: ProposedValidationRuleResponse = {
 }
 
 describe('BusinessImpactSection', () => {
-  it('labels each statement by its basis and shows the condition of an assumption', () => {
+  it('labels each statement conditional or context-informed and always shows its condition', () => {
     render(
       <BusinessImpactSection
-        statements={[EVIDENCE, CONTEXT, ASSUMPTION]}
+        statements={[CONTEXT, ASSUMPTION]}
         aiAssisted={true}
       />,
     )
@@ -55,27 +59,42 @@ describe('BusinessImpactSection', () => {
       screen.getByRole('heading', { name: 'Possible business impact' }),
     ).toBeInTheDocument()
     const items = screen.getAllByRole('listitem')
-    expect(items).toHaveLength(3)
-    expect(within(items[0]!).getByText('Evidence-backed')).toBeInTheDocument()
+    expect(items).toHaveLength(2)
     expect(
-      within(items[1]!).getByText('From your confirmed context'),
+      within(items[0]!).getByText('Informed by your confirmed context'),
     ).toBeInTheDocument()
     expect(
-      within(items[1]!).getByText(
-        'Based on your confirmed row grain, primary entity',
+      within(items[0]!).getByText(
+        'Draws on your confirmed row grain, primary entity',
       ),
     ).toBeInTheDocument()
-    expect(within(items[2]!).getByText('Conditional')).toBeInTheDocument()
     expect(
-      within(items[2]!).getByText(
+      within(items[0]!).getByText('Assumes: orders are counted per row'),
+    ).toBeInTheDocument()
+    expect(within(items[1]!).getByText('Conditional')).toBeInTheDocument()
+    expect(
+      within(items[1]!).getByText(
         'Assumes: the rows feed order-count reporting',
       ),
     ).toBeInTheDocument()
   })
 
-  it('never shows an assumption line for an evidence-backed statement', () => {
-    render(<BusinessImpactSection statements={[EVIDENCE]} aiAssisted={false} />)
-    expect(screen.queryByText(/Assumes:/)).toBeNull()
+  it('never presents an invented business consequence as evidence-backed', () => {
+    render(<BusinessImpactSection statements={[INVENTED]} aiAssisted={true} />)
+
+    const item = screen.getByRole('listitem')
+    expect(
+      within(item).getByText(/lose money and damage its reputation/),
+    ).toBeInTheDocument()
+    // Presented as conditional, with its condition, under a section that says
+    // these are potential impacts and not established facts.
+    expect(within(item).getByText('Conditional')).toBeInTheDocument()
+    expect(
+      within(item).getByText('Assumes: the flagged rows are used in reports'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/not established facts/)).toBeInTheDocument()
+    expect(screen.queryByText(/Evidence-backed/i)).toBeNull()
+    expect(screen.queryByText(/From your confirmed context/i)).toBeNull()
   })
 
   it('says whether the section is AI-assisted or built-in guidance', () => {
@@ -87,7 +106,7 @@ describe('BusinessImpactSection', () => {
       <BusinessImpactSection statements={[ASSUMPTION]} aiAssisted={false} />,
     )
     expect(
-      screen.getByText(/^Built-in guidance\. These are possibilities/),
+      screen.getByText(/^Built-in guidance\. These are potential impacts/),
     ).toBeInTheDocument()
   })
 

@@ -34,7 +34,7 @@ from trusttable_backend.ai_boundary.finding_analysis import (
 )
 from trusttable_backend.ai_boundary.validation import RejectionReason
 from trusttable_backend.domain.evidence import Evidence, EvidenceType
-from trusttable_backend.domain.explanation import ImpactBasis, ValidationRuleType
+from trusttable_backend.domain.explanation import ValidationRuleType
 from trusttable_backend.domain.parsing import SamplingScope
 from trusttable_backend.domain.value_objects import ColumnReference, RowReference
 
@@ -90,14 +90,12 @@ def good_output() -> dict[str, Any]:
         ),
         "business_impact": [
             {
-                "basis": "evidence",
                 "statement": "Negative quantities can reduce totals computed from this column.",
                 "evidence_ids": ["ev.1"],
                 "context_fields": [],
-                "assumption": "",
+                "assumption": "the column is used in totals",
             },
             {
-                "basis": "assumption",
                 "statement": "Reports built on this column may understate volumes.",
                 "evidence_ids": [],
                 "context_fields": [],
@@ -174,14 +172,16 @@ def test_mock_default_output_is_accepted_when_there_is_no_evidence() -> None:
     output = mock_finding_analysis_output(envelope)
     outcome = validate_finding_analysis_output(output, envelope, known_numeric_facts={})
     assert outcome.accepted, outcome.safe_summary
-    assert output["business_impact"][0]["basis"] == "assumption"  # type: ignore[index]
+    statement = output["business_impact"][0]  # type: ignore[index]
+    assert "basis" not in statement
+    assert statement["evidence_ids"] == []
+    assert statement["assumption"].strip()
 
 
-def test_conditional_statement_may_use_consequence_terms_when_labelled_an_assumption() -> None:
+def test_conditional_statement_may_use_consequence_terms_with_its_condition_stated() -> None:
     output = mutated(
         lambda o: o["business_impact"].append(
             {
-                "basis": "assumption",
                 "statement": "Customers could receive incorrect invoices and refunds.",
                 "evidence_ids": ["ev.1"],
                 "context_fields": [],
@@ -339,12 +339,6 @@ def test_impact_statement_must_be_an_object() -> None:
     assert not accepted and R.SCHEMA_INVALID in reasons
 
 
-def test_unknown_basis_is_schema_invalid() -> None:
-    output = mutated(lambda o: o["business_impact"][0].update(basis="fact"))
-    accepted, reasons = check(output)
-    assert not accepted and R.SCHEMA_INVALID in reasons
-
-
 def test_assumption_length_boundary() -> None:
     def set_assumption(text: str) -> dict[str, Any]:
         return mutated(lambda o: o["business_impact"][1].update(assumption=text))
@@ -414,37 +408,42 @@ def test_reference_lists_must_be_lists_of_strings() -> None:
 # --- basis rules ----------------------------------------------------------
 
 
-def test_evidence_statement_without_evidence_is_an_unsupported_impact_claim() -> None:
-    output = mutated(lambda o: o["business_impact"][0].update(evidence_ids=[]))
-    assert check(output) == (False, (R.UNSUPPORTED_IMPACT_CLAIM,))
+@pytest.mark.parametrize("model_chosen", ["evidence", "confirmed_context", "assumption", "fact"])
+def test_a_model_supplied_basis_is_an_unsupported_control_field(model_chosen: str) -> None:
+    """The structural correction (semantic review of `WP-068`): the model has
+    no `basis` to award. A response that supplies one — even the honest-looking
+    "assumption" — is rejected outright, so there is no self-declared label
+    for the presentation layer to trust or to accidentally honour."""
+    output = mutated(lambda o: o["business_impact"][0].update(basis=model_chosen))
+    accepted, reasons = check(output)
+    assert not accepted
+    assert R.UNSUPPORTED_CONTROL_FIELD in reasons
 
 
-def test_evidence_statement_carrying_an_assumption_is_an_unsupported_impact_claim() -> None:
-    output = mutated(lambda o: o["business_impact"][0].update(assumption="something holds"))
-    assert check(output) == (False, (R.UNSUPPORTED_IMPACT_CLAIM,))
+def test_every_impact_statement_must_state_its_condition() -> None:
+    output = mutated(lambda o: o["business_impact"][0].update(assumption=""))
+    accepted, reasons = check(output)
+    assert not accepted and R.SCHEMA_INVALID in reasons
+    output = mutated(lambda o: o["business_impact"][0].update(assumption="   "))
+    accepted, reasons = check(output)
+    assert not accepted and R.SCHEMA_INVALID in reasons
 
 
-def test_assumption_statement_without_an_assumption_is_an_unsupported_impact_claim() -> None:
-    output = mutated(lambda o: o["business_impact"][1].update(assumption=""))
-    assert check(output) == (False, (R.UNSUPPORTED_IMPACT_CLAIM,))
-
-
-def test_assumption_statement_with_only_whitespace_assumption_is_unsupported() -> None:
-    output = mutated(lambda o: o["business_impact"][1].update(assumption="   "))
-    assert check(output) == (False, (R.UNSUPPORTED_IMPACT_CLAIM,))
-
-
-def test_assumption_statement_may_cite_the_triggering_evidence() -> None:
-    output = mutated(lambda o: o["business_impact"][1].update(evidence_ids=["ev.1"]))
-    assert check(output) == (True, ())
+def test_an_impact_statement_may_cite_the_evidence_it_relates_to_or_none() -> None:
+    assert check(mutated(lambda o: o["business_impact"][1].update(evidence_ids=["ev.1"]))) == (
+        True,
+        (),
+    )
+    assert check(mutated(lambda o: o["business_impact"][0].update(evidence_ids=[]))) == (True, ())
 
 
 CONFIRMED = {"probable_domain": {"value": "Sales orders", "confirmation_state": "confirmed"}}
 
 
-def context_statement(fields: list[str], assumption: str = "") -> dict[str, Any]:
+def context_statement(
+    fields: list[str], assumption: str = "orders are summed per day"
+) -> dict[str, Any]:
     return {
-        "basis": "confirmed_context",
         "statement": "Sales order totals depend on this quantity column being reliable.",
         "evidence_ids": [],
         "context_fields": fields,
@@ -452,54 +451,33 @@ def context_statement(fields: list[str], assumption: str = "") -> dict[str, Any]
     }
 
 
-def test_context_backed_statement_is_accepted_when_the_field_was_sent() -> None:
+def test_context_informed_statement_is_accepted_when_the_field_was_sent() -> None:
     envelope = make_envelope(confirmed_context=CONFIRMED)
     output = mutated(lambda o: o["business_impact"].append(context_statement(["probable_domain"])))
     assert check(output, envelope) == (True, ())
 
 
-def test_context_backed_statement_is_rejected_when_no_context_was_sent() -> None:
+def test_context_informed_statement_is_rejected_when_no_context_was_sent() -> None:
     output = mutated(lambda o: o["business_impact"].append(context_statement(["probable_domain"])))
     accepted, reasons = check(output)
     assert not accepted
     assert R.UNKNOWN_CONTEXT_FIELD in reasons
 
 
-def test_context_backed_statement_naming_an_unsent_field_is_rejected() -> None:
+def test_context_informed_statement_naming_an_unsent_field_is_rejected() -> None:
     envelope = make_envelope(confirmed_context=CONFIRMED)
     output = mutated(lambda o: o["business_impact"].append(context_statement(["row_grain"])))
     accepted, reasons = check(output, envelope)
     assert not accepted and R.UNKNOWN_CONTEXT_FIELD in reasons
 
 
-def test_context_backed_statement_without_fields_is_an_unsupported_impact_claim() -> None:
-    envelope = make_envelope(confirmed_context=CONFIRMED)
-    output = mutated(lambda o: o["business_impact"].append(context_statement([])))
-    accepted, reasons = check(output, envelope)
-    assert not accepted and R.UNSUPPORTED_IMPACT_CLAIM in reasons
-
-
-def test_context_backed_statement_carrying_an_assumption_is_unsupported() -> None:
+def test_context_informed_statement_still_has_to_state_its_condition() -> None:
     envelope = make_envelope(confirmed_context=CONFIRMED)
     output = mutated(
-        lambda o: o["business_impact"].append(context_statement(["probable_domain"], "x holds"))
+        lambda o: o["business_impact"].append(context_statement(["probable_domain"], ""))
     )
     accepted, reasons = check(output, envelope)
-    assert not accepted and R.UNSUPPORTED_IMPACT_CLAIM in reasons
-
-
-def test_assumption_statement_citing_context_fields_is_unsupported() -> None:
-    envelope = make_envelope(confirmed_context=CONFIRMED)
-    output = mutated(lambda o: o["business_impact"][1].update(context_fields=["probable_domain"]))
-    accepted, reasons = check(output, envelope)
-    assert not accepted and R.UNSUPPORTED_IMPACT_CLAIM in reasons
-
-
-def test_evidence_statement_citing_context_fields_is_unsupported() -> None:
-    envelope = make_envelope(confirmed_context=CONFIRMED)
-    output = mutated(lambda o: o["business_impact"][0].update(context_fields=["probable_domain"]))
-    accepted, reasons = check(output, envelope)
-    assert not accepted and R.UNSUPPORTED_IMPACT_CLAIM in reasons
+    assert not accepted and R.SCHEMA_INVALID in reasons
 
 
 # ---------------------------------------------------------------------------
@@ -518,9 +496,17 @@ def test_evidence_statement_citing_context_fields_is_unsupported() -> None:
         "Fraud risk increases with these values.",
     ],
 )
-def test_ungrounded_consequence_in_an_evidence_statement_is_rejected(statement: str) -> None:
+def test_a_consequence_in_an_impact_statement_is_accepted_only_as_a_potential_impact(
+    statement: str,
+) -> None:
+    """A business consequence in impact prose is not rejected by a word list
+    (that never converged, `FUP-011`) and is not *established* by anything
+    either: it is accepted as a potential impact with its stated condition,
+    and TrustTable — not the model — decides how it is presented (never as
+    evidence-backed; see the presentation tests in `test_ai_explanation.py`
+    and the route-level tests)."""
     output = mutated(lambda o: o["business_impact"][0].update(statement=statement))
-    assert check(output) == (False, (R.UNSUPPORTED_IMPACT_CLAIM,))
+    assert check(output) == (True, ())
 
 
 def test_consequence_term_in_the_explanation_must_be_grounded() -> None:
@@ -942,14 +928,29 @@ def test_schema_enumerates_only_the_values_actually_supplied() -> None:
     impact = props["business_impact"]["items"]["properties"]
     assert impact["evidence_ids"]["items"]["enum"] == ["ev.1", "ev.2"]
     assert impact["context_fields"]["items"]["enum"] == ["probable_domain"]
-    assert impact["basis"]["enum"] == sorted(member.value for member in ImpactBasis)
     assert set(props["numeric_claims"]["properties"]) == {"negative_count"}
     assert props["validation_rule"]["properties"]["rule_type"]["enum"] == sorted(
         member.value for member in ValidationRuleType
     )
 
 
-def test_schema_makes_a_context_backed_statement_impossible_without_sent_context() -> None:
+def test_schema_gives_the_model_no_basis_to_choose_and_requires_every_condition() -> None:
+    """The structural correction: an impact statement has no `basis` property
+    at all (so a constrained-decoding runtime cannot emit one), and every
+    statement must state a non-empty condition."""
+    impact_schema = schema_for()["properties"]["business_impact"]["items"]
+    assert "basis" not in impact_schema["properties"]
+    assert "basis" not in impact_schema["required"]
+    assert set(impact_schema["required"]) == {
+        "statement",
+        "evidence_ids",
+        "context_fields",
+        "assumption",
+    }
+    assert impact_schema["properties"]["assumption"]["minLength"] == 1
+
+
+def test_schema_makes_a_context_informed_statement_impossible_without_sent_context() -> None:
     schema = schema_for(context_fields=[])
     impact = schema["properties"]["business_impact"]["items"]["properties"]
     assert impact["context_fields"] == {"type": "array", "maxItems": 0}
@@ -1003,11 +1004,13 @@ def test_instructions_name_every_key_and_forbid_activation_and_automatic_change(
         "referenced_evidence_ids",
         "referenced_columns",
         "numeric_claims",
-        "basis",
         "assumption",
         "context_fields",
     ):
         assert f'"{key}"' in FINDING_ANALYSIS_INSTRUCTIONS
+    # The model is never asked to label how well-founded its own statement is.
+    assert '"basis"' not in FINDING_ANALYSIS_INSTRUCTIONS
+    assert "POTENTIAL impact" in FINDING_ANALYSIS_INSTRUCTIONS
     assert "changed automatically" in FINDING_ANALYSIS_INSTRUCTIONS
     assert "never say it was applied or is active" in FINDING_ANALYSIS_INSTRUCTIONS
 

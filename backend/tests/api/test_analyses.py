@@ -780,7 +780,10 @@ def _assert_four_sections_present(body: dict[str, Any]) -> None:
     for item in body["business_impact"]:
         assert set(item) == {"statement", "basis", "evidence_ids", "context_fields", "assumption"}
         assert item["statement"]
-        assert item["basis"] in {"evidence", "confirmed_context", "assumption"}
+        # There is deliberately no "evidence" basis: the deterministic evidence
+        # establishes what was found, not what it costs a business.
+        assert item["basis"] in {"confirmed_context", "assumption"}
+        assert item["assumption"]
     assert body["remediation"]
     assert all(step for step in body["remediation"])
     rule = body["validation_rule"]

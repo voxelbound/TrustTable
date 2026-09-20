@@ -8,8 +8,9 @@ per finding (`AIOperation.FINDING_EXPLANATION`, already defined by
 direction) replaces the earlier single free-prose narrative with the
 versioned `finding_analysis_v1` output contract
 (`ai_boundary.finding_analysis`): an explanation, 1-3 business-impact
-statements each labelled `evidence`/`confirmed_context`/`assumption`, 1-3
-advisory remediation steps and one *proposed* validation rule. The request
+*potential*-impact statements (each stating its condition; TrustTable, not the
+model, derives how each is labelled), 1-3 advisory remediation steps and one
+*proposed* validation rule. The request
 carries the contract (so a constrained-decoding runtime can only emit
 evidence ids, columns and context fields that were actually supplied) and
 the response is validated role by role; `EVAL-AI-01`'s claim screen still
@@ -64,9 +65,9 @@ from ..domain.evidence import Evidence
 from ..domain.explanation import (
     BusinessImpactStatement,
     FindingExplanation,
-    ImpactBasis,
     ProposedValidationRule,
     ValidationRuleType,
+    derive_impact_basis,
 )
 from ..domain.value_objects import ColumnReference, Provenance
 
@@ -75,7 +76,8 @@ AI_EXPLANATION_TASK: Final[str] = (
     "for a business user: explain what it means, describe its possible business "
     "impact, recommend remediation steps and propose one validation rule. Ground "
     "every statement only in the supplied evidence and the supplied confirmed "
-    "context. Anything else must be labelled an assumption."
+    "context. Present business impact only as a possibility, with the condition "
+    "under which it would apply."
 )
 """Fixed, application-authored instruction text — never dataset-derived
 (`docs/product-requirements.md` §12; mirrors `context_inference.
@@ -268,15 +270,20 @@ def _build_explanation(
         assert isinstance(assumption, str)
         statement = entry["statement"]
         assert isinstance(statement, str)
+        context_fields = _string_tuple(entry["context_fields"])
         impact.append(
             BusinessImpactStatement(
                 statement=statement,
-                basis=ImpactBasis(str(entry["basis"])),
+                # The model has no say in how its statement is labelled:
+                # TrustTable derives the basis from the context fields that
+                # were actually sent (the validator already rejected any
+                # other), never from anything the model asserted.
+                basis=derive_impact_basis(context_fields),
                 evidence_ids=tuple(
                     alias_to_real[alias] for alias in _string_tuple(entry["evidence_ids"])
                 ),
-                context_fields=_string_tuple(entry["context_fields"]),
-                assumption=assumption.strip() or None,
+                context_fields=context_fields,
+                assumption=assumption.strip(),
             )
         )
 

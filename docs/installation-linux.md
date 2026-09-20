@@ -209,7 +209,7 @@ docker compose up -d --build
 | Section | Shown when AI answered | Shown otherwise |
 |---|---|---|
 | Explanation | the model's grounded explanation | the built-in explanation |
-| Possible business impact | statements labelled *Evidence-backed*, *From your confirmed context* or *Conditional* (with the assumption) | conditional built-in statements |
+| Possible business impact | potential impacts, each with the condition it depends on and a label TrustTable derives — *Conditional* or *Informed by your confirmed context* (never "Evidence-backed") | conditional built-in statements |
 | Remediation | advice to a person; TrustTable never changes your data | built-in advice |
 | Validation rule | a **proposed** rule, *not active*, never run or enforced | a built-in proposal |
 

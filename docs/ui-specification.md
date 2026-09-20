@@ -179,9 +179,13 @@ deterministic evidence:
   llama.cpp · Qwen3.5 4B (Q4_K_M)" (human-readable labels only; **never**
   a filesystem path) or "Built-in TrustTable guidance (no AI)" with the
   reason no AI result is shown;
-- each business-impact statement carries a badge — *Evidence-backed*,
-  *From your confirmed context*, or *Conditional* (shown together with
-  "Assumes: …"); a conditional statement is never presented as a fact;
+- each business-impact statement is a *potential* impact, shown with
+  "Assumes: …" (the condition it depends on) and a badge that TrustTable
+  derives — *Conditional*, or *Informed by your confirmed context* when it
+  cites context the user confirmed; there is deliberately no
+  *Evidence-backed* badge, because the deterministic evidence establishes
+  what was found in the data, not what it costs the business; the section
+  says these are potential impacts, not established facts;
 - remediation states it is advisory and that TrustTable never changes the
   user's data;
 - the validation rule is badged *Proposed — not active* and states that
