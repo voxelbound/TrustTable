@@ -681,6 +681,12 @@ PROVIDER_FAILURES: list[tuple[str, Responder]] = [
     ("json-array-not-object", lambda payload, body: chat_response("[1, 2, 3]")),
     ("unexpected-envelope", lambda payload, body: httpx.Response(200, json={"unexpected": True})),
     ("empty-choices", lambda payload, body: httpx.Response(200, json={"choices": []})),
+    (
+        "null-content",
+        lambda payload, body: httpx.Response(
+            200, json={"choices": [{"message": {"content": None}}]}
+        ),
+    ),
 ]
 
 
@@ -707,6 +713,53 @@ def test_every_provider_failure_leaves_the_full_deterministic_result_and_state_u
     assert_four_sections(body)
     assert "simulated" not in response.text  # no raw exception text
     assert authority_snapshot(client, analysis_id) == before
+
+
+MISCONFIGURATIONS = [
+    # (label, LLM_MODEL, LLM_BASE_URL) — `.env.example` ships LLM_MODEL blank.
+    # Neither case makes a network request: the factory refuses a blank model
+    # and httpx refuses the malformed URL before connecting.
+    ("empty-model", "", "http://llama.test:8081"),
+    ("malformed-base-url", "Qwen3.5-4B-Q4_K_M", "http://[::1"),
+]
+
+
+@pytest.mark.parametrize(
+    ("label", "model", "base_url"), MISCONFIGURATIONS, ids=[case[0] for case in MISCONFIGURATIONS]
+)
+def test_a_misconfigured_provider_never_removes_the_deterministic_sections_or_fails_the_request(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, label: str, model: str, base_url: str
+) -> None:
+    """The fallback is total (semantic review of `WP-068` r5): with
+    `LLM_PROVIDER=llama_cpp` but a blank model or a malformed URL — the real
+    factory and real provider, no stub — both routes still return 200 with the
+    deterministic content and a truthful status, never a 500."""
+    analysis_id = create_demo_analysis(client)
+    baseline = client.get(explanation_url(analysis_id, "0")).json()
+    context_baseline = client.get(f"/api/v1/analyses/{analysis_id}/context").json()
+    other_analysis = create_demo_analysis(client)
+    before = authority_snapshot(client, analysis_id)
+    monkeypatch.setenv("LLM_PROVIDER", "llama_cpp")
+    monkeypatch.setenv("LLM_BASE_URL", base_url)
+    monkeypatch.setenv("LLM_MODEL", model)
+    get_settings.cache_clear()
+
+    response = client.get(explanation_url(analysis_id, "0"))
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["ai_call_status"] == "attempted_provider_error"
+    assert body["provenance"] == "deterministic_fallback"
+    for section in FOUR_SECTIONS:
+        assert body[section] == baseline[section], section
+    assert_four_sections(body)
+    assert authority_snapshot(client, analysis_id) == before
+
+    # The Context route's first call (a fresh analysis) also degrades safely to
+    # the deterministic context.
+    context = client.get(f"/api/v1/analyses/{other_analysis}/context")
+    assert context.status_code == 200
+    assert context.json() == context_baseline
 
 
 # ---------------------------------------------------------------------------

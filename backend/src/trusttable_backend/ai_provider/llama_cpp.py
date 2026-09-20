@@ -174,7 +174,9 @@ class LlamaCppProvider:
                 f"llama-server request timed out after {self._timeout_seconds}s: "
                 f"{type(exc).__name__}"
             ) from exc
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            # `httpx.InvalidURL` (a malformed `LLM_BASE_URL`) is not an
+            # `httpx.HTTPError`; it is still a failure to reach the server.
             raise ProviderConnectionError(
                 f"llama-server request failed: {type(exc).__name__}: {exc}"
             ) from exc
@@ -258,7 +260,8 @@ class LlamaCppProvider:
 
         try:
             raw_output = json.loads(message_content)
-        except json.JSONDecodeError as exc:
+        except (json.JSONDecodeError, TypeError) as exc:
+            # `TypeError`: a reply whose `content` is `null` or not a string.
             excerpt = str(message_content)[:_MAX_ERROR_EXCERPT_CHARS]
             raise ProviderInvalidResponseError(
                 f"llama-server model output was not valid JSON ({type(exc).__name__}): {excerpt}"

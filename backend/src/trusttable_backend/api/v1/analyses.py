@@ -518,25 +518,41 @@ def get_analysis_finding_explanation(
         confirmed_context = confirmed_context_for_finding_analysis(
             analysis.context, finalized=analysis.context_finalized
         )
-        provider = create_provider(
-            settings.llm_provider,
-            base_url=settings.llm_base_url,
-            model_identifier=settings.llm_model,
-            timeout_seconds=float(settings.llm_timeout_seconds),
-        )
-        envelope = build_finding_explanation_envelope(
-            finding, evidence, confirmed_context=confirmed_context
-        )
-        result = run_finding_explanation(provider, envelope, evidence)
-        evidence_sent_to_model = True
-        confirmed_context_sent_to_model = confirmed_context is not None
-        if result.accepted and result.explanation is not None:
-            explanation = result.explanation
-            ai_call_status = "attempted_accepted"
-        elif result.provider_error is not None:
-            ai_call_status = "attempted_provider_error"
+        # The AI path is an optional enrichment: whatever goes wrong on it —
+        # a misconfigured provider (an empty `LLM_MODEL`, a malformed base
+        # URL) or anything unexpected — the deterministic four sections are
+        # still returned with a truthful status, never a 500 that removes
+        # them. Nothing about the failure is echoed or logged.
+        ai_call_status = "attempted_provider_error"
+        try:
+            provider = create_provider(
+                settings.llm_provider,
+                base_url=settings.llm_base_url,
+                model_identifier=settings.llm_model,
+                timeout_seconds=float(settings.llm_timeout_seconds),
+            )
+            envelope = build_finding_explanation_envelope(
+                finding, evidence, confirmed_context=confirmed_context
+            )
+        except Exception:
+            # Nothing was built or sent.
+            pass
         else:
-            ai_call_status = "attempted_rejected"
+            # Conservative from here on: a request may have been made.
+            evidence_sent_to_model = True
+            confirmed_context_sent_to_model = confirmed_context is not None
+            try:
+                result = run_finding_explanation(provider, envelope, evidence)
+            except Exception:
+                pass
+            else:
+                if result.accepted and result.explanation is not None:
+                    explanation = result.explanation
+                    ai_call_status = "attempted_accepted"
+                elif result.provider_error is not None:
+                    ai_call_status = "attempted_provider_error"
+                else:
+                    ai_call_status = "attempted_rejected"
 
     return _finding_explanation_response(
         finding_id,
@@ -684,15 +700,20 @@ def get_analysis_context(analysis_id: str, request: Request) -> ContextResponse:
     settings = get_settings()
     if settings.llm_provider != "disabled" and is_first_inference:
         assert updated.dataset_profile is not None  # guaranteed by COMPLETED invariant
-        provider = create_provider(
-            settings.llm_provider,
-            base_url=settings.llm_base_url,
-            model_identifier=settings.llm_model,
-            timeout_seconds=float(settings.llm_timeout_seconds),
-        )
-        envelope = build_context_inference_envelope(context, evidence=updated.evidence)
-        ai_result = run_context_inference(provider, envelope)
-        if ai_result.accepted and ai_result.hypothesis is not None:
+        # Optional enrichment: a misconfigured or misbehaving provider must
+        # leave the deterministic context in place, never fail the request.
+        try:
+            provider = create_provider(
+                settings.llm_provider,
+                base_url=settings.llm_base_url,
+                model_identifier=settings.llm_model,
+                timeout_seconds=float(settings.llm_timeout_seconds),
+            )
+            envelope = build_context_inference_envelope(context, evidence=updated.evidence)
+            ai_result = run_context_inference(provider, envelope)
+        except Exception:
+            ai_result = None
+        if ai_result is not None and ai_result.accepted and ai_result.hypothesis is not None:
             deterministic_hypotheses = infer_context_hypotheses(updated.dataset_profile)
             combined = combine_hypotheses(deterministic_hypotheses, ai_result)
             context = consolidate_dataset_context(combined)
