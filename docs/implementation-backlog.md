@@ -533,6 +533,15 @@ rather than inventing the path, and must not close until:
 > local provider configuration and the trust-boundary meaning of the
 > `confirmed_context` envelope slot was recorded. Neither satisfies any of the
 > four bullets above; `REL-02` stays **open**.
+>
+> **Annotation (2026-09-20, `docs/decision-log.md` D-043):** the instrument for
+> the local-AI qualification (the fourth bullet) now exists: a harness that runs
+> the product's own finding-analysis path over one finding per detector, with and
+> without finalized confirmed context, and records fill rate, fallback rate and
+> harness-measured latency (`docs/local-ai-qualification.md`). It has been proven
+> against the real explanation route with stubbed providers only; **no real model
+> has been measured**, so the fourth bullet is still unmet and `REL-02` stays
+> **open**.
 
 # Complete manager workflow
 
