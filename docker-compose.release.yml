@@ -1,0 +1,61 @@
+# TrustTable pull-only Docker stack (REL-02).
+#
+# Runs a published TrustTable release from container images: nothing is
+# built, so the host needs only access to GitHub and the GitHub Container
+# Registry (GHCR) - not the container base-image registry, PyPI or npm.
+#
+# Usage (from a checkout of the release tag; see docs/installation-linux.md):
+#
+#   TRUSTTABLE_VERSION=<version> docker compose -f docker-compose.release.yml up -d
+#
+# TRUSTTABLE_VERSION is required and has no default on purpose: there is no
+# floating "latest" tag, so an install is always a specific, reproducible
+# release. See docs/release-images.md for the image names and tag scheme.
+#
+# This file is the pull-only twin of docker-compose.yml. Apart from where the
+# images come from (`image:` here, `build:` there) the two services are
+# identical, and a test enforces that; change them together.
+
+services:
+  backend:
+    image: ghcr.io/voxelbound/trusttable-backend:${TRUSTTABLE_VERSION:?set TRUSTTABLE_VERSION to a published release version, for example 0.2.0}
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    # Lets the backend container reach a `llama-server` running on the host at
+    # the documented default LLM_BASE_URL (http://host.docker.internal:8081).
+    # Docker Engine on Linux does not define that name itself, so it is mapped
+    # explicitly to the host gateway. Harmless when AI is disabled (the
+    # default). See docs/installation-linux.md.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - path: .env
+        required: false
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  frontend:
+    image: ghcr.io/voxelbound/trusttable-frontend:${TRUSTTABLE_VERSION:?set TRUSTTABLE_VERSION to a published release version, for example 0.2.0}
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
