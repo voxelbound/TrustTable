@@ -129,8 +129,9 @@ Mitigations:
 - deterministic fallback
 - provenance labels
 - structured, versioned finding-analysis output validated role by role,
-  with impact statements labelled evidence-backed, context-backed or
-  conditional, and numbers and consequence terms grounded in the supplied
+  with impact statements presented only as potential impacts whose label
+  (conditional, or informed by confirmed context) is derived by TrustTable
+  rather than chosen by the model, and numbers grounded in the supplied
   evidence or confirmed context (`AI-08`, `docs/decision-log.md` D-040)
 - remediation and proposed rules are advisory text that may not claim data
   was changed or a rule activated; nothing AI produces is executed or

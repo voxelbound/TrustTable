@@ -13,9 +13,14 @@ import type {
  * guidance otherwise — both arrive in the same shape, so these components do
  * not care which, only that the *kind* of statement is always visible:
  *
- * - business impact carries its basis: evidence-backed, backed by the
- *   user's confirmed context, or a conditional assumption shown together
- *   with the condition — a possibility is never displayed as a fact;
+ * - business impact is always a *potential* impact shown together with the
+ *   condition it depends on, never as a fact. The badge is derived by the
+ *   backend from what TrustTable can establish — "informed by your
+ *   confirmed context" when a statement cites context you confirmed, and
+ *   "conditional" otherwise. There is deliberately no "evidence-backed"
+ *   badge: the deterministic evidence establishes what was found in the
+ *   data, not what it costs your business, and a model's prose cannot award
+ *   itself that standing;
  * - remediation is advisory: TrustTable never changes uploaded data;
  * - the validation rule is a proposal, never an active or authoritative
  *   rule.
@@ -30,14 +35,11 @@ const BADGE =
   'inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap'
 
 const BASIS_LABEL: Record<BusinessImpactStatementResponse['basis'], string> = {
-  evidence: 'Evidence-backed',
-  confirmed_context: 'From your confirmed context',
+  confirmed_context: 'Informed by your confirmed context',
   assumption: 'Conditional',
 }
 
 const BASIS_STYLE: Record<BusinessImpactStatementResponse['basis'], string> = {
-  evidence:
-    'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200',
   confirmed_context:
     'bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200',
   assumption:
@@ -83,9 +85,10 @@ export function BusinessImpactSection({
         Possible business impact
       </h2>
       <p className={NOTE}>
-        {aiAssisted
-          ? 'AI-assisted. Each statement shows what it rests on; conditional ones state the assumption they depend on.'
-          : 'Built-in guidance. These are possibilities that depend on how your data is used, not established facts.'}
+        {aiAssisted ? 'AI-assisted. ' : 'Built-in guidance. '}
+        These are potential impacts, not established facts: the analysis shows
+        what was found in your data, not what it costs your business. Each one
+        states the condition it depends on.
       </p>
       {statements.length === 0 ? (
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
@@ -104,7 +107,7 @@ export function BusinessImpactSection({
               <p className="mt-1 text-slate-800 dark:text-slate-200">
                 {item.statement}
               </p>
-              {item.basis === 'assumption' && item.assumption && (
+              {item.assumption && (
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
                   Assumes: {item.assumption}
                 </p>
@@ -112,7 +115,7 @@ export function BusinessImpactSection({
               {item.basis === 'confirmed_context' &&
                 item.context_fields.length > 0 && (
                   <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                    Based on your confirmed{' '}
+                    Draws on your confirmed{' '}
                     {item.context_fields.map(humanize).join(', ')}
                   </p>
                 )}

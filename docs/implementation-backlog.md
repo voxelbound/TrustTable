@@ -473,9 +473,11 @@ Delivers:
   `response_format`, and a role-aware validator that keeps `EVAL-AI-01`'s claim
   screen as defense in depth (the durable structured-output direction for this
   surface — see D-040 for what remains lexical);
-- business-impact statements labelled evidence-backed, confirmed-context-backed
-  or a conditional assumption; remediation that never mutates data; a proposed
-  validation rule that is never active;
+- business-impact statements presented only as potential impacts that state
+  their condition, labelled by TrustTable (never by the model) as conditional or
+  informed by confirmed context — never evidence-backed, since deterministic
+  evidence does not establish a business consequence; remediation that never
+  mutates data; a proposed validation rule that is never active;
 - only user-confirmed or corrected context, and only once finalized, as grounding;
 - normal provenance as a human-readable identity ("Local AI · llama.cpp ·
   Qwen3.5 4B") with no absolute host path in the API or UI;

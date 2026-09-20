@@ -30,7 +30,8 @@ const REPRESENTATIVE_SAMPLE_TYPE = 'representative_sample'
  * built-in guidance otherwise, never a placeholder. Each kind of statement
  * stays distinguishable: deterministic observation/evidence above, AI
  * interpretation (labelled with a human-readable identity, never a
- * filesystem path), evidence-backed vs. conditional impact, and a
+ * filesystem path), conditional vs. context-informed potential impact (never
+ * "evidence-backed"), and a
  * *proposed* rule that is explicitly not active. "Review controls" is
  * still the disclosed not-yet-available section (`REV-01`, a later
  * backlog item).

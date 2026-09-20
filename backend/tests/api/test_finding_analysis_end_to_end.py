@@ -73,14 +73,12 @@ def grounded_output(payload: dict[str, Any], *, use_context: bool = True) -> dic
     row_count = evidence[0]["affected_row_count"]
     impact: list[dict[str, Any]] = [
         {
-            "basis": "evidence",
             "statement": "The supplied evidence documents this condition in the data.",
             "evidence_ids": ids[:1],
             "context_fields": [],
-            "assumption": "",
+            "assumption": "the affected rows are used in analysis",
         },
         {
-            "basis": "assumption",
             "statement": "Reports built on this data may be affected.",
             "evidence_ids": [],
             "context_fields": [],
@@ -91,11 +89,10 @@ def grounded_output(payload: dict[str, Any], *, use_context: bool = True) -> dic
     if use_context and context_fields:
         impact.append(
             {
-                "basis": "confirmed_context",
                 "statement": "This matters in light of the confirmed dataset context.",
                 "evidence_ids": [],
                 "context_fields": context_fields[:1],
-                "assumption": "",
+                "assumption": "the confirmed context describes how the data is used",
             }
         )
     return {
@@ -291,7 +288,7 @@ def test_a_real_finding_detail_request_yields_four_sections_grounded_in_the_capt
     assert payload["untrusted_dataset_samples"] == []
 
 
-def test_business_impact_statements_carry_their_basis_and_conditions(
+def test_business_impact_statements_are_conditional_and_carry_their_condition(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     analysis_id = create_demo_analysis(client)
@@ -299,12 +296,73 @@ def test_business_impact_statements_carry_their_basis_and_conditions(
 
     body = client.get(explanation_url(analysis_id, "0")).json()
 
-    bases = [item["basis"] for item in body["business_impact"]]
-    assert bases == ["evidence", "assumption"]
-    evidence_item, assumption_item = body["business_impact"]
-    assert evidence_item["evidence_ids"] and evidence_item["assumption"] is None
-    assert assumption_item["assumption"] == "the affected values feed reports"
+    # Without confirmed context every statement is conditional — including one
+    # that cites evidence, which relates it to the finding but establishes no
+    # business consequence.
+    assert [item["basis"] for item in body["business_impact"]] == ["assumption", "assumption"]
+    related_item, plain_item = body["business_impact"]
+    assert related_item["evidence_ids"]
+    assert related_item["assumption"] == "the affected rows are used in analysis"
+    assert plain_item["assumption"] == "the affected values feed reports"
+    assert all(item["assumption"] for item in body["business_impact"])
     assert body["validation_rule"]["status"] == "proposed"
+
+
+# The reviewer's exact counterexample (semantic review of `WP-068`, second
+# attempt): a schema-valid answer whose impact statement invents a loss and a
+# reputational harm and cites real evidence. It contains none of the
+# consequence stems the validator ever listed ("lose", "money", "damage",
+# "reputation"), so no lexicon is what keeps it from being presented as
+# established: TrustTable derives the basis itself.
+INVENTED_CONSEQUENCE = "This will cause the company to lose money and damage its reputation."
+
+
+@pytest.mark.parametrize(
+    "extra_key",
+    [None, "basis"],
+    ids=["model_says_nothing_about_a_basis", "model_claims_evidence_basis"],
+)
+def test_an_invented_business_consequence_is_never_presented_as_evidence_backed(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, extra_key: str | None
+) -> None:
+    analysis_id = create_demo_analysis(client)
+
+    def respond(payload: dict[str, Any], body: dict[str, Any]) -> httpx.Response:
+        output = grounded_output(payload)
+        output["business_impact"][0].update(
+            statement=INVENTED_CONSEQUENCE,
+            evidence_ids=[payload["computed_evidence"][0]["evidence_id"]],
+            assumption="the flagged rows are used in reports",
+        )
+        if extra_key is not None:
+            output["business_impact"][0][extra_key] = "evidence"
+        return chat_response(json.dumps(output))
+
+    configure_llama(monkeypatch, StubLlamaServer(respond))
+    before = authority_snapshot(client, analysis_id)
+
+    body = client.get(explanation_url(analysis_id, "0")).json()
+
+    if extra_key is None:
+        assert body["ai_call_status"] == "attempted_accepted"
+        invented = body["business_impact"][0]
+        assert invented["statement"] == INVENTED_CONSEQUENCE
+        # Shown as a conditional, potential impact with its stated condition —
+        # never as evidence-backed (there is no such basis to award).
+        assert invented["basis"] == "assumption"
+        assert invented["assumption"] == "the flagged rows are used in reports"
+        assert all(
+            item["basis"] in {"assumption", "confirmed_context"} for item in body["business_impact"]
+        )
+    else:
+        # A model that tries to award itself a basis is rejected outright and
+        # the deterministic conditional guidance is shown instead.
+        assert body["ai_call_status"] == "attempted_rejected"
+        assert body["provenance"] == "deterministic_fallback"
+        assert INVENTED_CONSEQUENCE not in json.dumps(body)
+        assert all(item["basis"] == "assumption" for item in body["business_impact"])
+    assert "evidence" not in {item["basis"] for item in body["business_impact"]}
+    assert authority_snapshot(client, analysis_id) == before
 
 
 def test_a_model_is_retried_once_with_reason_codes_and_a_valid_answer_is_then_accepted(
@@ -409,11 +467,10 @@ def test_context_backed_statement_is_rejected_when_the_context_was_not_finalized
         output = grounded_output(payload)
         output["business_impact"].append(
             {
-                "basis": "confirmed_context",
                 "statement": "This matters given the confirmed dataset context.",
                 "evidence_ids": [],
                 "context_fields": ["row_grain"],
-                "assumption": "",
+                "assumption": "the context describes how the data is used",
             }
         )
         return chat_response(json.dumps(output))
@@ -448,11 +505,10 @@ def _legacy_shape(_: dict[str, Any]) -> dict[str, Any]:
 def _add_context_impact(output: dict[str, Any]) -> None:
     output["business_impact"].append(
         {
-            "basis": "confirmed_context",
             "statement": "This matters given the confirmed context.",
             "evidence_ids": [],
             "context_fields": ["row_grain"],
-            "assumption": "",
+            "assumption": "the context describes how the data is used",
         }
     )
 
@@ -480,20 +536,18 @@ ATTACKS: list[tuple[str, Callable[[dict[str, Any]], Any], str]] = [
     ),
     ("unknown-column", lambda o: o.update(referenced_columns=["ghost"]), "unknown_column"),
     (
-        "evidence-impact-without-evidence",
-        lambda o: o["business_impact"][0].update(evidence_ids=[]),
-        "unsupported_impact_claim",
+        "model-awards-itself-an-evidence-basis",
+        lambda o: o["business_impact"][0].update(basis="evidence"),
+        "unsupported_control_field",
     ),
     (
-        "invented-financial-loss-as-fact",
-        lambda o: o["business_impact"][0].update(
-            statement="This causes financial loss and regulatory penalties."
-        ),
-        "unsupported_impact_claim",
+        "model-awards-itself-a-context-basis",
+        lambda o: o["business_impact"][0].update(basis="confirmed_context"),
+        "unsupported_control_field",
     ),
     (
-        "invented-customer-effect-as-fact",
-        lambda o: o["business_impact"][0].update(statement="Customers will be overcharged."),
+        "invented-consequence-in-the-explanation",
+        lambda o: o.update(explanation="These rows cause financial loss and regulatory penalties."),
         "unsupported_impact_claim",
     ),
     (
@@ -502,9 +556,14 @@ ATTACKS: list[tuple[str, Callable[[dict[str, Any]], Any], str]] = [
         "unknown_numeric_claim",
     ),
     (
-        "assumption-without-condition",
+        "invented-amount-in-an-impact-statement",
+        lambda o: o["business_impact"][0].update(statement="Reports could be off by $5,000."),
+        "unknown_numeric_claim",
+    ),
+    (
+        "impact-without-a-condition",
         lambda o: o["business_impact"][1].update(assumption=""),
-        "unsupported_impact_claim",
+        "schema_invalid",
     ),
     ("context-field-not-sent", _add_context_impact, "unknown_context_field"),
     (

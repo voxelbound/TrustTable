@@ -8,9 +8,13 @@ open-ended coverage. This module moves the finding-analysis call to a
 are validated separately instead:
 
 1. **explanation** — what the finding means, grounded in supplied evidence;
-2. **business impact** — 1 to 3 statements, each labelled `evidence`,
-   `confirmed_context` or `assumption` (a conditional implication with its
-   condition stated), so a possible consequence can never read as a fact;
+2. **business impact** — 1 to 3 *potential*-impact statements, each stating
+   the condition under which it would hold. The model does **not** choose how
+   a statement is labelled: it has no `basis` field. TrustTable derives the
+   label afterwards from what it can establish (a statement that cites a
+   context field that was actually sent as confirmed context is shown as
+   informed by that context; every other statement is shown as conditional),
+   so model prose can never award itself the standing of an established fact;
 3. **remediation** — 1 to 3 advisory steps a person could take;
 4. **validation rule** — one *proposed* rule from the closed set in
    `docs/product-requirements.md` §13, never an active or applied rule.
@@ -30,14 +34,14 @@ Validation rules (each a distinct, tested `RejectionReason`):
 - provenance must be `ai_interpretation`;
 - evidence ids and columns must be real (top level and per statement), and a
   named context field must be one that was actually sent;
-- each impact statement's declared basis must be supported (an `evidence`
-  statement cites evidence, a `confirmed_context` statement cites sent
-  context fields, an `assumption` statement states its assumption and
-  nothing else);
-- an explanation or an evidence/context-backed statement may not use a
-  consequence term (loss, penalty, regulatory, customer, revenue, ...) that
-  the supplied evidence or confirmed context does not itself contain —
-  a consequence must be labelled a conditional assumption instead;
+- every impact statement must state the condition under which it would hold
+  (`assumption`), and a context field it cites must be one that was actually
+  sent; there is no model-chosen basis to validate, and no lexical list
+  decides whether a consequence is "established" — none is, by construction;
+- an *explanation* (an assertion about the finding, not a potential impact)
+  may not use a consequence term (loss, penalty, regulatory, customer,
+  revenue, ...) that the supplied evidence or confirmed context does not
+  itself contain;
 - every number in prose must appear in the supplied evidence, confirmed
   context or known numeric facts (a small structural allowance for
   `0`/`1`/`100` applies only inside a proposed rule's description, where a
@@ -64,7 +68,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Final
 
 from ..domain.evidence import Evidence
-from ..domain.explanation import ImpactBasis, ValidationRuleType
+from ..domain.explanation import ValidationRuleType
 from ..domain.value_objects import Provenance
 from .claim_screen import (
     CLAIM_FAMILY_DATASET_PERFECTION,
@@ -114,10 +118,9 @@ _REQUIRED_KEYS: Final[frozenset[str]] = frozenset(
 )
 _ALLOWED_KEYS: Final[frozenset[str]] = _REQUIRED_KEYS | {"numeric_claims"}
 _IMPACT_KEYS: Final[frozenset[str]] = frozenset(
-    {"basis", "statement", "evidence_ids", "context_fields", "assumption"}
+    {"statement", "evidence_ids", "context_fields", "assumption"}
 )
 _RULE_KEYS: Final[frozenset[str]] = frozenset({"rule_type", "columns", "description"})
-_IMPACT_BASES: Final[frozenset[str]] = frozenset(member.value for member in ImpactBasis)
 _RULE_TYPES: Final[frozenset[str]] = frozenset(member.value for member in ValidationRuleType)
 
 FINDING_ANALYSIS_INSTRUCTIONS: Final[str] = (
@@ -126,7 +129,7 @@ FINDING_ANALYSIS_INSTRUCTIONS: Final[str] = (
     f'"schema_version" (use "{FINDING_ANALYSIS_SCHEMA_VERSION}"), '
     '"provenance" (use "ai_interpretation"), '
     '"explanation" (one or two plain sentences on what the finding means), '
-    '"business_impact" (1 to 3 objects, each with the keys "basis", "statement", '
+    '"business_impact" (1 to 3 objects, each with the keys "statement", '
     '"evidence_ids", "context_fields" and "assumption"), '
     '"remediation" (1 to 3 short advisory steps a person could take), '
     '"validation_rule" (one object with "rule_type", "columns" and "description": '
@@ -134,15 +137,15 @@ FINDING_ANALYSIS_INSTRUCTIONS: Final[str] = (
     '"referenced_evidence_ids" (the evidence ids you relied on), '
     '"referenced_columns" (the column keys you relied on), and optionally '
     '"numeric_claims" (an object mapping a supplied number\'s name to its exact '
-    'supplied value). For each business_impact object set "basis" to "evidence" '
-    "when the statement follows directly from the listed evidence (list its "
-    'evidence_ids and leave "assumption" empty), to "confirmed_context" when it '
-    'relies on the supplied confirmed_context (list those "context_fields"), or to '
-    '"assumption" when it is only a possible consequence: then state the condition '
-    'that must hold in "assumption" and leave "context_fields" empty. Never state '
-    "a monetary amount, a named customer, a regulation or a business process "
-    "unless it appears in the supplied evidence or confirmed context; if it is "
-    'only a possibility, use basis "assumption". Use only numbers that appear in '
+    "supplied value). Each business_impact object is a POTENTIAL impact, not an "
+    'established fact: put the statement in "statement", the condition that must '
+    'hold for it to apply in "assumption" (never empty), the evidence ids it '
+    'relates to in "evidence_ids", and, only if it draws on the supplied '
+    'confirmed_context, those field names in "context_fields" (otherwise an empty '
+    "list). You do not label how well-founded a statement is; that is decided "
+    "elsewhere. Never state a monetary amount, a named customer, a regulation or "
+    "a business process unless it appears in the supplied evidence or confirmed "
+    "context. Use only numbers that appear in "
     "the supplied evidence or confirmed context. Remediation steps are advice for "
     "a person: never say data was or will be changed automatically. The "
     "validation rule is only a proposal: never say it was applied or is active. "
@@ -199,7 +202,6 @@ def finding_analysis_json_schema(
                     "additionalProperties": False,
                     "required": sorted(_IMPACT_KEYS),
                     "properties": {
-                        "basis": {"type": "string", "enum": sorted(_IMPACT_BASES)},
                         "statement": _string_schema(MAX_STATEMENT_LENGTH),
                         "evidence_ids": _enum_list_schema(
                             evidence_ids, max_items=MAX_REFERENCE_LIST
@@ -207,7 +209,7 @@ def finding_analysis_json_schema(
                         "context_fields": _enum_list_schema(
                             context_fields, max_items=MAX_REFERENCE_LIST
                         ),
-                        "assumption": _string_schema(MAX_ASSUMPTION_LENGTH, min_length=0),
+                        "assumption": _string_schema(MAX_ASSUMPTION_LENGTH),
                     },
                 },
             },
@@ -253,23 +255,12 @@ def mock_finding_analysis_output(envelope: PromptEnvelope) -> dict[str, object]:
     for any real finding."""
     evidence_ids = [item.evidence_id for item in envelope.computed_evidence]
     column_keys = _evidence_column_keys(envelope.computed_evidence)
-    impact: dict[str, object]
-    if evidence_ids:
-        impact = {
-            "basis": ImpactBasis.EVIDENCE.value,
-            "statement": "The supplied evidence documents this condition in the data.",
-            "evidence_ids": evidence_ids[:1],
-            "context_fields": [],
-            "assumption": "",
-        }
-    else:
-        impact = {
-            "basis": ImpactBasis.ASSUMPTION.value,
-            "statement": "Downstream users may draw conclusions from data with this condition.",
-            "evidence_ids": [],
-            "context_fields": [],
-            "assumption": "the affected data is used for decisions",
-        }
+    impact: dict[str, object] = {
+        "statement": "Downstream users may draw conclusions from data with this condition.",
+        "evidence_ids": evidence_ids[:1],
+        "context_fields": [],
+        "assumption": "the affected data is used for decisions",
+    }
     return {
         "schema_version": FINDING_ANALYSIS_SCHEMA_VERSION,
         "provenance": Provenance.AI_INTERPRETATION.value,
@@ -625,14 +616,10 @@ def _check_impact_statement(
         findings.invalid()
         return
 
-    basis = raw["basis"]
     statement = _bounded_text(raw["statement"], MAX_STATEMENT_LENGTH, findings)
     evidence_ids = _string_list(raw["evidence_ids"], findings, max_items=MAX_REFERENCE_LIST)
     context_fields = _string_list(raw["context_fields"], findings, max_items=MAX_REFERENCE_LIST)
-    assumption = _bounded_text(raw["assumption"], MAX_ASSUMPTION_LENGTH, findings, allow_empty=True)
-    if not isinstance(basis, str) or basis not in _IMPACT_BASES:
-        findings.invalid()
-        return
+    assumption = _bounded_text(raw["assumption"], MAX_ASSUMPTION_LENGTH, findings)
     if statement is None or evidence_ids is None or context_fields is None or assumption is None:
         return
 
@@ -641,23 +628,16 @@ def _check_impact_statement(
     if any(field not in sent_context_fields for field in context_fields):
         findings.add(RejectionReason.UNKNOWN_CONTEXT_FIELD)
 
-    has_assumption = bool(assumption.strip())
-    if basis == ImpactBasis.EVIDENCE.value:
-        supported = bool(evidence_ids) and not context_fields and not has_assumption
-    elif basis == ImpactBasis.CONFIRMED_CONTEXT.value:
-        supported = bool(context_fields) and not has_assumption
-    else:
-        supported = has_assumption and not context_fields
-    if not supported:
-        findings.add(RejectionReason.UNSUPPORTED_IMPACT_CLAIM)
-
+    # There is no model-chosen basis to check. A statement is a *potential*
+    # impact: it must state the condition under which it would hold
+    # (`_bounded_text` above already rejected a blank one), and the label a
+    # person sees is derived afterwards by TrustTable, never awarded by the
+    # model. No lexical list is consulted here: whatever consequence the prose
+    # names, it is presented as conditional advice, not as an established fact.
     texts.append(statement)
-    if has_assumption:
-        texts.append(assumption)
-    if basis != ImpactBasis.ASSUMPTION.value and _ungrounded_consequence_term(statement, grounding):
-        findings.add(RejectionReason.UNSUPPORTED_IMPACT_CLAIM)
+    texts.append(assumption)
     for prose in (statement, assumption):
-        if prose.strip() and _ungrounded_numbers(prose, grounding):
+        if _ungrounded_numbers(prose, grounding):
             findings.add(RejectionReason.UNKNOWN_NUMERIC_CLAIM)
 
 

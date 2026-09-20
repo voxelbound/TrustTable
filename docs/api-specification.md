@@ -433,11 +433,18 @@ Returns:
 - `narrative` — the explanation: one or two sentences explaining the
   finding
 - `provenance` — `"deterministic_fallback"` or `"ai_interpretation"`
-- `business_impact` — 1–3 statements, each with `statement`, a `basis`
-  (`"evidence"`, `"confirmed_context"` or `"assumption"`), `evidence_ids`,
-  `context_fields` and `assumption`. A `"assumption"` statement is a
-  conditional implication and always carries the condition it depends on;
-  a client must never present it as a fact
+- `business_impact` — 1–3 *potential*-impact statements, each with
+  `statement`, a `basis` (`"confirmed_context"` or `"assumption"`),
+  `evidence_ids` (the evidence it relates to), `context_fields` and
+  `assumption` (always present: the condition the statement depends on).
+  `basis` is derived by TrustTable, never chosen by a model:
+  `"confirmed_context"` means the statement cites context the user
+  confirmed or corrected, so show it as *informed by* that context;
+  `"assumption"` means it is only a conditional possibility. There is
+  deliberately no `"evidence"` basis — the deterministic evidence
+  establishes what was found in the data, not what it costs a business — so
+  a client must never present any statement as evidence-backed or as a
+  fact
 - `remediation` — 1–3 advisory steps for a person. TrustTable never
   changes uploaded data, and no step claims it did
 - `validation_rule` — a proposed rule: `rule_type` (one of the §11 /

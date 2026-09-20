@@ -13,6 +13,7 @@ from trusttable_backend.domain.explanation import (
     ImpactBasis,
     ProposedValidationRule,
     ValidationRuleType,
+    derive_impact_basis,
 )
 from trusttable_backend.domain.value_objects import ColumnReference, Provenance
 
@@ -85,14 +86,6 @@ def test_the_advisory_sections_default_to_empty_for_a_bare_explanation() -> None
     assert explanation.validation_rule is None
 
 
-def test_impact_basis_is_a_closed_three_value_set() -> None:
-    assert {member.value for member in ImpactBasis} == {
-        "evidence",
-        "confirmed_context",
-        "assumption",
-    }
-
-
 def test_validation_rule_types_are_exactly_the_documented_product_requirement_set() -> None:
     # docs/product-requirements.md section 13, "Supported rule types".
     assert {member.value for member in ValidationRuleType} == {
@@ -110,39 +103,36 @@ def test_validation_rule_types_are_exactly_the_documented_product_requirement_se
     }
 
 
-def test_an_evidence_backed_statement_cites_evidence_and_carries_nothing_else() -> None:
+def test_there_is_no_evidence_basis_a_consequence_can_award_itself() -> None:
+    """The deterministic evidence establishes what was found in the data, not
+    what it costs a business, so no impact statement can be presented as
+    evidence-backed: the closed basis set has no such member."""
+    assert {member.value for member in ImpactBasis} == {"confirmed_context", "assumption"}
+    assert not hasattr(ImpactBasis, "EVIDENCE")
+
+
+def test_a_context_informed_statement_cites_context_and_still_states_its_condition() -> None:
     statement = BusinessImpactStatement(
-        statement="Totals may double count.", basis=ImpactBasis.EVIDENCE, evidence_ids=("ev-1",)
+        statement="x",
+        basis=ImpactBasis.CONFIRMED_CONTEXT,
+        context_fields=("row_grain",),
+        assumption="rows are summed per order",
     )
-    assert statement.assumption is None
-    with pytest.raises(ValueError, match="cite evidence"):
-        BusinessImpactStatement(statement="x", basis=ImpactBasis.EVIDENCE)
-    with pytest.raises(ValueError, match="no context or assumption"):
-        BusinessImpactStatement(
-            statement="x", basis=ImpactBasis.EVIDENCE, evidence_ids=("ev-1",), assumption="if y"
-        )
-    with pytest.raises(ValueError, match="no context or assumption"):
-        BusinessImpactStatement(
-            statement="x",
-            basis=ImpactBasis.EVIDENCE,
-            evidence_ids=("ev-1",),
-            context_fields=("row_grain",),
-        )
-
-
-def test_a_context_backed_statement_cites_context_and_carries_no_assumption() -> None:
-    BusinessImpactStatement(
-        statement="x", basis=ImpactBasis.CONFIRMED_CONTEXT, context_fields=("row_grain",)
-    )
+    assert statement.assumption == "rows are summed per order"
     with pytest.raises(ValueError, match="cite confirmed context"):
-        BusinessImpactStatement(statement="x", basis=ImpactBasis.CONFIRMED_CONTEXT)
-    with pytest.raises(ValueError, match="no assumption"):
         BusinessImpactStatement(
-            statement="x",
-            basis=ImpactBasis.CONFIRMED_CONTEXT,
-            context_fields=("row_grain",),
-            assumption="if y",
+            statement="x", basis=ImpactBasis.CONFIRMED_CONTEXT, assumption="if y"
         )
+    with pytest.raises(ValueError, match="state its assumption"):
+        BusinessImpactStatement(
+            statement="x", basis=ImpactBasis.CONFIRMED_CONTEXT, context_fields=("row_grain",)
+        )
+
+
+def test_the_basis_is_derived_from_the_cited_context_fields_alone() -> None:
+    assert derive_impact_basis(()) is ImpactBasis.ASSUMPTION
+    assert derive_impact_basis(("row_grain",)) is ImpactBasis.CONFIRMED_CONTEXT
+    assert derive_impact_basis(("row_grain", "primary_entity")) is ImpactBasis.CONFIRMED_CONTEXT
 
 
 def test_a_conditional_statement_must_state_its_assumption() -> None:
@@ -152,7 +142,7 @@ def test_a_conditional_statement_must_state_its_assumption() -> None:
     assert statement.assumption == "it feeds reports"
     with pytest.raises(ValueError, match="state its assumption"):
         BusinessImpactStatement(statement="x", basis=ImpactBasis.ASSUMPTION)
-    with pytest.raises(ValueError, match="blank"):
+    with pytest.raises(ValueError, match="state its assumption"):
         BusinessImpactStatement(statement="x", basis=ImpactBasis.ASSUMPTION, assumption="  ")
     with pytest.raises(ValueError, match="no confirmed context"):
         BusinessImpactStatement(

@@ -370,21 +370,24 @@ class RowContextResponse(BaseModel):
 
 
 class BusinessImpactStatementResponse(BaseModel):
-    """One possible business implication of a finding (`AI-08`), mirroring
-    `domain.explanation.BusinessImpactStatement`.
+    """One *potential* business implication of a finding (`AI-08`),
+    mirroring `domain.explanation.BusinessImpactStatement`.
 
-    `basis` says what the statement rests on and therefore how a client
-    must present it: `"evidence"` (follows from the finding's computed
-    evidence), `"confirmed_context"` (relies on context the user confirmed
-    or corrected) or `"assumption"` (only a possible consequence — always
-    shown together with its `assumption`, never as a fact).
+    `basis` is derived by TrustTable and says how a client must present the
+    statement: `"confirmed_context"` (it cites context the user confirmed or
+    corrected, so show it as *informed by* that context) or `"assumption"`
+    (only a possible consequence). Either way it is a potential impact shown
+    together with its `assumption` (the condition under which it would
+    hold), never as a fact — there is deliberately no "evidence" basis,
+    because the deterministic evidence establishes what was found in the
+    data, not what it costs a business.
     """
 
     statement: str
-    basis: Literal["evidence", "confirmed_context", "assumption"]
+    basis: Literal["confirmed_context", "assumption"]
     evidence_ids: list[str]
     context_fields: list[str]
-    assumption: str | None
+    assumption: str
 
 
 class ProposedValidationRuleResponse(BaseModel):

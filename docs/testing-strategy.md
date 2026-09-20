@@ -118,8 +118,11 @@ Checks:
 **Structured finding analysis (`AI-08`, `docs/decision-log.md` D-040).**
 The finding-analysis output is a structured contract, so these checks are
 also asserted per role — schema and bounds, evidence/column/context-field
-grounding at every level, impact statements' declared basis, ungrounded
-consequence terms and numbers in prose, advisory-only wording in
+grounding at every level, a model-supplied impact `basis` rejected outright
+(the basis is derived by TrustTable, never chosen by a model; an invented
+loss or reputation harm is presented as conditional, never as
+evidence-backed), ungrounded consequence terms in the explanation and
+ungrounded numbers in prose, advisory-only wording in
 remediation and rule text — and end to end through the real route, the
 real provider factory and the real `LlamaCppProvider` over a
 request-capturing stub (`backend/tests/api/test_finding_analysis_end_to_end.py`):

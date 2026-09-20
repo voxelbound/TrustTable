@@ -165,7 +165,7 @@ describe('FindingDetailRoute', () => {
     expect(screen.getByText(/does not run or enforce it/)).toBeInTheDocument()
   })
 
-  it('AI-08: an accepted AI analysis distinguishes evidence-backed, context-backed and conditional impact and labels the provenance without any filesystem path', async () => {
+  it('AI-08: an accepted AI analysis presents impact as conditional or context-informed, never evidence-backed, and labels the provenance without any filesystem path', async () => {
     server.use(
       http.get(
         'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/explanation',
@@ -190,11 +190,12 @@ describe('FindingDetailRoute', () => {
               confirmed_context_sent_to_model: true,
               business_impact: [
                 {
-                  statement: 'The supplied evidence documents this condition.',
-                  basis: 'evidence',
+                  statement:
+                    'This will cause the company to lose money and damage its reputation.',
+                  basis: 'assumption',
                   evidence_ids: ['validity.future_dates.evidence.order_date'],
                   context_fields: [],
-                  assumption: null,
+                  assumption: 'the flagged rows are used in reports',
                 },
                 {
                   statement:
@@ -202,7 +203,7 @@ describe('FindingDetailRoute', () => {
                   basis: 'confirmed_context',
                   evidence_ids: [],
                   context_fields: ['row_grain'],
-                  assumption: null,
+                  assumption: 'orders are counted per row',
                 },
                 {
                   statement: 'Reports built on this data may be affected.',
@@ -231,12 +232,22 @@ describe('FindingDetailRoute', () => {
         'AI interpretation — Local AI · llama.cpp · Qwen3.5 9B (Q4_K_M)',
       ),
     ).toBeInTheDocument()
-    // All three impact kinds are individually labelled.
-    expect(screen.getByText('Evidence-backed')).toBeInTheDocument()
-    expect(screen.getByText('From your confirmed context')).toBeInTheDocument()
-    expect(screen.getByText('Conditional')).toBeInTheDocument()
+    // Impact statements are potential impacts: conditional, or informed by
+    // confirmed context — and never "Evidence-backed", whatever the model
+    // wrote (here: an invented loss and reputation harm).
+    expect(screen.getAllByText('Conditional')).toHaveLength(2)
     expect(
-      screen.getByText(/Based on your confirmed row grain/),
+      screen.getByText('Informed by your confirmed context'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Evidence-backed/i)).toBeNull()
+    expect(
+      screen.getByText(/lose money and damage its reputation/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Assumes: the flagged rows are used in reports/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Draws on your confirmed row grain/),
     ).toBeInTheDocument()
     expect(
       screen.getByText(/Assumes: the affected values feed reports/),
