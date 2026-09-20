@@ -396,6 +396,49 @@ _ACTION_CLAIM_RES: Final[tuple[re.Pattern[str], ...]] = (
     ),
 )
 
+# Voice-independent action claims (semantic review of revision 5). The patterns
+# above need an explicit subject or a fixed word order, so a passive or
+# subject-less claim ("The duplicate rows will be removed automatically.",
+# "Rows get deleted for you.", "The rule will run on every upload.") passed.
+# These are applied per sentence, whatever the grammatical voice, and are biased
+# toward rejecting: advice to a person never needs to say that something happens
+# "automatically" or "for you", and a false rejection degrades safely to the
+# built-in guidance. A sentence that is a request to a person ("Verify that the
+# duplicates were removed") is exempt, as everywhere in advice text.
+_AUTOMATION_MARKER_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:automatically|autonomously|by\s+itself|on\s+(?:its|their)\s+own|for\s+you|"
+    r"behind\s+the\s+scenes|without\s+(?:any\s+)?(?:manual|human)\s+(?:action|effort|input))\b"
+)
+_CHANGE_PARTICIPLES: Final[str] = (
+    r"(?:fixed|corrected|repaired|removed|deleted|dropped|updated|cleaned|cleansed|overwritten|"
+    r"modified|changed|altered|merged|imputed|filled|normali[sz]ed|standardi[sz]ed|replaced|"
+    r"trimmed|converted|reformatted|rewritten|deduplicated|de-duplicated|purged|erased|"
+    r"discarded|edited|adjusted|patched|reset|truncated|applied|activated|enabled|enforced)"
+)
+_FUTURE_OR_GET_CLAIM_RE: Final[re.Pattern[str]] = re.compile(
+    # "will be removed", "get deleted", "is being fixed", "will then be cleaned"
+    r"(?:\b(?:will|shall)\b|'ll\b|\bgets?\b|\bgot\b|\b(?:is|are)\s+being\b)\s+"
+    r"(?:(?:now|then|also|already|always|immediately|simply)\s+){0,2}(?:be\s+)?"
+    r"(?:(?:now|then|also|already|always|immediately|simply)\s+){0,2}" + _CHANGE_PARTICIPLES
+)
+_RULE_EXECUTION_CLAIM_RE: Final[re.Pattern[str]] = re.compile(
+    # "will run", "will be enforced", "will block rows that fail"
+    r"(?:\b(?:will|shall)\b|'ll\b)\s+(?:(?:now|then|also|always)\s+){0,2}(?:be\s+)?"
+    r"(?:(?:now|then|also|always)\s+){0,2}(?:run|execute[ds]?|appl(?:y|ied)|enforce[ds]?|trigger(?:ed)?|activate[ds]?|"
+    r"enable[ds]?|block(?:ed)?|reject(?:ed)?)\b"
+)
+_STATE_CLAIM_RE: Final[re.Pattern[str]] = re.compile(
+    # "The duplicates are removed", "Rows are fixed" — a present-tense state claim
+    # anchored on a data noun; exempted below when the sentence is purposive or
+    # modal advice ("... so that rows are cleaned before loading").
+    r"\b(?:data|values?|rows?|records?|entries|files?|datasets?|duplicates?|columns?|cells?)\s+"
+    r"(?:is|are)\s+(?:(?:now|then|also|already)\s+)?" + _CHANGE_PARTICIPLES
+)
+_PURPOSIVE_OR_MODAL_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:so|that|before|until|unless|once|after|when|if|whether|should|must|need|needs|"
+    r"ought|ensure|consider|recommend\w*|suggest\w*)\b"
+)
+
 
 # --- Claim screening for directive (advice) text --------------------------
 #
@@ -544,8 +587,29 @@ def _ungrounded_consequence_term(text: str, grounding: _Grounding) -> bool:
 
 
 def _claims_action_was_taken(text: str) -> bool:
+    """Whether advice text says data was, or will be, changed, or that a rule
+    was, or will be, applied, run or enforced — see the two pattern groups
+    above (subject-anchored, and voice-independent per sentence)."""
     normalized = normalize_narrative(text)
-    return any(pattern.search(normalized) is not None for pattern in _ACTION_CLAIM_RES)
+    if any(pattern.search(normalized) is not None for pattern in _ACTION_CLAIM_RES):
+        return True
+    # Split first: normalization strips the punctuation the split relies on.
+    for raw_sentence in _SENTENCE_SPLIT_RE.split(text):
+        sentence = normalize_narrative(raw_sentence)
+        if not sentence or _DIRECTIVE_FRAME_RE.match(sentence):
+            continue
+        if (
+            _AUTOMATION_MARKER_RE.search(sentence) is not None
+            or _FUTURE_OR_GET_CLAIM_RE.search(sentence) is not None
+            or _RULE_EXECUTION_CLAIM_RE.search(sentence) is not None
+        ):
+            return True
+        if (
+            _STATE_CLAIM_RE.search(sentence) is not None
+            and _PURPOSIVE_OR_MODAL_RE.search(sentence) is None
+        ):
+            return True
+    return False
 
 
 # --- Validation -------------------------------------------------------------

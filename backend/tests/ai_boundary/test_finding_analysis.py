@@ -744,6 +744,89 @@ def test_advice_to_a_person_is_not_an_action_claim(step: str) -> None:
     assert check(output) == (True, ())
 
 
+# Semantic review of revision 5: the subject-anchored patterns above matched only
+# fixed sentence shapes, so passive and subject-less claims passed. The
+# voice-independent check below is per sentence.
+
+_PASSIVE_REMEDIATION_CLAIMS = [
+    # the reviewer's exact counterexamples
+    "The duplicate rows will be removed automatically.",
+    "Duplicates are removed automatically.",
+    "Rows get deleted for you.",
+    # the same class, phrased independently
+    "The duplicates will be deleted.",
+    "The negative values will be replaced with zero.",
+    "Bad rows get dropped.",
+    "The flagged values are corrected on their own.",
+    "Records are fixed behind the scenes.",
+    "The affected cells will then be cleaned before the report is built.",
+    "Whitespace is being trimmed for you.",
+    "The date column will be converted to a standard format.",
+    "Duplicates are now removed from the file.",
+    "Your data is cleaned without any manual effort.",
+]
+
+_PASSIVE_RULE_CLAIMS = [
+    "The rule will run automatically on every upload.",  # the reviewer's counterexample
+    "This rule will be enforced on every import.",
+    "The rule will block rows that fail it.",
+    "The check will execute whenever data is loaded.",
+    "This validation will be applied to each new file.",
+    "The rule runs by itself.",
+]
+
+
+@pytest.mark.parametrize("step", _PASSIVE_REMEDIATION_CLAIMS)
+def test_passive_and_subject_less_remediation_claims_are_rejected(step: str) -> None:
+    output = mutated(lambda o: o.update(remediation=[step]))
+    assert check(output) == (False, (R.UNSUPPORTED_ACTION_CLAIM,))
+
+
+@pytest.mark.parametrize("description", _PASSIVE_RULE_CLAIMS)
+def test_passive_and_subject_less_rule_claims_are_rejected(description: str) -> None:
+    output = mutated(lambda o: o["validation_rule"].update(description=description))
+    assert check(output) == (False, (R.UNSUPPORTED_ACTION_CLAIM,))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Review the rows, then correct them at the source. The duplicates will be removed "
+        "automatically.",  # a claim after honest advice is still caught (per sentence)
+        "Duplicates get deleted for YOU.",  # case
+        "The rows will be removed​ automatically.",  # zero-width character
+    ],
+)
+def test_the_passive_check_holds_across_sentences_case_and_obfuscation(text: str) -> None:
+    output = mutated(lambda o: o.update(remediation=[text]))
+    assert check(output) == (False, (R.UNSUPPORTED_ACTION_CLAIM,))
+
+
+@pytest.mark.parametrize(
+    "step",
+    [
+        "Duplicates should be removed at the source.",
+        "Verify that the duplicates were removed after the import.",
+        "Confirm whether the rows are cleaned before loading.",
+        "Update the export so that rows are cleaned before loading.",
+        "The data owner must fix the values that are flagged.",
+        "Ask the source system owner to delete the affected rows.",
+        "Add a not-null check to your own import job.",
+        "Consider correcting the flagged values in the source system.",
+    ],
+)
+def test_honest_advice_is_not_mistaken_for_an_action_claim(step: str) -> None:
+    output = mutated(lambda o: o.update(remediation=[step]))
+    assert check(output) == (True, ())
+
+
+def test_documented_limit_a_claim_with_no_change_verb_or_automation_marker_can_pass() -> None:
+    # A lexical check covers a class, not every phrasing (D-040): this says the
+    # data is handled without naming a change verb or an automation marker.
+    output = mutated(lambda o: o.update(remediation=["The rows are handled by the platform."]))
+    assert check(output) == (True, ())
+
+
 def test_action_claims_are_only_screened_in_remediation_and_rule_text() -> None:
     # An explanation may describe a state ("values were changed upstream").
     output = mutated(
