@@ -47,8 +47,12 @@ def _computed_fact(value: object, *, strings_allowed: bool) -> tuple[bool, objec
 
     Numbers, booleans and `None` always are. A string is only when its key
     was allow-listed and it is a bare token. Sequences and mappings are only
-    when *every* element (and every mapping key) is: one dataset-derived
-    string anywhere inside drops the whole field, never a partial copy.
+    when *every* element is: one dataset-derived string anywhere inside drops
+    the whole field, never a partial copy. A nested mapping's **keys** are
+    strings too — a key can be a raw cell value (for example a value-count
+    table keyed by the values counted) — so they pass the same gate as a
+    string value: they are only kept under an allow-listed field, and only as
+    bare tokens. A nested mapping under any other field is withheld whole.
     """
     if value is None or isinstance(value, bool | int | float):
         return True, value
@@ -66,7 +70,11 @@ def _computed_fact(value: object, *, strings_allowed: bool) -> tuple[bool, objec
     if isinstance(value, Mapping):
         mapping: dict[str, object] = {}
         for key, element in value.items():
-            if not isinstance(key, str) or _SAFE_STRING_TOKEN_RE.match(key) is None:
+            if not (
+                strings_allowed
+                and isinstance(key, str)
+                and _SAFE_STRING_TOKEN_RE.match(key) is not None
+            ):
                 return False, None
             keep, converted = _computed_fact(element, strings_allowed=strings_allowed)
             if not keep:
