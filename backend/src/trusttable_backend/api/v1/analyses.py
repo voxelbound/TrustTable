@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query, Request, UploadFile
 
+from trusttable_backend.ai_provider.display import describe_provenance, sanitize_model_identifier
 from trusttable_backend.ai_provider.factory import create_provider
 from trusttable_backend.analysis import (
     Analysis,
@@ -63,7 +64,6 @@ from trusttable_backend.context_inference.ai_context import (
     build_context_inference_envelope,
     combine_hypotheses,
     run_context_inference,
-    serialize_dataset_context,
 )
 from trusttable_backend.context_inference.heuristics import (
     consolidate_dataset_context,
@@ -80,18 +80,21 @@ from trusttable_backend.domain.value_objects import ColumnReference
 from trusttable_backend.errors import AppError
 from trusttable_backend.explanation.ai_explanation import (
     build_finding_explanation_envelope,
+    confirmed_context_for_finding_analysis,
     run_finding_explanation,
 )
 from trusttable_backend.explanation.deterministic import build_deterministic_explanation
 from trusttable_backend.profiling.schemas import ColumnProfile, DatasetProfile, ProfilingWarning
 from trusttable_backend.risk.scoring import TrustAssessment
 from trusttable_backend.schemas.analysis import (
+    AiProvenanceResponse,
     AnalysisFailureResponse,
     AnalysisProfileResponse,
     AnalysisResource,
     AnalysisStatusResponse,
     AnswerGuidedQuestionRequest,
     AnswerGuidedQuestionResponse,
+    BusinessImpactStatementResponse,
     ClarificationAnswerResponse,
     ClarificationQuestionListResponse,
     ClarificationQuestionResponse,
@@ -110,6 +113,7 @@ from trusttable_backend.schemas.analysis import (
     FindingItem,
     FindingsListResponse,
     ProfilingTimingResponse,
+    ProposedValidationRuleResponse,
     RowContextEntryResponse,
     RowContextResponse,
     SampleMetadataResponse,
@@ -386,17 +390,52 @@ def _finding_explanation_response(
     evidence_sent_to_model: bool,
     confirmed_context_sent_to_model: bool,
 ) -> FindingExplanationResponse:
+    ai_provenance: AiProvenanceResponse | None = None
+    if explanation.provider_name is not None:
+        display = describe_provenance(explanation.provider_name, explanation.model_identifier)
+        ai_provenance = AiProvenanceResponse(
+            deployment_label=display.deployment_label,
+            runtime_label=display.runtime_label,
+            model_label=display.model_label,
+            quantization=display.quantization,
+            model_identifier=display.model_identifier,
+        )
+    rule = explanation.validation_rule
     return FindingExplanationResponse(
         finding_id=finding_id,
         narrative=explanation.narrative,
         provenance=explanation.provenance.value,
         provider_name=explanation.provider_name,
-        model_identifier=explanation.model_identifier,
+        # `AI-08`: the raw configured value (often an absolute model path)
+        # never leaves the backend; only the sanitized identifier does.
+        model_identifier=sanitize_model_identifier(explanation.model_identifier),
+        ai_provenance=ai_provenance,
         ai_call_status=ai_call_status,
         evidence_sent_to_model=evidence_sent_to_model,
         confirmed_context_sent_to_model=confirmed_context_sent_to_model,
         referenced_evidence_ids=list(explanation.referenced_evidence_ids),
         referenced_columns=[_column_reference(column) for column in explanation.referenced_columns],
+        business_impact=[
+            BusinessImpactStatementResponse(
+                statement=item.statement,
+                basis=item.basis.value,
+                evidence_ids=list(item.evidence_ids),
+                context_fields=list(item.context_fields),
+                assumption=item.assumption,
+            )
+            for item in explanation.business_impact
+        ],
+        remediation=list(explanation.remediation),
+        validation_rule=(
+            ProposedValidationRuleResponse(
+                rule_type=rule.rule_type.value,
+                columns=[_column_reference(column) for column in rule.columns],
+                description=rule.description,
+                status="proposed",
+            )
+            if rule is not None
+            else None
+        ),
     )
 
 
@@ -423,17 +462,27 @@ def get_analysis_finding_explanation(
     to a real HTTP response.
 
     When the analysis's context has been finalized (`Analysis.
-    context_finalized`, via `POST .../finalize`), the confirmed
-    `DatasetContext` is serialized into the AI envelope's
-    `confirmed_context` field, grounding the explanation in confirmed
+    context_finalized`, via `POST .../finalize`), the fields the user
+    *confirmed or corrected* are serialized into the AI envelope's
+    `confirmed_context` field, grounding the analysis in confirmed
     business facts (domain, row grain, currency behavior, etc.) in
     addition to the finding's own evidence — D-037's "confirmed/
     finalized context available to the explanation/enrichment path"
-    requirement. Deliberately gated on `context_finalized` rather than
+    requirement. **`AI-08`:** inferred and unknown fields are never sent,
+    so an inferred value cannot reach the model — or the user — labelled
+    as confirmed. Deliberately gated on `context_finalized` rather than
     merely `context is not None`: this is what makes `POST .../finalize`
     a meaningful, observable action rather than a no-op flag flip.
     Before finalize, this route's behavior is unchanged from `WP-063`
     (evidence-grounded only).
+
+    **`AI-08` — the four sections.** The response always carries an
+    explanation, business impact, remediation and a proposed validation
+    rule. With AI disabled, rejected or failing they come from the
+    deterministic built-in guidance (`explanation.guidance`); an accepted
+    structured AI response replaces all four together. The response never
+    carries the raw configured model value — only a sanitized identifier
+    and human-readable `ai_provenance` labels (`ai_provider.display`).
 
     Also returns `ai_call_status` (`WP-065`, defect fix), this
     request's own independent AI-call disclosure — deliberately
@@ -464,30 +513,46 @@ def get_analysis_finding_explanation(
 
     settings = get_settings()
     if settings.llm_provider != "disabled":
-        confirmed_context = (
-            serialize_dataset_context(analysis.context)
-            if analysis.context_finalized and analysis.context is not None
-            else None
+        # `AI-08`: only user-confirmed/corrected fields, and only once the
+        # context is finalized. Inferred or unknown fields are never sent.
+        confirmed_context = confirmed_context_for_finding_analysis(
+            analysis.context, finalized=analysis.context_finalized
         )
-        provider = create_provider(
-            settings.llm_provider,
-            base_url=settings.llm_base_url,
-            model_identifier=settings.llm_model,
-            timeout_seconds=float(settings.llm_timeout_seconds),
-        )
-        envelope = build_finding_explanation_envelope(
-            finding, evidence, confirmed_context=confirmed_context
-        )
-        result = run_finding_explanation(provider, envelope, evidence)
-        evidence_sent_to_model = True
-        confirmed_context_sent_to_model = confirmed_context is not None
-        if result.accepted and result.explanation is not None:
-            explanation = result.explanation
-            ai_call_status = "attempted_accepted"
-        elif result.provider_error is not None:
-            ai_call_status = "attempted_provider_error"
+        # The AI path is an optional enrichment: whatever goes wrong on it —
+        # a misconfigured provider (an empty `LLM_MODEL`, a malformed base
+        # URL) or anything unexpected — the deterministic four sections are
+        # still returned with a truthful status, never a 500 that removes
+        # them. Nothing about the failure is echoed or logged.
+        ai_call_status = "attempted_provider_error"
+        try:
+            provider = create_provider(
+                settings.llm_provider,
+                base_url=settings.llm_base_url,
+                model_identifier=settings.llm_model,
+                timeout_seconds=float(settings.llm_timeout_seconds),
+            )
+            envelope = build_finding_explanation_envelope(
+                finding, evidence, confirmed_context=confirmed_context
+            )
+        except Exception:
+            # Nothing was built or sent.
+            pass
         else:
-            ai_call_status = "attempted_rejected"
+            # Conservative from here on: a request may have been made.
+            evidence_sent_to_model = True
+            confirmed_context_sent_to_model = confirmed_context is not None
+            try:
+                result = run_finding_explanation(provider, envelope, evidence)
+            except Exception:
+                pass
+            else:
+                if result.accepted and result.explanation is not None:
+                    explanation = result.explanation
+                    ai_call_status = "attempted_accepted"
+                elif result.provider_error is not None:
+                    ai_call_status = "attempted_provider_error"
+                else:
+                    ai_call_status = "attempted_rejected"
 
     return _finding_explanation_response(
         finding_id,
@@ -635,15 +700,20 @@ def get_analysis_context(analysis_id: str, request: Request) -> ContextResponse:
     settings = get_settings()
     if settings.llm_provider != "disabled" and is_first_inference:
         assert updated.dataset_profile is not None  # guaranteed by COMPLETED invariant
-        provider = create_provider(
-            settings.llm_provider,
-            base_url=settings.llm_base_url,
-            model_identifier=settings.llm_model,
-            timeout_seconds=float(settings.llm_timeout_seconds),
-        )
-        envelope = build_context_inference_envelope(context, evidence=updated.evidence)
-        ai_result = run_context_inference(provider, envelope)
-        if ai_result.accepted and ai_result.hypothesis is not None:
+        # Optional enrichment: a misconfigured or misbehaving provider must
+        # leave the deterministic context in place, never fail the request.
+        try:
+            provider = create_provider(
+                settings.llm_provider,
+                base_url=settings.llm_base_url,
+                model_identifier=settings.llm_model,
+                timeout_seconds=float(settings.llm_timeout_seconds),
+            )
+            envelope = build_context_inference_envelope(context, evidence=updated.evidence)
+            ai_result = run_context_inference(provider, envelope)
+        except Exception:
+            ai_result = None
+        if ai_result is not None and ai_result.accepted and ai_result.hypothesis is not None:
             deterministic_hypotheses = infer_context_hypotheses(updated.dataset_profile)
             combined = combine_hypotheses(deterministic_hypotheses, ai_result)
             context = consolidate_dataset_context(combined)

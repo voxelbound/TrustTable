@@ -10,6 +10,12 @@ output is rejected").
 from __future__ import annotations
 
 from trusttable_backend.ai_boundary.envelope import PromptEnvelope, UntrustedSample
+from trusttable_backend.ai_boundary.finding_analysis import (
+    build_finding_analysis_contract,
+    mock_finding_analysis_output,
+    validate_finding_analysis_output,
+)
+from trusttable_backend.ai_boundary.output_contract import OutputContract
 from trusttable_backend.ai_boundary.validation import (
     MODEL_OUTPUT_SCHEMA_VERSION,
     RejectionReason,
@@ -270,3 +276,75 @@ def test_mock_provider_adversarial_unsupported_control_field_is_rejected() -> No
     )
     assert outcome.accepted is False
     assert RejectionReason.UNSUPPORTED_CONTROL_FIELD in outcome.rejection_reasons
+
+
+# ---------------------------------------------------------------------------
+# AI-08: structured output contract
+# ---------------------------------------------------------------------------
+
+
+def make_contract_request(**overrides: object) -> ProviderRequest:
+    envelope = PromptEnvelope(
+        task="Analyze the finding.",
+        computed_evidence=(make_evidence(),),
+        confirmed_context={},
+        untrusted_dataset_samples=(),
+        sample_sending_enabled=False,
+    )
+    contract = build_finding_analysis_contract(
+        evidence=envelope.computed_evidence, context_fields=(), numeric_fact_names=("mean",)
+    )
+    return make_request(
+        envelope=envelope,
+        known_numeric_facts={"mean": 1.5},
+        output_contract=contract,
+        **overrides,
+    )
+
+
+def test_a_contract_request_gets_the_contracts_own_grounded_default_output() -> None:
+    request = make_contract_request()
+
+    response = MockProvider().complete(request)
+
+    assert response.raw_output == mock_finding_analysis_output(request.envelope)
+    outcome = validate_finding_analysis_output(
+        response.raw_output, request.envelope, known_numeric_facts=request.known_numeric_facts
+    )
+    assert outcome.accepted, outcome.safe_summary
+
+
+def test_a_request_without_a_contract_still_gets_the_legacy_default() -> None:
+    request = make_request()
+    assert request.output_contract is None
+
+    response = MockProvider().complete(request)
+
+    assert response.raw_output == default_mock_raw_output(request)
+
+
+def test_a_contract_without_a_mock_factory_falls_back_to_the_legacy_default() -> None:
+    contract = OutputContract(name="c", json_schema={"type": "object"}, instructions="JSON.")
+    request = make_request(output_contract=contract)
+
+    assert MockProvider().complete(request).raw_output == default_mock_raw_output(request)
+
+
+def test_static_output_and_response_factory_still_take_precedence_over_the_contract() -> None:
+    request = make_contract_request()
+    static = {"schema_version": "static"}
+    assert MockProvider(raw_output=static).complete(request).raw_output == static
+    dynamic = MockProvider(response_factory=lambda r: {"from": "factory"})
+    assert dynamic.complete(request).raw_output == {"from": "factory"}
+
+
+def test_the_legacy_default_is_rejected_by_the_structured_validator() -> None:
+    # A structured contract cannot be satisfied by the generic narrative shape.
+    request = make_contract_request()
+    legacy = default_mock_raw_output(request)
+
+    outcome = validate_finding_analysis_output(
+        legacy, request.envelope, known_numeric_facts=request.known_numeric_facts
+    )
+
+    assert outcome.accepted is False
