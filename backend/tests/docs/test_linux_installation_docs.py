@@ -26,6 +26,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 README = REPO_ROOT / "README.md"
 GUIDE = REPO_ROOT / "docs" / "installation-linux.md"
 COMPOSE = REPO_ROOT / "docker-compose.yml"
+RELEASE_COMPOSE = REPO_ROOT / "docker-compose.release.yml"
+RELEASE_DOC = REPO_ROOT / "docs" / "release-images.md"
 ENV_EXAMPLE = REPO_ROOT / ".env.example"
 BACKLOG = REPO_ROOT / "docs" / "implementation-backlog.md"
 LOCAL_DEV = REPO_ROOT / "docs" / "local-development.md"
@@ -72,7 +74,11 @@ def test_the_guide_exists_and_the_readme_links_to_it_before_the_project_status()
     assert readme.index("## Quick start (Linux)") < readme.index("## Project status")
 
 
-@pytest.mark.parametrize("source", [README, GUIDE], ids=["README", "installation-linux"])
+@pytest.mark.parametrize(
+    "source",
+    [README, GUIDE, RELEASE_DOC],
+    ids=["README", "installation-linux", "release-images"],
+)
 def test_every_relative_link_resolves_to_a_real_file_and_anchor(source: Path) -> None:
     for link in relative_links(source):
         target, _, fragment = link.partition("#")
@@ -95,6 +101,9 @@ def test_public_docs_do_not_reference_private_delivery_paths() -> None:
     # The new guide is written for users, not for the delivery history.
     for private in ("WP-0", "FUP-0"):
         assert private not in read(GUIDE), private
+    for private in ("project-ops", ".eds", "WP-0", "FUP-0", "Claude", "Anthropic"):
+        assert private not in read(RELEASE_DOC), private
+        assert private not in read(RELEASE_COMPOSE), private
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +125,9 @@ def test_the_env_example_matches_the_real_defaults_it_documents() -> None:
         for line in read(ENV_EXAMPLE).splitlines()
         if "=" in line and not line.startswith("#")
     )
-    defaults = Settings()
+    # Hermetic: the documented defaults are the built-in ones, whatever a developer's own
+    # repository-root `.env` sets (a local `.env` with `LLM_PROVIDER=llama_cpp` is normal).
+    defaults = Settings(_env_file=None)
     assert env["LLM_PROVIDER"] == defaults.llm_provider == "disabled"
     assert env["LLM_BASE_URL"] == defaults.llm_base_url
     assert env["LLM_TIMEOUT_SECONDS"] == str(defaults.llm_timeout_seconds)
@@ -229,6 +240,71 @@ def test_the_backlog_orders_ai_08_between_eval_ai_01_and_rel_02_with_linux_requi
         assert requirement in rel02, requirement
     # It does not claim the deferred v0.3 items.
     assert "Does **not** deliver `REM-01`" in backlog[ai08_at:rel02_at]
+
+
+# ---------------------------------------------------------------------------
+# The pull-only (GHCR) path is documented as defined, NOT as working
+# ---------------------------------------------------------------------------
+
+
+def test_the_release_images_doc_is_linked_from_the_readme_and_the_guide() -> None:
+    assert RELEASE_DOC.is_file()
+    assert "(docs/release-images.md)" in read(README).split("## Documentation map")[1]
+    assert "](release-images.md)" in read(GUIDE)
+    assert (
+        "](docs/release-images.md)"
+        in read(README).split("## Quick start (Linux)")[1].split("## Project status")[0]
+    )
+
+
+def test_the_guides_pull_only_commands_use_the_real_file_variable_and_image_names() -> None:
+    guide = read(GUIDE)
+    section = guide.split("**Pull-only install", 1)[1].split("**What the `v0.2` packaging", 1)[0]
+    release_compose = read(RELEASE_COMPOSE)
+    assert "docker-compose.release.yml" in section
+    assert RELEASE_COMPOSE.is_file()
+    assert "TRUSTTABLE_VERSION" in section and "TRUSTTABLE_VERSION" in release_compose
+    assert "/api/v1/version" in section  # a real route (checked by the API-path test)
+    assert "latest" in section  # it says there is no `latest`
+    doc = read(RELEASE_DOC)
+    for image in (
+        "ghcr.io/voxelbound/trusttable-backend",
+        "ghcr.io/voxelbound/trusttable-frontend",
+    ):
+        assert image in doc and image in release_compose, image
+
+
+def test_the_pull_only_path_is_described_as_unpublished_and_unverified_everywhere() -> None:
+    """A later edit must not quietly turn 'defined' into 'works'."""
+    guide = read(GUIDE)
+    section = guide.split("**Pull-only install", 1)[1].split("**What the `v0.2` packaging", 1)[0]
+    for phrase in ("not yet published or verified", "no image exists yet", "unverified"):
+        assert phrase in section, phrase
+    doc = " ".join(read(RELEASE_DOC).replace(">", " ").split())  # undo Markdown line wrapping
+    assert "defined, not yet published or verified" in doc
+    assert "no image has been published" in doc
+    # The existing limitation statements are still true and still present.
+    assert "No TrustTable images are published" in guide
+    assert "not supported yet" in guide
+    quick_start = (
+        read(README).split("## Quick start (Linux)", 1)[1].split("## Project status", 1)[0]
+    )
+    assert "not supported yet" in quick_start
+    assert "no image has been published yet" in quick_start
+
+
+def test_the_release_doc_keeps_the_protected_steps_with_the_human_owner() -> None:
+    doc = read(RELEASE_DOC)
+    section = doc.split("## What stays a human action", 1)[1].split("## First-publish", 1)[0]
+    for phrase in ("Pushing the version tag", "Package visibility", "Removing a published tag"):
+        assert phrase in section, phrase
+    assert "no `latest` tag" in doc
+
+
+def test_the_release_workflow_is_public_text_free_of_private_delivery_provenance() -> None:
+    text = read(REPO_ROOT / ".github" / "workflows" / "release-images.yml")
+    for private in ("project-ops", ".eds", "WP-0", "FUP-0", "Claude", "Anthropic", "session_"):
+        assert private not in text, private
 
 
 # ---------------------------------------------------------------------------

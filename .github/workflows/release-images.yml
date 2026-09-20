@@ -1,0 +1,148 @@
+name: Release images
+
+# Builds the TrustTable backend and frontend images and, ONLY for a version tag
+# pushed by a person, publishes them to GHCR. Nothing is published by a pull
+# request, a branch push or a manual run: a manual run builds and checks only.
+#
+# Publishing is a protected release action. Pushing the tag is the explicit
+# act that authorizes it; this workflow never creates a tag or a release, and
+# never changes package visibility. See docs/release-images.md.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-images-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io/voxelbound
+
+jobs:
+  check-version:
+    name: Check the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require the tag to match the backend package version
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          package_version="$(python3 -c "import tomllib; print(tomllib.load(open('backend/pyproject.toml', 'rb'))['project']['version'])")"
+          if [ "$REF_TYPE" != "tag" ]; then
+            # A manual run builds only; it publishes nothing, so use the package version.
+            echo "version=${package_version}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          case "$REF_NAME" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "Tag '$REF_NAME' is not a version tag (vMAJOR.MINOR.PATCH)."; exit 1 ;;
+          esac
+          tag_version="${REF_NAME#v}"
+          if [ "$tag_version" != "$package_version" ]; then
+            echo "Tag version '$tag_version' does not match the backend package version '$package_version'."
+            echo "Bump backend/pyproject.toml (and uv.lock) to the release version before tagging."
+            exit 1
+          fi
+          echo "version=${tag_version}" >> "$GITHUB_OUTPUT"
+
+  images:
+    name: Build and publish (${{ matrix.image }})
+    needs: check-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        image: [backend, frontend]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR (tag pushes only)
+        if: github.ref_type == 'tag'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/trusttable-${{ matrix.image }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=${{ needs.check-version.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=TrustTable ${{ matrix.image }}
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - name: Build, and push for tags only
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.image }}
+          platforms: linux/amd64
+          push: ${{ github.ref_type == 'tag' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+
+  verify-anonymous-pull:
+    name: Verify the published images pull and start without credentials
+    if: github.ref_type == 'tag'
+    needs: [check-version, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No registry login on purpose: a package that is still private, or that
+      # was never published, must fail here rather than be assumed reachable.
+      - name: Pull both images anonymously
+        env:
+          TRUSTTABLE_VERSION: ${{ needs.check-version.outputs.version }}
+        run: docker compose -f docker-compose.release.yml pull
+
+      - name: Start the pull-only stack
+        env:
+          TRUSTTABLE_VERSION: ${{ needs.check-version.outputs.version }}
+        run: docker compose -f docker-compose.release.yml up -d --wait --wait-timeout 120
+
+      - name: Check backend, version and frontend
+        env:
+          TRUSTTABLE_VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          curl -fsS http://127.0.0.1:8000/api/v1/health/ready
+          reported="$(curl -fsS http://127.0.0.1:8000/api/v1/version | python3 -c "import json,sys; print(json.load(sys.stdin)['application_version'])")"
+          test "$reported" = "$TRUSTTABLE_VERSION"
+          curl -fsSI http://127.0.0.1:8080/ | head -n 1
+          curl -fsS http://127.0.0.1:8080/api/v1/version
+
+      - name: Stop the stack
+        if: always()
+        env:
+          TRUSTTABLE_VERSION: ${{ needs.check-version.outputs.version }}
+        run: docker compose -f docker-compose.release.yml down

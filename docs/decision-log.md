@@ -376,3 +376,24 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** does not reopen `D-034`/`D-035`/`D-036`/`D-037`/`D-038`/`D-039`; changes no detector, risk scoring, `analysis/service.py`, `Analysis.security_exposure` or `AnalysisState`; adds no dependency; does not implement `REM-01`, `RULE-01`/`RULE-02`, `REV-01` or `EXP-01`; publishes no image.
 
 **Decided by:** the product intent was set by the human owner, 2026-09-19. The technical design above (schema, single call, validation strategy, display derivation, documentation layout, container details) was selected under delegated implementation authority and was not chosen by the human owner.
+
+## D-041 — `REL-02` split into build, qualify and publish, and the shape of the GHCR release-image path
+
+**Decision:**
+
+1. **`REL-02` is delivered in three ordered steps**, not one package: (a) the repository-side path — a pull-only Compose file and a publish workflow, defined and tested but **not executed**; (b) the local-AI qualification, measured on baseline hardware; (c) the protected publish (version tag, package visibility) and the fresh-Linux-host verification, after which the install guide is updated to what actually passed. Step (a) does not complete `REL-02` and satisfies none of its four acceptance bullets by itself. The order lets measured timeout and reliability results settle configuration defaults before any image version exists.
+2. **Images and tags.** `ghcr.io/voxelbound/trusttable-backend` and `ghcr.io/voxelbound/trusttable-frontend` (GHCR requires lowercase), tagged with the version without the leading `v`. **No `latest` tag:** a pull-only install is always a specific release. `linux/amd64` only, the formally supported target; no arm64 image.
+3. **Pull-only Compose.** `docker-compose.release.yml` is a standalone twin of `docker-compose.yml` with `image:` instead of `build:`, and a required `TRUSTTABLE_VERSION` with no default. It is a separate file rather than an override, so a host needs nothing but the file and the images, and it cannot silently build. A test keeps the two files identical apart from where images come from.
+4. **Publishing is gated by a human act.** The workflow runs only for version tags (and manual dispatch, which builds without publishing); the registry login and the push are conditional on a tag; `packages: write` is granted only to the publish job (the workflow default is read-only); ref names reach scripts only through the environment. A tag must be `vMAJOR.MINOR.PATCH` and equal the backend package version, so the version a running backend reports is the tag it was installed from. Provenance and SBOM attestations are off: SBOM, container scanning and signing stay with the later security and release-artifact work (`DEC-002`'s deferral is unchanged).
+5. **Published-result verification without credentials.** After a tag publish, a job with no registry login pulls both images at the tag and starts the pull-only file, so a package left private is caught rather than assumed reachable.
+6. **Stays human-owned:** pushing the tag, package visibility, and removing a published tag. None is performed by automation.
+
+**Basis:** `D-040` documented that a GitHub/GHCR-only install is unsupported because the images are built from source, and made published images and a pull-only path `REL-02` acceptance requirements. The human owner chose the split and delegated the technical mechanisms.
+
+**Alternatives considered:** qualify the model first (retires a measurement risk earlier but delays deployability and does not change the packaging design); one package for everything (not atomically reviewable, and it would hold a pull request open across human-hardware waits); narrowing `REL-02` to the source-build install (reverses the 2026-09-19 direction that `v0.2` be deployable from GHCR); a Compose override file instead of a standalone twin (needs the source-build file present and can still build); a floating `latest` tag (not reproducible).
+
+**Residual limits, stated plainly.** The workflow and pull-only file are defined and statically and locally tested, but have never run against a real registry; the first real execution is the human-authorized publish. The pull-only file's runtime behavior is proven against locally built images, not published ones. Action versions are pinned by major tag, not by commit digest.
+
+**Explicit non-scope:** does not reopen `D-034`/`D-035`/`D-036`/`D-040`; changes no product code, dependency, `docker-compose.yml` or `ci.yml`; publishes nothing.
+
+**Decided by:** the split and its order were chosen by the human owner, 2026-09-20. The technical design above (registry and image naming, workflow structure, Compose layout, tag mechanics) was selected under delegated implementation authority and was not chosen by the human owner.
