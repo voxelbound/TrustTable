@@ -516,6 +516,18 @@ rather than inventing the path, and must not close until:
   a finding falls back to built-in guidance) and the per-finding latency and
   suitable `LLM_TIMEOUT_SECONDS` on baseline hardware — measured, not asserted.
 
+> **Annotation (2026-09-20, `docs/decision-log.md` D-041):** `REL-02` is delivered
+> in three ordered steps, so this item stays **open** until all three are done.
+> (1) *Repository-side path — defined, not executed:* `docker-compose.release.yml`
+> (pull-only, requires `TRUSTTABLE_VERSION`) and a tag-gated publish workflow
+> (`docs/release-images.md`), tested structurally and against locally built
+> images; this satisfies none of the four bullets above by itself, because no
+> image is published and no fresh host has been used. (2) *Local-AI
+> qualification* (the fourth bullet). (3) *Protected publish and fresh-host
+> verification* (the first three bullets), after which the guide is updated to
+> what actually passed. Publishing, tagging and package visibility stay with the
+> repository owner.
+
 # Complete manager workflow
 
 ## DB-01 — SQLAlchemy 2 persistence

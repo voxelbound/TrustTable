@@ -94,6 +94,12 @@ Deliver, in dependency order:
 > Linux guide on a fresh host and publishing images, rather than that
 > path being claimed earlier.
 
+> **Annotation (2026-09-20, `docs/decision-log.md` D-041):** `REL-02` is
+> delivered in three ordered steps — the repository-side pull-only Compose file
+> and tag-gated publish workflow (defined and tested, nothing published), then
+> the local-AI qualification, then the protected publish with a fresh-Linux-host
+> verification. `v0.2` is not release-qualified until all three are done.
+
 This is the first promoted portfolio release.
 
 ## v0.3 — Complete manager workflow

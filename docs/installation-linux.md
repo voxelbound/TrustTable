@@ -261,15 +261,38 @@ Face access at runtime.**
 - The containerized `llama.cpp` server image is likewise not part of the
   supported path here; `llama-server` is run on the host as described above.
 
-**What the `v0.2` packaging item (`REL-02`) must deliver and verify** (recorded
-in `docs/implementation-backlog.md` under `REL-02`): versioned backend and
-frontend images published to GHCR; a pull-only Compose path with no build step;
-an end-to-end run on a fresh Linux host with only GitHub/GHCR access and an
-offline-provisioned model, including the verification in §3.5; and this guide
-updated to the verified commands.
+**Pull-only install — defined in the repository, not yet published or verified**
+
+The repository now contains the pull-only path
+([`docs/release-images.md`](release-images.md)): `docker-compose.release.yml`,
+which runs published images with no build step, and a workflow that publishes
+them when a maintainer pushes a version tag. **Neither has been used against a
+real registry: no image exists yet, so these commands cannot work today.** Once
+a release is published they are:
+
+```sh
+git clone --branch v<version> --depth 1 https://github.com/voxelbound/trusttable.git
+cd trusttable
+TRUSTTABLE_VERSION=<version> docker compose -f docker-compose.release.yml up -d
+curl -s http://127.0.0.1:8000/api/v1/version
+```
+
+`TRUSTTABLE_VERSION` is required (there is no `latest`), and the version the
+backend reports equals it. Everything else in this guide — the `.env` file,
+`llama-server`, the verification in §3.5 — is unchanged; use
+`-f docker-compose.release.yml` on the `docker compose` commands. These commands
+are **unverified until a run on a fresh Linux host says otherwise**.
+
+**What the `v0.2` packaging item (`REL-02`) still has to deliver and verify**
+(recorded in `docs/implementation-backlog.md` under `REL-02`): the versioned
+backend and frontend images actually published to GHCR (a protected release
+action); an end-to-end run of the commands above on a fresh Linux host with only
+GitHub/GHCR access and an offline-provisioned model, including the verification
+in §3.5; and this guide updated to the verified commands.
 
 ## See also
 
+- [`docs/release-images.md`](release-images.md) — image names, tags and the publish workflow.
 - [`docs/local-development.md`](local-development.md) — native development, tests.
 - [`docs/configuration.md`](configuration.md) — every setting.
 - [`README.md`](../README.md) — project overview.
