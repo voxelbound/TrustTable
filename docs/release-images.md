@@ -52,9 +52,10 @@ come from.
    publishing. The ref name is passed to the script only through an environment
    variable, never interpolated into shell.
 2. **Build both images** (`linux/amd64`). The build runs for a manual run too,
-   but **only a tag push publishes**: the registry login and the push are both
-   conditional on the ref being a tag, and only this job holds
-   `packages: write` (the workflow's default permission is `contents: read`).
+   but **only the first attempt of a pushed version tag publishes**: the
+   registry login and the push are both conditional on the event being a `push`
+   of a tag with `run_attempt == 1`, and only this job holds `packages: write`
+   (the workflow's default permission is `contents: read`).
 3. **Verify the published images without credentials.** After a tag publish, a
    job with **no registry login** pulls both images at that tag, starts the
    pull-only Compose file, and checks backend health, that the reported version
@@ -62,8 +63,12 @@ come from.
    private, or was never published, fails here instead of being assumed
    reachable.
 
-Pull requests and branch pushes never publish. A manual run builds and checks
-only.
+Pull requests, branch pushes and manual runs never publish — **including a
+manual run started from a tag**, which is not a tag push. **A re-run never
+publishes either**: only the first attempt does, so a published version is never
+overwritten. The verification job is the exception that may be re-run, because
+it only pulls. If a publish fails part-way (one image pushed, the other not), the
+version is superseded by a new one rather than completed by a re-run.
 
 ## What stays a human action
 
@@ -76,8 +81,9 @@ performed by any workflow or automation, and each needs explicit authority:
   by default. If the anonymous-pull verification fails for that reason, making
   the package public is a repository-owner action taken in GitHub's package
   settings, after which the verification can be re-run.
-- **Removing a published tag.** Published tags are not removed as routine
-  recovery; a bad release is superseded by a new version.
+- **Removing or replacing a published tag.** Published tags are neither removed
+  nor overwritten as routine recovery (a re-run does not push, see above); a bad
+  or incomplete release is superseded by a new version.
 
 ## First-publish checklist
 
@@ -88,7 +94,8 @@ performed by any workflow or automation, and each needs explicit authority:
 4. Watch the workflow: check the version → build and publish → verify the
    anonymous pull.
 5. If the anonymous pull fails because the packages are private, change their
-   visibility (protected action) and re-run the verification job.
+   visibility (protected action) and re-run only the verification job (it
+   re-runs safely; nothing is pushed).
 6. On a fresh Linux host that can reach only GitHub and GHCR, follow
    [`installation-linux.md`](installation-linux.md) with the published version
    and record the result; update the guide to what actually passed.

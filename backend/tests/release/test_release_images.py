@@ -181,15 +181,95 @@ def test_only_the_publish_job_can_write_packages() -> None:
     assert "check-version" not in granted  # inherits the workflow's read-only default
 
 
-def test_nothing_is_pushed_unless_the_ref_is_a_tag() -> None:
+# Publishing needs a version tag that a person PUSHED, on its FIRST attempt. A manual run
+# started from a tag ref is not a push, and a re-run has run_attempt > 1: neither may
+# publish, so a published version is never overwritten. The verification job may be
+# re-run (after a package's visibility is changed), so it has no attempt condition.
+PUBLISH_GATE = "github.event_name == 'push' && github.ref_type == 'tag' && github.run_attempt == 1"
+VERIFY_GATE = "github.event_name == 'push' && github.ref_type == 'tag'"
+
+
+def gate_allows(gate: str, **context: str | int) -> bool:
+    """Evaluate the plain `github.x == 'y' && github.z == 1` gates this workflow uses.
+
+    Deliberately supports nothing else: a gate that cannot be parsed fails loudly rather
+    than being silently assumed safe.
+    """
+    for clause in gate.split(" && "):
+        match = re.fullmatch(r"github\.(\w+) == (?:'([^']*)'|(\d+))", clause.strip())
+        assert match, f"unsupported gate clause: {clause!r}"
+        expected: str | int = match.group(2) if match.group(2) is not None else int(match.group(3))
+        if context[match.group(1)] != expected:
+            return False
+    return True
+
+
+def test_publishing_is_gated_on_the_first_attempt_of_a_tag_push_in_both_places() -> None:
     images = workflow()["jobs"]["images"]
     build = next(s for s in steps(images) if str(s.get("uses", "")).startswith("docker/build-push"))
-    assert build["with"]["push"] == "${{ github.ref_type == 'tag' }}"
+    assert build["with"]["push"] == "${{ " + PUBLISH_GATE + " }}"
     login = next(s for s in steps(images) if str(s.get("uses", "")).startswith("docker/login"))
-    assert login["if"] == "github.ref_type == 'tag'"
+    assert login["if"] == PUBLISH_GATE
     # No other step in the publish job can push (e.g. a hand-written `docker push`).
     for step in steps(images):
         assert "docker push" not in str(step.get("run", ""))
+
+
+@pytest.mark.parametrize(
+    ("event_name", "ref_type", "run_attempt", "publishes"),
+    [
+        ("push", "tag", 1, True),
+        ("push", "tag", 2, False),  # a re-run must never overwrite a published version
+        ("workflow_dispatch", "tag", 1, False),  # a manual run from a tag ref is not a push
+        ("workflow_dispatch", "tag", 2, False),
+        ("workflow_dispatch", "branch", 1, False),
+        ("push", "branch", 1, False),
+        ("pull_request", "branch", 1, False),
+        ("pull_request", "tag", 1, False),
+    ],
+)
+def test_the_publish_gate_over_every_event_ref_and_attempt(
+    event_name: str, ref_type: str, run_attempt: int, publishes: bool
+) -> None:
+    context: dict[str, str | int] = {
+        "event_name": event_name,
+        "ref_type": ref_type,
+        "run_attempt": run_attempt,
+    }
+    assert gate_allows(PUBLISH_GATE, **context) is publishes
+
+
+def test_the_gate_test_would_catch_the_ref_type_only_gate_it_replaced() -> None:
+    """Characterization: the earlier gate published on a manual run started from a tag."""
+    old_gate = "github.ref_type == 'tag'"
+    context: dict[str, str | int] = {
+        "event_name": "workflow_dispatch",
+        "ref_type": "tag",
+        "run_attempt": 1,
+    }
+    assert gate_allows(old_gate, **context) is True  # the defect
+    assert gate_allows(PUBLISH_GATE, **context) is False  # the fix
+
+
+@pytest.mark.parametrize(
+    ("event_name", "ref_type", "run_attempt", "verifies"),
+    [
+        ("push", "tag", 1, True),
+        ("push", "tag", 2, True),  # re-runnable after a package's visibility is changed
+        ("workflow_dispatch", "tag", 1, False),
+        ("push", "branch", 1, False),
+        ("pull_request", "branch", 1, False),
+    ],
+)
+def test_the_verification_gate_over_every_event_ref_and_attempt(
+    event_name: str, ref_type: str, run_attempt: int, verifies: bool
+) -> None:
+    context: dict[str, str | int] = {
+        "event_name": event_name,
+        "ref_type": ref_type,
+        "run_attempt": run_attempt,
+    }
+    assert gate_allows(VERIFY_GATE, **context) is verifies
 
 
 def test_images_are_amd64_only_with_no_attestations_and_no_floating_tag() -> None:
@@ -240,6 +320,7 @@ def test_the_ref_name_reaches_the_version_check_only_through_the_environment() -
     check = workflow()["jobs"]["check-version"]
     step = next(s for s in steps(check) if s.get("id") == "version")
     assert step["env"] == {
+        "EVENT_NAME": "${{ github.event_name }}",
         "REF_TYPE": "${{ github.ref_type }}",
         "REF_NAME": "${{ github.ref_name }}",
     }
@@ -250,9 +331,9 @@ def test_the_ref_name_reaches_the_version_check_only_through_the_environment() -
 # ---------------------------------------------------------------------------
 
 
-def test_the_verification_job_runs_only_for_tags_after_publishing_and_never_logs_in() -> None:
+def test_the_verification_job_runs_only_for_tag_pushes_after_publishing_and_never_logs_in() -> None:
     verify = workflow()["jobs"]["verify-anonymous-pull"]
-    assert verify["if"] == "github.ref_type == 'tag'"
+    assert verify["if"] == VERIFY_GATE
     assert set(verify["needs"]) == {"check-version", "images"}
     for step in steps(verify):
         assert "login" not in str(step.get("uses", "")).lower(), step
@@ -277,7 +358,12 @@ def version_check_script() -> str:
 
 
 def run_version_check(
-    tmp_path: Path, *, ref_type: str, ref_name: str, package_version: str = "0.2.0"
+    tmp_path: Path,
+    *,
+    ref_type: str,
+    ref_name: str,
+    package_version: str = "0.2.0",
+    event_name: str = "push",
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     (tmp_path / "backend").mkdir(exist_ok=True)
     (tmp_path / "backend" / "pyproject.toml").write_text(
@@ -291,6 +377,7 @@ def run_version_check(
         cwd=tmp_path,
         env={
             "PATH": os.environ["PATH"],
+            "EVENT_NAME": event_name,
             "REF_TYPE": ref_type,
             "REF_NAME": ref_name,
             "GITHUB_OUTPUT": str(output),
@@ -340,7 +427,34 @@ def test_a_manual_run_on_a_branch_only_reports_the_package_version(tmp_path: Pat
     assert output.read_text(encoding="utf-8").strip() == "version=0.9.9"
 
 
-def test_the_repository_never_pushes_by_default_for_a_branch_ref() -> None:
-    """A branch run reports a version but `images` still cannot push: the two are independent."""
+@pytest.mark.parametrize("ref_name", ["v9.9.9", "latest", "v0.2.0-rc.1"])
+def test_a_manual_run_started_from_a_tag_builds_only_and_enforces_nothing(
+    tmp_path: Path, ref_name: str
+) -> None:
+    """The reviewer's counterexample: a dispatch on a tag ref is not a publish, so it neither
+    needs the tag to match nor reports anything but the package version."""
+    result, output = run_version_check(
+        tmp_path, ref_type="tag", ref_name=ref_name, event_name="workflow_dispatch"
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert output.read_text(encoding="utf-8").strip() == "version=0.2.0"
+
+
+def test_a_hostile_ref_name_on_a_manual_run_is_still_never_executed(tmp_path: Path) -> None:
+    marker = tmp_path / "pwned"
+    result, _ = run_version_check(
+        tmp_path,
+        ref_type="tag",
+        ref_name=f"v0.2.0$(touch {marker})",
+        event_name="workflow_dispatch",
+    )
+    assert result.returncode == 0
+    assert not marker.exists()
+
+
+def test_the_same_gates_appear_verbatim_in_the_workflow_text() -> None:
+    """The gate constants above are what the workflow says, not a parallel invention."""
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert text.count("github.ref_type == 'tag'") >= 3  # login, push, verification job
+    assert text.count(PUBLISH_GATE) == 2  # the login step and the push input
+    assert text.count(VERIFY_GATE) >= 3  # the same prefix, in the verify job and both publish gates
+    assert "github.run_attempt" in text

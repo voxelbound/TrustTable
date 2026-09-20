@@ -1,12 +1,19 @@
 name: Release images
 
-# Builds the TrustTable backend and frontend images and, ONLY for a version tag
-# pushed by a person, publishes them to GHCR. Nothing is published by a pull
-# request, a branch push or a manual run: a manual run builds and checks only.
+# Builds the TrustTable backend and frontend images and publishes them to GHCR
+# ONLY for the first attempt of a version-tag push by a person. Nothing is
+# published by a pull request, a branch push, a manual run (even one started
+# from a tag) or a re-run: those build and check only, so a published version
+# is never overwritten.
 #
 # Publishing is a protected release action. Pushing the tag is the explicit
 # act that authorizes it; this workflow never creates a tag or a release, and
 # never changes package visibility. See docs/release-images.md.
+#
+# The publish gate is written out in full in the login step and the push
+# input below (it is the same expression in both); the verification job uses
+# the same gate without the attempt condition so it can be re-run after a
+# package's visibility is changed. A test pins all three.
 
 on:
   push:
@@ -37,12 +44,14 @@ jobs:
       - name: Require the tag to match the backend package version
         id: version
         env:
+          EVENT_NAME: ${{ github.event_name }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           package_version="$(python3 -c "import tomllib; print(tomllib.load(open('backend/pyproject.toml', 'rb'))['project']['version'])")"
-          if [ "$REF_TYPE" != "tag" ]; then
-            # A manual run builds only; it publishes nothing, so use the package version.
+          if [ "$EVENT_NAME" != "push" ] || [ "$REF_TYPE" != "tag" ]; then
+            # Only a pushed tag can publish. A manual run (even from a tag) builds
+            # only, so use the package version and enforce nothing.
             echo "version=${package_version}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -76,8 +85,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR (tag pushes only)
-        if: github.ref_type == 'tag'
+      - name: Log in to GHCR (first attempt of a tag push only)
+        if: github.event_name == 'push' && github.ref_type == 'tag' && github.run_attempt == 1
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -97,12 +106,12 @@ jobs:
             org.opencontainers.image.title=TrustTable ${{ matrix.image }}
             org.opencontainers.image.licenses=Apache-2.0
 
-      - name: Build, and push for tags only
+      - name: Build, and push only on the first attempt of a tag push
         uses: docker/build-push-action@v6
         with:
           context: ./${{ matrix.image }}
           platforms: linux/amd64
-          push: ${{ github.ref_type == 'tag' }}
+          push: ${{ github.event_name == 'push' && github.ref_type == 'tag' && github.run_attempt == 1 }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
@@ -110,7 +119,7 @@ jobs:
 
   verify-anonymous-pull:
     name: Verify the published images pull and start without credentials
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: [check-version, images]
     runs-on: ubuntu-latest
     permissions:

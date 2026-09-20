@@ -296,8 +296,21 @@ def test_the_pull_only_path_is_described_as_unpublished_and_unverified_everywher
 def test_the_release_doc_keeps_the_protected_steps_with_the_human_owner() -> None:
     doc = read(RELEASE_DOC)
     section = doc.split("## What stays a human action", 1)[1].split("## First-publish", 1)[0]
-    for phrase in ("Pushing the version tag", "Package visibility", "Removing a published tag"):
+    for phrase in (
+        "Pushing the version tag",
+        "Package visibility",
+        "Removing or replacing a published tag",
+    ):
         assert phrase in section, phrase
+    # The publish gate is stated exactly as the workflow implements it (a test in
+    # tests/release pins the workflow side): a manual run from a tag and a re-run never publish.
+    flat = " ".join(doc.replace(">", " ").split())
+    for phrase in (
+        "only the first attempt of a pushed version tag publishes",
+        "including a manual run started from a tag",
+        "A re-run never publishes either",
+    ):
+        assert phrase in flat, phrase
     assert "no `latest` tag" in doc
 
 
