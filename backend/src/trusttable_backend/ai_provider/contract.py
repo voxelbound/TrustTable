@@ -22,6 +22,7 @@ from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 from ..ai_boundary.envelope import PromptEnvelope
+from ..ai_boundary.output_contract import OutputContract
 
 
 class AIOperation(StrEnum):
@@ -70,12 +71,15 @@ class ProviderRequest:
     rejected attempt (`docs/product-requirements.md` §12's "may be
     retried with validation feedback") — the retry *loop* itself is a
     future orchestration package's responsibility, not this interface.
+    `output_contract`, when set (`AI-08`), asks the provider to produce
+    that structured output instead of the legacy generic shape.
     """
 
     operation: AIOperation
     envelope: PromptEnvelope
     known_numeric_facts: Mapping[str, float]
     retry_feedback: str | None = None
+    output_contract: OutputContract | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +154,7 @@ class AIProvider(Protocol):
 __all__ = [
     "AIOperation",
     "AIProvider",
+    "OutputContract",
     "ProviderConnectionError",
     "ProviderError",
     "ProviderHealth",

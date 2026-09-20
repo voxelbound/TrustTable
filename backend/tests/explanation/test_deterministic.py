@@ -18,8 +18,10 @@ from trusttable_backend.detectors.contract import (
     SecurityExposureState,
 )
 from trusttable_backend.detectors.engine import run_detectors
+from trusttable_backend.domain.explanation import ImpactBasis
 from trusttable_backend.domain.value_objects import ColumnReference, Provenance, Severity
 from trusttable_backend.explanation.deterministic import build_deterministic_explanation
+from trusttable_backend.explanation.guidance import build_deterministic_guidance
 from trusttable_backend.parsers.csv_parser import parse_csv
 from trusttable_backend.profiling.metrics import compute_dataset_profile
 
@@ -88,6 +90,31 @@ def test_deterministic_explanation_non_empty_and_severity_framed_for_every_sever
         explanation = build_deterministic_explanation(make_finding(severity=severity))
         assert explanation.narrative != ""
         assert severity.value in explanation.narrative.lower()
+
+
+def test_deterministic_explanation_carries_all_four_sections_without_any_ai() -> None:
+    # AI-08: with AI disabled the same four sections are still useful.
+    explanation = build_deterministic_explanation(make_finding())
+
+    assert explanation.narrative
+    assert explanation.business_impact
+    assert all(item.basis is ImpactBasis.ASSUMPTION for item in explanation.business_impact)
+    assert explanation.remediation
+    assert explanation.validation_rule is not None
+    assert explanation.validation_rule.status == "proposed"
+    assert explanation.provenance is Provenance.DETERMINISTIC_FALLBACK
+    assert explanation.provider_name is None
+
+
+def test_deterministic_sections_match_the_guidance_table_exactly() -> None:
+    finding = make_finding(detector_id="validity.future_dates")
+
+    explanation = build_deterministic_explanation(finding)
+    guidance = build_deterministic_guidance(finding)
+
+    assert explanation.business_impact == guidance.business_impact
+    assert explanation.remediation == guidance.remediation
+    assert explanation.validation_rule == guidance.validation_rule
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,13 @@
 import { Link, useParams } from 'react-router'
+import { AiProvenance } from '../../components/provenance/AiProvenance'
+import type { AiCallStatus } from '../../components/provenance/aiProvenanceLabels'
 import { FindingSeverityBadge } from '../../components/provenance/FindingSeverityBadge'
 import { PromptInjectionWarning } from '../../components/provenance/PromptInjectionWarning'
+import {
+  BusinessImpactSection,
+  RemediationSection,
+  ValidationRuleSection,
+} from './FindingGuidanceSections'
 import { RowContext } from './RowContext'
 import {
   useFindingDetail,
@@ -11,48 +18,23 @@ import {
 const PROMPT_INJECTION_CATEGORY = 'ai_processing_security'
 const REPRESENTATIVE_SAMPLE_TYPE = 'representative_sample'
 
-/** `ai_call_status`'s closed set (`WP-065`, defect fix). Kept as a
- * small local union rather than importing the generated enum type, to
- * mirror this file's existing informal-typing convention for other
- * response string fields. */
-type AiCallStatus =
-  | 'not_configured'
-  | 'attempted_accepted'
-  | 'attempted_rejected'
-  | 'attempted_provider_error'
-
-/** Describes this specific request's own AI-call outcome
- * (`ai_call_status`), deliberately never a claim about whether AI is
- * used anywhere else on the screen or on this analysis in general —
- * that ambiguity, and its resulting contradiction with
- * `PromptInjectionWarning`'s unrelated `security_exposure`-derived
- * fields, is exactly what `WP-065` fixes. See
- * `docs/decision-log.md` D-038. */
-function explanationCallStatusLabel(status: AiCallStatus): string {
-  switch (status) {
-    case 'attempted_accepted':
-      return ''
-    case 'attempted_rejected':
-      return 'an AI attempt for this explanation did not produce a usable result'
-    case 'attempted_provider_error':
-      return 'an AI attempt for this explanation could not complete'
-    case 'not_configured':
-    default:
-      return 'no AI provider is configured for this explanation'
-  }
-}
-
 /** The Finding detail screen (`docs/ui-specification.md` §4.7), plus the
  * dedicated Prompt-injection warning presentation (§4.8) for findings in
  * the `ai_processing_security` category (`UI-01`, extending — consumes
  * `WP-027`'s `GET .../findings/{finding_id}` and `.../evidence` routes).
  *
- * "Possible business impact", "Remediation", "Validation rule", and
- * "Review controls" render the same disclosed not-yet-available pattern
- * `OverviewRoute.tsx` already established for its own unbuilt sections —
- * `REM-01`/`RULE-01`/`REV-01` are later, unimplemented backlog items;
- * the backend does not compute this content yet (`WP-027`'s own Recorded
- * assumption 4), so no placeholder value is fabricated here either.
+ * **`AI-08` (`docs/decision-log.md` D-040):** Explanation, Possible
+ * business impact, Remediation and Validation rule are one coherent
+ * analysis, all from the same `GET .../explanation` response — a single
+ * validated AI response when one was accepted, TrustTable's deterministic
+ * built-in guidance otherwise, never a placeholder. Each kind of statement
+ * stays distinguishable: deterministic observation/evidence above, AI
+ * interpretation (labelled with a human-readable identity, never a
+ * filesystem path), conditional vs. context-informed potential impact (never
+ * "evidence-backed"), and a
+ * *proposed* rule that is explicitly not active. "Review controls" is
+ * still the disclosed not-yet-available section (`REV-01`, a later
+ * backlog item).
  *
  * **`WP-065` (defect fix):** Technical metadata's former generic "AI
  * model enabled" row (sourced from `finding.security_exposure`) was
@@ -60,11 +42,11 @@ function explanationCallStatusLabel(status: AiCallStatus): string {
  * finding, the Explanation section above could show a genuinely
  * accepted AI interpretation, and `security_exposure` is in fact a
  * narrow, prompt-injection-specific, always-`False`-today signal (see
- * `docs/decision-log.md` D-038). The Explanation section's own
- * provenance line is now the single accurate place this screen
- * discloses per-request AI-call status; `PromptInjectionWarning` below
- * remains the accurate place for this finding's own raw-content
- * exposure, reworded for the same reason. */
+ * `docs/decision-log.md` D-038). The provenance line under Explanation is
+ * the single accurate place this screen discloses per-request AI-call
+ * status; `PromptInjectionWarning` below remains the accurate place for
+ * this finding's own raw-content exposure, reworded for the same
+ * reason. */
 export function FindingDetailRoute() {
   const { analysisId, findingId } = useParams<{
     analysisId: string
@@ -193,17 +175,11 @@ export function FindingDetailRoute() {
           <p className="mt-1 text-sm text-slate-800 dark:text-slate-200">
             {explanation.narrative}
           </p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {explanation.provenance === 'ai_interpretation'
-              ? 'AI interpretation'
-              : 'Deterministic (no AI)'}
-            {explanation.provider_name && explanation.model_identifier
-              ? ` — ${explanation.provider_name} (${explanation.model_identifier})`
-              : null}
-            {explanation.provenance !== 'ai_interpretation'
-              ? ` — ${explanationCallStatusLabel(explanation.ai_call_status as AiCallStatus)}`
-              : null}
-          </p>
+          <AiProvenance
+            provenance={explanation.provenance}
+            aiProvenance={explanation.ai_provenance}
+            aiCallStatus={explanation.ai_call_status as AiCallStatus}
+          />
           {explanation.evidence_sent_to_model && (
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               This finding&apos;s evidence was sent to the model for this
@@ -217,17 +193,12 @@ export function FindingDetailRoute() {
         </section>
       )}
 
-      <section aria-labelledby="impact-heading">
-        <h2
-          id="impact-heading"
-          className="text-xl font-semibold text-slate-900 dark:text-slate-100"
-        >
-          Possible business impact
-        </h2>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Not yet available — business-impact analysis is a later backlog item.
-        </p>
-      </section>
+      {explanation && (
+        <BusinessImpactSection
+          statements={explanation.business_impact}
+          aiAssisted={explanation.provenance === 'ai_interpretation'}
+        />
+      )}
 
       {isPromptInjection ? (
         <section aria-labelledby="warning-heading">
@@ -305,31 +276,18 @@ export function FindingDetailRoute() {
         />
       )}
 
-      <section aria-labelledby="remediation-heading">
-        <h2
-          id="remediation-heading"
-          className="text-xl font-semibold text-slate-900 dark:text-slate-100"
-        >
-          Remediation
-        </h2>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Not yet available — remediation recommendations are a later backlog
-          item.
-        </p>
-      </section>
-
-      <section aria-labelledby="rule-heading">
-        <h2
-          id="rule-heading"
-          className="text-xl font-semibold text-slate-900 dark:text-slate-100"
-        >
-          Validation rule
-        </h2>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Not yet available — proposed validation rules are a later backlog
-          item.
-        </p>
-      </section>
+      {explanation && (
+        <>
+          <RemediationSection
+            steps={explanation.remediation}
+            aiAssisted={explanation.provenance === 'ai_interpretation'}
+          />
+          <ValidationRuleSection
+            rule={explanation.validation_rule}
+            aiAssisted={explanation.provenance === 'ai_interpretation'}
+          />
+        </>
+      )}
 
       <section aria-labelledby="review-heading">
         <h2

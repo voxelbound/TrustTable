@@ -128,6 +128,20 @@ Mitigations:
 - bounded retries
 - deterministic fallback
 - provenance labels
+- structured, versioned finding-analysis output validated role by role,
+  with impact statements presented only as potential impacts whose label
+  (conditional, or informed by confirmed context) is derived by TrustTable
+  rather than chosen by the model, and numbers grounded in the supplied
+  evidence or confirmed context (`AI-08`, `docs/decision-log.md` D-040)
+- remediation and proposed rules are advisory text that may not claim data
+  was changed or a rule activated; nothing AI produces is executed or
+  applied
+- only user-confirmed or corrected context is ever sent to a model
+- provider-bound evidence is an allow-list of computed facts: no dataset
+  cell value, and no evidence id derived from one, is sent to a model
+  (`AI-08`, D-040); column names are sent as untrusted metadata data,
+  never as instructions, and a hostile header cannot change a finding,
+  its evidence, severity or the trust score
 
 ### 3.5 Local data leakage
 
@@ -136,6 +150,9 @@ Mitigations:
 - local-only inference runtime by default (specific runtime open —
   see `docs/decision-log.md` D-007, D-033)
 - clear provider and model-location status
+- no filesystem path (model file, runtime or configuration location) is
+  returned by the API or shown in the UI: only a sanitized final path
+  segment and human-readable labels (`AI-08`, D-040)
 - sample sending disabled
 - no telemetry requirement
 - safe logs

@@ -206,6 +206,7 @@ export function makeFindingExplanationResponse(
     provenance: 'deterministic_fallback',
     provider_name: null,
     model_identifier: null,
+    ai_provenance: null,
     ai_call_status: 'not_configured',
     evidence_sent_to_model: false,
     confirmed_context_sent_to_model: false,
@@ -213,6 +214,29 @@ export function makeFindingExplanationResponse(
     referenced_columns: [
       { original_name: 'order_date', internal_key: 'order_date', ordinal: 3 },
     ],
+    business_impact: [
+      {
+        statement:
+          'Dates later than the analysis date may be typing errors and can distort time-based reports.',
+        basis: 'assumption',
+        evidence_ids: ['validity.future_dates.evidence.order_date'],
+        context_fields: [],
+        assumption:
+          'the column is meant to record events that have already happened',
+      },
+    ],
+    remediation: [
+      'Check the flagged rows and correct any mistyped dates in the source.',
+    ],
+    validation_rule: {
+      rule_type: 'date_range',
+      columns: [
+        { original_name: 'order_date', internal_key: 'order_date', ordinal: 3 },
+      ],
+      description:
+        "Dates in 'order_date' should not be later than the date the data is analyzed.",
+      status: 'proposed',
+    },
     ...overrides,
   }
 }

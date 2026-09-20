@@ -16,47 +16,73 @@ only.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
-from ..domain.evidence import Evidence, EvidenceType
+from ..domain.evidence import Evidence
 from .envelope import PromptEnvelope
 
 #: Bumped whenever the fixed instructions text or payload shape changes
 #: in a way a future consumer needs to distinguish.
 PROMPT_TEMPLATE_VERSION = "1"
 
-_RAW_DERIVED_STRUCTURED_PAYLOAD_FIELDS: dict[EvidenceType, frozenset[str]] = {
-    EvidenceType.SECURITY_PATTERN: frozenset({"truncated_sample_prefix"}),
-}
-"""Per-`EvidenceType` `structured_payload` keys known to carry a raw or
-raw-derived dataset excerpt rather than a bounded, purely computed fact
-(`WP-065` r4, defect fix; `docs/decision-log.md` D-038's extended axis-4
-requirement).
+#: The only `structured_payload` keys whose *string* values may be sent to a
+#: provider, each a closed, detector-authored vocabulary rather than dataset
+#: content: `matched_pattern_categories` (fixed prompt-injection family ids)
+#: and `reference_date` (an ISO date derived from the analysis clock). Every
+#: other string in a payload is withheld — see `serialize_evidence_for_provider`.
+_SAFE_STRING_PAYLOAD_KEYS: Final[frozenset[str]] = frozenset(
+    {"matched_pattern_categories", "reference_date"}
+)
 
-`detectors.security.PossiblePromptInjectionDetector` deliberately
-carries `truncated_sample_prefix` (an up-to-80-character literal excerpt
-of the actual flagged cell value) on its `SECURITY_PATTERN` evidence —
-a legitimate, already-documented local field
-(`docs/domain-model.md` §15's "escaped, truncated display sample";
-`docs/security-threat-model.md` §5) that the frontend deliberately never
-renders (`PromptInjectionWarning`'s own docstring, `WP-027`/`WP-028`,
-pending a future `PRIV-01` redaction package). It was never intended to
-leave the backend's own evidence store, but nothing previously stopped
-it from being forwarded to an AI provider as if it were ordinary
-computed evidence — contradicting this module's own trust-boundary
-invariant (untrusted content is data, never sent as `computed_evidence`)
-and this project's disclosed AI-exposure claims (D-038).
+#: A permitted string value is a single short token with no whitespace, so
+#: even an allow-listed key cannot carry a sentence (an instruction).
+_SAFE_STRING_TOKEN_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
 
-This module is the single universal serialization seam every real
-`AIProvider` implementation calls through (`ai_provider.llama_cpp`, the
-benchmark-only HTTP adapter) — the narrowest point that protects every
-current and future provider uniformly, without mutating the canonical
-local `Evidence` object (`detectors.security` itself is unchanged) and
-without routing this content through `untrusted_dataset_samples` (the
-flagged raw content is not sent at all — not merely relabeled).
-Extend this mapping, never inline ad hoc field-name checks, if a future
-detector's evidence ever needs the same treatment."""
+
+def _computed_fact(value: object, *, strings_allowed: bool) -> tuple[bool, object]:
+    """Whether `value` is a computed fact safe to send, and its JSON form.
+
+    Numbers, booleans and `None` always are. A string is only when its key
+    was allow-listed and it is a bare token. Sequences and mappings are only
+    when *every* element is: one dataset-derived string anywhere inside drops
+    the whole field, never a partial copy. A nested mapping's **keys** are
+    strings too — a key can be a raw cell value (for example a value-count
+    table keyed by the values counted) — so they pass the same gate as a
+    string value: they are only kept under an allow-listed field, and only as
+    bare tokens. A nested mapping under any other field is withheld whole.
+    """
+    if value is None or isinstance(value, bool | int | float):
+        return True, value
+    if isinstance(value, str):
+        ok = strings_allowed and _SAFE_STRING_TOKEN_RE.match(value) is not None
+        return ok, value
+    if isinstance(value, list | tuple):
+        items: list[object] = []
+        for element in value:
+            keep, converted = _computed_fact(element, strings_allowed=strings_allowed)
+            if not keep:
+                return False, None
+            items.append(converted)
+        return True, items
+    if isinstance(value, Mapping):
+        mapping: dict[str, object] = {}
+        for key, element in value.items():
+            if not (
+                strings_allowed
+                and isinstance(key, str)
+                and _SAFE_STRING_TOKEN_RE.match(key) is not None
+            ):
+                return False, None
+            keep, converted = _computed_fact(element, strings_allowed=strings_allowed)
+            if not keep:
+                return False, None
+            mapping[key] = converted
+        return True, mapping
+    return False, None
+
 
 _SYSTEM_INSTRUCTIONS_PREAMBLE = (
     "You are given verified deterministic evidence and a separate "
@@ -81,24 +107,51 @@ class SafePrompt:
     data_payload: dict[str, Any]
 
 
-def _serialize_evidence(evidence: Evidence) -> dict[str, Any]:
-    """Serialize `evidence` for the AI-bound `computed_evidence` payload,
-    redacting any `structured_payload` key `_RAW_DERIVED_STRUCTURED_
-    PAYLOAD_FIELDS` names for this evidence's own `evidence_type`
-    (`WP-065` r4) — the canonical `evidence.structured_payload` object
-    itself is never mutated; only this function's own returned copy
-    omits the redacted keys.
+def serialize_evidence_for_provider(evidence: Evidence) -> dict[str, Any]:
+    """Serialize `evidence` for the AI-bound `computed_evidence` payload —
+    **exactly what a provider is allowed to see**, and therefore also the
+    only thing a model's output may be grounded in (`AI-08`'s validator
+    builds its grounding corpus from this function, not from the canonical
+    evidence).
+
+    `structured_payload` is forwarded as an **allow-list of computed
+    facts** (`AI-08`, `docs/decision-log.md` D-040, superseding `WP-065`
+    r4's block-list): numbers, booleans and `None`, plus a string only for
+    a key in `_SAFE_STRING_PAYLOAD_KEYS` and only as a bare token. Any
+    other string — for example a detector's `distinct_casings` (the raw
+    cell values that differ only in casing) or a prompt-injection
+    finding's `truncated_sample_prefix` (a raw excerpt of the flagged
+    cell) — is withheld, and one such string anywhere inside a field
+    withholds the whole field. This fails closed: a string field a future
+    detector adds stays invisible to every provider until it is
+    deliberately allow-listed, rather than leaking until someone notices.
+
+    The canonical `evidence.structured_payload` is never mutated; only
+    this function's returned copy differs. Column names (dataset metadata)
+    still appear, in `display_safe_summary` and `affected_columns`, because
+    the model must be able to name and reference columns; they are sent as
+    data in the untrusted-data payload, never in system instructions.
     """
-    redacted_keys = _RAW_DERIVED_STRUCTURED_PAYLOAD_FIELDS.get(evidence.evidence_type, frozenset())
-    structured_payload = {
-        key: value for key, value in evidence.structured_payload.items() if key not in redacted_keys
-    }
+    structured_payload: dict[str, Any] = {}
+    for key, value in evidence.structured_payload.items():
+        if _SAFE_STRING_TOKEN_RE.match(key) is None:
+            continue
+        keep, converted = _computed_fact(value, strings_allowed=key in _SAFE_STRING_PAYLOAD_KEYS)
+        if keep:
+            structured_payload[key] = converted
     return {
         "evidence_id": evidence.evidence_id,
         "evidence_type": evidence.evidence_type.value,
         "calculation_version": evidence.calculation_version,
         "structured_payload": structured_payload,
         "display_safe_summary": evidence.display_safe_summary,
+        # `AI-08`: the model is later held to `referenced_columns` being
+        # real column keys and to numeric claims matching supplied counts,
+        # so it must be told which columns this evidence covers and how
+        # many rows it affects. Both are computed facts (a count and the
+        # column keys already present in the summary), never row content.
+        "affected_columns": [column.internal_key for column in evidence.affected_columns],
+        "affected_row_count": len(evidence.affected_row_references),
     }
 
 
@@ -112,17 +165,19 @@ def build_safe_prompt(envelope: PromptEnvelope) -> SafePrompt:
     example shows: `task`, `computed_evidence`, `confirmed_context`,
     `untrusted_dataset_samples`.
 
-    `computed_evidence` entries are built via `_serialize_evidence`,
-    which redacts any known raw-derived `structured_payload` field for
-    the evidence's own type (`WP-065` r4) — see that function's and
-    `_RAW_DERIVED_STRUCTURED_PAYLOAD_FIELDS`'s own docstrings. This is
-    the only content transformation this module performs; every other
-    field is forwarded unchanged.
+    `computed_evidence` entries are built via
+    `serialize_evidence_for_provider`, which forwards `structured_payload`
+    as an allow-list of computed facts and withholds every dataset-derived
+    string (`WP-065` r4, superseded by `AI-08`'s fail-closed allow-list) —
+    see that function's docstring. This is the only content transformation
+    this module performs; every other field is forwarded unchanged.
     """
     system_instructions = f"{_SYSTEM_INSTRUCTIONS_PREAMBLE}\n\nTask: {envelope.task}"
     data_payload: dict[str, Any] = {
         "task": envelope.task,
-        "computed_evidence": [_serialize_evidence(e) for e in envelope.computed_evidence],
+        "computed_evidence": [
+            serialize_evidence_for_provider(e) for e in envelope.computed_evidence
+        ],
         "confirmed_context": dict(envelope.confirmed_context),
         "untrusted_dataset_samples": [
             {"column": sample.column.internal_key, "value": sample.value}
@@ -132,4 +187,9 @@ def build_safe_prompt(envelope: PromptEnvelope) -> SafePrompt:
     return SafePrompt(system_instructions=system_instructions, data_payload=data_payload)
 
 
-__all__ = ["PROMPT_TEMPLATE_VERSION", "SafePrompt", "build_safe_prompt"]
+__all__ = [
+    "PROMPT_TEMPLATE_VERSION",
+    "SafePrompt",
+    "build_safe_prompt",
+    "serialize_evidence_for_provider",
+]

@@ -30,10 +30,16 @@ future caller (this module does not import `config.py` itself --
 existing constraint); it is registered in `ai_provider.factory` and
 re-exported from `ai_provider`'s own top-level package.
 
-No FastAPI route, application service, or analysis-pipeline calls this
-provider yet -- that remains a separate, later package (`CTX-01`/`CTX-
-02`/`CTX-03`). `Settings.llm_provider`'s default is unchanged
-(`"disabled"`); AI remains off by default.
+The API route layer calls this provider through the factory (`UI-02`,
+`AI-08`); `analysis.service` and the deterministic pipeline never do.
+`Settings.llm_provider`'s default is unchanged (`"disabled"`); AI remains
+off by default.
+
+`AI-08`: a request that names a structured `OutputContract` gets that
+contract's own format instructions, output-token bound and a JSON-schema
+`response_format` (grammar-constrained decoding); a server that rejects
+`response_format` is retried once without it. Requests without a contract
+behave exactly as before.
 
 Framework-independent except for `httpx` (already a declared backend
 dependency, matching the benchmark adapter's own precedent): no
@@ -68,6 +74,10 @@ LLAMA_CPP_PROVIDER_NAME = "llama_cpp"
 #: provider talks only to a locally configured `llama-server` instance,
 #: not the untrusted-data boundary `ai_boundary` already owns.
 _MAX_ERROR_EXCERPT_CHARS = 500
+
+#: HTTP statuses that mean "this server does not accept the request's
+#: `response_format`" (`AI-08`): the request is retried once without it.
+_RESPONSE_FORMAT_REJECTED_STATUSES = frozenset({400, 422, 501})
 
 #: Instruction appended after `build_safe_prompt`'s own unmodified
 #: `system_instructions`, telling the model the exact JSON shape
@@ -150,36 +160,11 @@ class LlamaCppProvider:
             detail=f"llama-server /health returned HTTP {response.status_code}",
         )
 
-    def complete(self, request: ProviderRequest) -> ProviderResponse:
-        """Send `request` to `llama-server`'s OpenAI-compatible
-        `/v1/chat/completions` endpoint and return the parsed
-        `ProviderResponse`. Never validates `raw_output` itself -- a
-        future caller's own `validate_model_output` call remains the
-        sole acceptance authority, exactly as it already is for
-        `MockProvider`/`DisabledProvider`.
-        """
-        safe_prompt = build_safe_prompt(request.envelope)
-        system_instructions = f"{safe_prompt.system_instructions}\n\n{_JSON_OUTPUT_INSTRUCTIONS}"
-        user_content = json.dumps(safe_prompt.data_payload, sort_keys=True)
-        if request.retry_feedback:
-            user_content = (
-                f"{user_content}\n\nYour previous response was rejected: "
-                f"{request.retry_feedback} Correct it and respond again with "
-                "JSON only, using exactly the required keys."
-            )
-        payload: dict[str, Any] = {
-            "model": self._model_identifier,
-            "messages": [
-                {"role": "system", "content": system_instructions},
-                {"role": "user", "content": user_content},
-            ],
-            "temperature": self._temperature,
-            "max_tokens": self._max_tokens,
-        }
-
-        start = perf_counter()
+    def _post_chat(self, payload: dict[str, Any]) -> httpx.Response:
+        """POST `payload` to `/v1/chat/completions`, mapping transport
+        failures to this interface's provider-error hierarchy."""
         try:
-            response = self._client.post(
+            return self._client.post(
                 f"{self._base_url}/v1/chat/completions",
                 json=payload,
                 timeout=self._timeout_seconds,
@@ -189,10 +174,73 @@ class LlamaCppProvider:
                 f"llama-server request timed out after {self._timeout_seconds}s: "
                 f"{type(exc).__name__}"
             ) from exc
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            # `httpx.InvalidURL` (a malformed `LLM_BASE_URL`) is not an
+            # `httpx.HTTPError`; it is still a failure to reach the server.
             raise ProviderConnectionError(
                 f"llama-server request failed: {type(exc).__name__}: {exc}"
             ) from exc
+
+    def complete(self, request: ProviderRequest) -> ProviderResponse:
+        """Send `request` to `llama-server`'s OpenAI-compatible
+        `/v1/chat/completions` endpoint and return the parsed
+        `ProviderResponse`. Never validates `raw_output` itself -- a
+        future caller's own `validate_model_output` call remains the
+        sole acceptance authority, exactly as it already is for
+        `MockProvider`/`DisabledProvider`.
+        """
+        contract = request.output_contract
+        format_instructions = (
+            contract.instructions if contract is not None else _JSON_OUTPUT_INSTRUCTIONS
+        )
+        safe_prompt = build_safe_prompt(request.envelope)
+        system_instructions = f"{safe_prompt.system_instructions}\n\n{format_instructions}"
+        user_content = json.dumps(safe_prompt.data_payload, sort_keys=True)
+        if request.retry_feedback:
+            user_content = (
+                f"{user_content}\n\nYour previous response was rejected: "
+                f"{request.retry_feedback} Correct it and respond again with "
+                "JSON only, using exactly the required keys."
+            )
+        max_tokens = (
+            contract.max_output_tokens
+            if contract is not None and contract.max_output_tokens is not None
+            else self._max_tokens
+        )
+        payload: dict[str, Any] = {
+            "model": self._model_identifier,
+            "messages": [
+                {"role": "system", "content": system_instructions},
+                {"role": "user", "content": user_content},
+            ],
+            "temperature": self._temperature,
+            "max_tokens": max_tokens,
+        }
+        if contract is not None:
+            # `AI-08`: ask `llama-server` for grammar-constrained decoding
+            # against the contract's own JSON schema. This narrows what the
+            # model can emit; the caller's validator stays the sole
+            # acceptance authority either way.
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": contract.name,
+                    "strict": True,
+                    "schema": dict(contract.json_schema),
+                },
+            }
+
+        start = perf_counter()
+        response = self._post_chat(payload)
+        if contract is not None and response.status_code in _RESPONSE_FORMAT_REJECTED_STATUSES:
+            # An older `llama-server` build may not accept `response_format`.
+            # Retry once without it: the prompt-level instructions and the
+            # caller's validator still apply, so this only loses the
+            # decoding-time constraint, never a safety property.
+            payload_without_format = {
+                key: value for key, value in payload.items() if key != "response_format"
+            }
+            response = self._post_chat(payload_without_format)
         duration_ms = (perf_counter() - start) * 1000
 
         if not (200 <= response.status_code < 300):
@@ -212,7 +260,8 @@ class LlamaCppProvider:
 
         try:
             raw_output = json.loads(message_content)
-        except json.JSONDecodeError as exc:
+        except (json.JSONDecodeError, TypeError) as exc:
+            # `TypeError`: a reply whose `content` is `null` or not a string.
             excerpt = str(message_content)[:_MAX_ERROR_EXCERPT_CHARS]
             raise ProviderInvalidResponseError(
                 f"llama-server model output was not valid JSON ({type(exc).__name__}): {excerpt}"
