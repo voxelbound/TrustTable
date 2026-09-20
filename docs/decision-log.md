@@ -397,3 +397,18 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** does not reopen `D-034`/`D-035`/`D-036`/`D-040`; changes no product code, dependency, `docker-compose.yml` or `ci.yml`; publishes nothing.
 
 **Decided by:** the split and its order were chosen by the human owner, 2026-09-20. The technical design above (registry and image naming, workflow structure, Compose layout, tag mechanics) was selected under delegated implementation authority and was not chosen by the human owner.
+
+## D-042 — the `confirmed_context` envelope slot carries context with its own confirmation state; the backend test suite is hermetic against local configuration
+
+**Decision:**
+
+1. **The slot is documented, not renamed.** `PromptEnvelope.confirmed_context` carries dataset context together with each field's own `confirmation_state`. The context-inference call (`CTX-02`) deliberately sends every field, inferred and unknown ones labelled as such, because its purpose is to propose a value for a still-unconfirmed field. The finding-analysis call (`AI-08`) sends only user-confirmed or corrected fields of a finalized context. An AI-sourced context result is a proposed hypothesis only and is never marked confirmed until the user confirms or corrects it. `docs/architecture.md` section 7 records this.
+2. **The backend test suite ignores local configuration.** An autouse fixture disables `Settings`' env file and removes every environment variable that names a `Settings` field for the duration of each test, so a developer machine configured for a real provider gives the same results as CI. A test may still configure `Settings` itself; an explicit `_env_file=` is still honored.
+
+**Basis:** `WP-068`'s independent review noted that the slot name suggests confirmed context while the context-inference call sends inferred fields, and `WP-069`'s local verification found the suite failing on a machine whose `.env` selects a real provider. Both were recorded as follow-ups to settle before the local-AI qualification.
+
+**Alternatives considered:** renaming the slot or sending inferred hypotheses in a separate field (clearer name, but it changes the `PromptEnvelope` contract and the bytes a model receives, which should be re-measured by the qualification work rather than altered before it — **left open**, not rejected); changing what the context-inference call sends (a behavior change to the call whose reliability is about to be measured); leaving the suite dependent on the developer's `.env` (results differ between a developer machine and CI, and real-provider configuration is about to become the normal local state).
+
+**Explicit non-scope:** changes no product source, dependency, prompt or provider behavior; does not reopen `D-034`/`D-035`/`D-036`/`D-040`/`D-041`.
+
+**Decided by:** the technical design was selected under delegated implementation authority; it was not chosen by the human owner.
