@@ -527,6 +527,12 @@ rather than inventing the path, and must not close until:
 > verification* (the first three bullets), after which the guide is updated to
 > what actually passed. Publishing, tagging and package visibility stay with the
 > repository owner.
+>
+> **Annotation (2026-09-20, `docs/decision-log.md` D-042):** before the local-AI
+> qualification, the backend test suite was made hermetic against a developer's
+> local provider configuration and the trust-boundary meaning of the
+> `confirmed_context` envelope slot was recorded. Neither satisfies any of the
+> four bullets above; `REL-02` stays **open**.
 
 # Complete manager workflow
 
