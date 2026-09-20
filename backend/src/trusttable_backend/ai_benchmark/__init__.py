@@ -18,6 +18,12 @@ local model/runtime (`D-033`), which remains open, human-owned
 follow-on work. Not product UI; not the production AI provider
 integration; not wired into CI as a live-model-executing job (`D-032`).
 
+A second, separate instrument lives beside it (`qualification.py`,
+`REL-02`, `docs/decision-log.md` D-043): the finding-analysis qualification
+harness, which measures the *shipped* `finding_analysis_v1` product path (the
+product's own envelope builder, provider, validator, retry and fallback)
+rather than the older narrative contract this harness scores.
+
 **Scoring boundary (explicit, confirmed 2026-09-14, r3):**
 
 - **Measured by this harness itself:** structural validity/groundedness
@@ -58,22 +64,52 @@ from .persistence import (
     report_to_dict,
     save_report,
 )
+from .qualification import (
+    QUALIFICATION_CASE_SET_VERSION,
+    CaseOutcome,
+    CaseScope,
+    Condition,
+    MeasuringProvider,
+    QualificationConfig,
+    QualificationReport,
+    QualificationSuite,
+    build_qualification_suite,
+    run_qualification,
+)
+from .qualification_persistence import (
+    QUALIFICATION_RESULT_SCHEMA_VERSION,
+    load_qualification_report,
+    save_qualification_report,
+)
 from .runner import BenchmarkConfig, HardwareProfile, run_benchmark
 
 __all__ = [
     "BENCHMARK_RESULT_SCHEMA_VERSION",
     "FIXTURE_SET_VERSION",
+    "QUALIFICATION_CASE_SET_VERSION",
+    "QUALIFICATION_RESULT_SCHEMA_VERSION",
     "BenchmarkConfig",
     "BenchmarkReport",
     "BenchmarkTask",
     "CandidateMetadata",
+    "CaseOutcome",
+    "CaseScope",
+    "Condition",
     "FixtureGroundingError",
     "HardwareProfile",
+    "MeasuringProvider",
+    "QualificationConfig",
+    "QualificationReport",
+    "QualificationSuite",
     "ResourceObservations",
     "TaskResult",
     "build_fixture_tasks",
+    "build_qualification_suite",
+    "load_qualification_report",
     "load_report",
     "report_to_dict",
     "run_benchmark",
+    "run_qualification",
+    "save_qualification_report",
     "save_report",
 ]

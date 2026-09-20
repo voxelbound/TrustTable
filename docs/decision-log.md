@@ -412,3 +412,22 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** changes no product source, dependency, prompt or provider behavior; does not reopen `D-034`/`D-035`/`D-036`/`D-040`/`D-041`.
 
 **Decided by:** the technical design was selected under delegated implementation authority; it was not chosen by the human owner.
+
+## D-043 — the local-AI qualification measures the shipped finding-analysis path, reports facts, and decides no threshold
+
+**Decision:**
+
+1. **The instrument runs the product's own path and only observes it.** A qualification harness (`ai_benchmark/qualification.py`, run with `python -m trusttable_backend.ai_benchmark.qualification_cli`; see `docs/local-ai-qualification.md`) calls the product's own envelope builder, its confirmed-context selection, `run_finding_explanation` (one structured call, role-aware validation, the product's bounded retry, accept or fall back) and a provider built from the same configuration the explanation route uses. It contains no prompt text, output schema, validator or retry logic of its own, and it does not override the retry bound. A measurement of any other path would describe something a user never experiences.
+2. **Four outcomes, in the product's own terms.** For each finding the harness records whether the AI analysis was shown on the first attempt (`accepted_first_attempt`), after a retry (`accepted_after_retry`), or built-in guidance was shown because every attempt was rejected (`fell_back_rejected`) or the provider failed (`fell_back_provider_error`). They map onto the explanation route's `ai_call_status` (`attempted_accepted`, `attempted_rejected`, `attempted_provider_error`); a test proves the mapping, the call counts and the exact request bytes against the real HTTP route.
+3. **What is measured.** Fill rate, first-attempt fill rate and fallback rate; the wall time a user waits per finding and per attempt, measured by the harness's own clock and never taken from the provider's self-report; nearest-rank percentiles; the slowest attempt that completed (the figure a timeout must clear, since a timed-out attempt lasts about the timeout); rejection-reason and provider-error-class histograms. One finding per detector by default, under two conditions: evidence only, and finalized context carrying only user-confirmed or corrected fields.
+4. **It reports facts and decides no threshold.** No acceptance threshold, model choice or default (`LLM_TIMEOUT_SECONDS` included) is defined or changed here (`D-032`); what a measured run means for them is a human decision. Narrative usefulness is not scored.
+5. **A result document is safe to share.** It carries case ids, outcomes, reason codes, exception class names and durations. It never carries model output, exception message text, dataset values, the server URL or an absolute host path; model identifiers are reduced to a file name as the product API does.
+6. **Recorded, not changed:** `Settings.llm_temperature` exists (default `0.0`) but neither route passes it to the provider factory, so a value set by an operator is not applied. The harness mirrors the route and therefore also does not apply it, so a measured run describes what the product does; making the setting take effect is a separate product change.
+
+**Basis:** `REL-02` requires the qualification to record how reliably the baseline model fills the `finding_analysis_v1` contract and the per-finding latency, measured. The existing benchmark harness scores the older narrative contract through a benchmark-only adapter and cannot measure this path.
+
+**Alternatives considered:** extending the existing benchmark harness (it exercises a contract and adapter the product does not use for this surface); measuring only through the HTTP route (adds server state and cannot observe per-attempt timing or reason codes, so the route is used as the *oracle* in tests instead); hand-running a few findings (not repeatable or comparable); defining acceptance thresholds now (no accepted decision supplies one, and a threshold should follow a measurement rather than precede it).
+
+**Explicit non-scope:** performs no measurement of a real model; changes no route, prompt, validator, provider, default, dependency or frontend behavior; does not reopen `D-032`/`D-034`/`D-035`/`D-040`/`D-041`/`D-042`.
+
+**Decided by:** the technical design was selected under delegated implementation authority; it was not chosen by the human owner.
