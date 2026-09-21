@@ -335,8 +335,11 @@ firewall guidance).
   prerequisite threat-model update and that feature both exist.
 - The accelerated/GPU hardware-tier default — explicitly deferred
   (D-035), not evaluated by this project.
-- A GitHub/GHCR-only install (no PyPI, npm or base-image access) — not
-  supported yet; a `v0.2` packaging (`REL-02`) acceptance requirement.
+- A source build on a host with only GitHub and GHCR access (no PyPI, npm or
+  base-image access) — not possible; such a host installs the published `v0.2.0`
+  images through `docker-compose.release.yml` instead (see
+  [`docs/release-images.md`](release-images.md) and
+  [`docs/installation-linux.md`](installation-linux.md)).
 
 ## Running the tests
 
