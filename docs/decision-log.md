@@ -449,3 +449,21 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** performs no measurement; changes no code, default or setting; does not reopen `D-034`, `D-035`, `D-041` or `D-043`.
 
 **Decided by:** the human owner, 2026-09-21.
+
+## D-045 — `REL-02` is complete: `v0.2.0` is published and verified, with acceptance bullet 2 narrowed and bullet 4 waived
+
+**Decision:**
+
+1. **Published.** The project owner pushed the annotated tag `v0.2.0` at commit `e0c8dd2aafa197e40f6693be0649e20a9b362996`, the tip of `main` (read back from the remote; the tag peels to that commit). The `Release images` workflow published `ghcr.io/voxelbound/trusttable-backend:0.2.0` and `ghcr.io/voxelbound/trusttable-frontend:0.2.0` on the first attempt of the tag push, and its job with no registry login pulled and started them and passed, as reported by the owner, who observed the run. That job is defined with a fresh runner, no login step and no token passed to Docker. No package visibility change was needed or made.
+2. **Verified on a clean host.** The owner ran a credential-free smoke on a clean Linux host and reports: no TrustTable images present beforehand, `docker logout ghcr.io`, a clone at `v0.2.0`, both exact images pulled, `docker compose -f docker-compose.release.yml up -d --no-build` started the stack, the backend became healthy, `health/live` returned `{"status":"alive"}`, `health/ready` reported the process and configuration checks OK, `version` returned `"application_version":"0.2.0"`, the frontend answered `HTTP/1.1 200 OK`, and `down` removed the containers and the network cleanly. These are the owner's observations; no automation ran on that host.
+3. **Acceptance mapping.** Bullet 1 (published images and a pull-only path with no build, PyPI, npm or base-image access): **delivered**. Bullet 2 (a fresh-host run of the guide's commands): **narrowed by the owner** to one AI-off pull, start and health check; the offline-provisioned model, `llama-server` on the host and the model connectivity check were **not exercised**. Bullet 3 (the guide updated to the verified commands, unverified statements removed or marked): **delivered**. Bullet 4 (the local-AI qualification): **waived** (`D-044`).
+4. **Stated limits.** The images are unsigned, carry no provenance or SBOM attestation and have not been container-scanned (`DEC-002`'s deferral). Only `linux/amd64` is published. The demo analysis and any host other than Linux x86-64 were not exercised on the clean host. Nothing about local-AI reliability, latency or hardware was measured.
+5. **`REL-02` is complete on that basis.** Whether the `v0.2` milestone is complete is the owner's decision and is not made here.
+
+**Basis:** the published path and its credential-free verification were the point of `REL-02`'s Linux deployment requirements (`D-040`, `D-041`); the owner chose the smallest clean-host check that proves the released artifacts are usable and declined further evaluation.
+
+**Alternatives considered:** require the original bullet 2 in full, including model provisioning and connectivity on the clean host (more evidence, but it re-enters the waived local-AI work and the owner scoped it out); change the package visibility (unnecessary, since the anonymous pull already succeeded).
+
+**Explicit non-scope:** changes no code, workflow, dependency or default; does not reopen `D-041` or `D-044`.
+
+**Decided by:** the human owner narrowed bullet 2, pushed the tag and ran and observed the clean-host smoke (2026-09-21); the documentation mapping was completed under delegated implementation authority.

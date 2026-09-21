@@ -11,10 +11,11 @@ Formally supported Linux target: **Linux x86-64** with Docker Engine
 > **What has and has not been verified.** Every port, setting, file and
 > endpoint named below is checked against the repository by an automated
 > documentation test, and the model-facing behavior is proven with a stub
-> `llama-server`. A complete run on a fresh Linux host with a real model is
-> **not** part of this guide's evidence — it is an explicit acceptance
-> requirement of the `v0.2` packaging item (see
-> [Restricted-network installs](#restricted-network-installs)).
+> `llama-server`. The published `v0.2.0` release was also installed on a clean
+> Linux host with no GHCR credentials and started with AI off. A run with a real
+> model on a clean host is **not** part of this guide's evidence; see
+> [Restricted-network installs](#restricted-network-installs) for exactly what
+> was and was not covered.
 
 ## 1. Quick start (no AI)
 
@@ -24,7 +25,9 @@ You need:
   (`docker compose version` must work; the standalone `docker-compose` binary
   is not supported).
 - **git**, and network access to GitHub and to the container/package
-  registries the build uses (see the limitation below).
+  registries the build uses. A host that can reach only GitHub and GHCR should
+  install the published images instead of building (see
+  [Restricted-network installs](#restricted-network-installs)).
 
 ```sh
 git clone https://github.com/voxelbound/trusttable.git
@@ -243,52 +246,77 @@ The target: **a fresh Linux host that can reach GitHub and the GitHub Container
 Registry (GHCR) and has a locally provisioned GGUF file, and needs no Hugging
 Face access at runtime.**
 
-**What works today**
+**What works**
 
 - **Model provisioning without Hugging Face:** yes. The GGUF is copied to the
   host by any means (§3.2); TrustTable and `llama-server` never fetch it.
 - **Running with no internet at all after installation:** yes, once images are
-  built and the model is in place — TrustTable calls no external service.
+  pulled or built and the model is in place — TrustTable calls no external
+  service.
+- **A GitHub-and-GHCR-only install of the published release, with AI off:** yes,
+  verified for `v0.2.0` (below).
 
-**What does not work today — stated, not glossed over**
+**Limits — stated, not glossed over**
 
-- **A GitHub/GHCR-only install is not supported yet.** `docker compose up
+- **Building from source needs more than GitHub and GHCR.** `docker compose up
   --build` **builds both images from source**. That build needs the container
   base-image registry, PyPI (Python dependencies via `uv`) and the npm registry
   (frontend dependencies) — none of which a GitHub-and-GHCR-only host can reach.
-  No TrustTable images are published to GHCR, no release exists yet, and
-  publishing images is a protected release action that has not been taken.
+  Such a host should use the published images below.
 - The containerized `llama.cpp` server image is likewise not part of the
   supported path here; `llama-server` is run on the host as described above.
+- The published images are **unsigned**, carry **no provenance or SBOM
+  attestation**, and have **not been container-scanned**.
 
-**Pull-only install — defined in the repository, not yet published or verified**
+**Pull-only install — verified on a clean Linux host for `v0.2.0`**
 
-The repository now contains the pull-only path
+The repository contains the pull-only path
 ([`docs/release-images.md`](release-images.md)): `docker-compose.release.yml`,
 which runs published images with no build step, and a workflow that publishes
-them when a maintainer pushes a version tag. **Neither has been used against a
-real registry: no image exists yet, so these commands cannot work today.** Once
-a release is published they are:
+them when a maintainer pushes a version tag. The `v0.2.0` images were published
+that way, and the release was then installed on a clean Linux host with only
+GitHub and GHCR access and **no GHCR credentials**:
 
 ```sh
-git clone --branch v<version> --depth 1 https://github.com/voxelbound/trusttable.git
+git clone --branch v0.2.0 --depth 1 https://github.com/voxelbound/trusttable.git
 cd trusttable
-TRUSTTABLE_VERSION=<version> docker compose -f docker-compose.release.yml up -d
+TRUSTTABLE_VERSION=0.2.0 docker compose -f docker-compose.release.yml pull
+TRUSTTABLE_VERSION=0.2.0 docker compose -f docker-compose.release.yml up -d --no-build
+curl -s http://127.0.0.1:8000/api/v1/health/live
+curl -s http://127.0.0.1:8000/api/v1/health/ready
 curl -s http://127.0.0.1:8000/api/v1/version
+curl -sI http://127.0.0.1:8080/
+TRUSTTABLE_VERSION=0.2.0 docker compose -f docker-compose.release.yml down
 ```
 
-`TRUSTTABLE_VERSION` is required (there is no `latest`), and the version the
-backend reports equals it. Everything else in this guide — the `.env` file,
-`llama-server`, the verification in §3.5 — is unchanged; use
-`-f docker-compose.release.yml` on the `docker compose` commands. These commands
-are **unverified until a run on a fresh Linux host says otherwise**.
+On that host no TrustTable images were present beforehand and `docker logout
+ghcr.io` had removed any credentials. Both
+`ghcr.io/voxelbound/trusttable-backend:0.2.0` and
+`ghcr.io/voxelbound/trusttable-frontend:0.2.0` pulled, the backend became healthy,
+`health/live` returned `{"status":"alive"}`, `health/ready` reported the process and
+configuration checks OK, `version` reported `"application_version":"0.2.0"`, the
+frontend answered `HTTP/1.1 200 OK`, and `down` removed the containers and the network
+cleanly. The release workflow runs the same credential-free pull and start after
+every tag publish.
 
-**What the `v0.2` packaging item (`REL-02`) still has to deliver and verify**
-(recorded in `docs/implementation-backlog.md` under `REL-02`): the versioned
-backend and frontend images actually published to GHCR (a protected release
-action); an end-to-end run of the commands above on a fresh Linux host with only
-GitHub/GHCR access and an offline-provisioned model, including the verification
-in §3.5; and this guide updated to the verified commands.
+`TRUSTTABLE_VERSION` is required (there is no `latest`), and the version the
+backend reports equals it. For a later release, substitute its version.
+
+**What that run did not cover**
+
+- **The local-AI setup.** `llama-server` on the host, a provisioned GGUF file and
+  the model connectivity check in §3.5 were **not exercised** on the clean host.
+  The `.env` file and §3 apply to this stack as well (use
+  `-f docker-compose.release.yml` on the `docker compose` commands), but that is
+  documented, not verified there; the model-facing behavior is proven only by the
+  automated tests with a stub `llama-server`.
+- **The demo analysis and any UI flow** beyond the frontend answering.
+- **Any host that is not Linux x86-64:** only `linux/amd64` images are published.
+- **Local-AI reliability and speed.** How reliably a real local model fills the
+  structured analysis, how long a finding takes, and a suitable
+  `LLM_TIMEOUT_SECONDS` were **not measured** for `v0.2` (that qualification was
+  waived, `docs/decision-log.md` D-044). Treat the timeout values in this guide as
+  unmeasured guidance and raise it on slow machines.
 
 ## See also
 

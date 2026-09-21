@@ -3,11 +3,14 @@
 How TrustTable's container images are named, built and published, and what a
 person with only GitHub and the GitHub Container Registry (GHCR) runs.
 
-> **Status: defined, not yet published or verified.** The pull-only Compose
-> file and the publish workflow exist and are tested, but **no image has been
-> published and the workflow has never run against a real registry.** Until a
-> release exists, `docker compose up --build` from a checkout is the only
-> supported install (see [`installation-linux.md`](installation-linux.md)).
+> **Status: published and verified for `v0.2.0`.** The workflow published both
+> `0.2.0` images on the first attempt of the `v0.2.0` tag push, its
+> credential-free pull-and-start check passed, and the release was then installed
+> on a clean Linux host with no GHCR credentials (see
+> [`installation-linux.md`](installation-linux.md) for exactly what that run
+> covered and what it did not). The images are unsigned, carry no attestations
+> and have not been container-scanned. `docker compose up --build` from a
+> checkout remains the source-build install.
 
 ## What is published
 
@@ -27,13 +30,17 @@ person with only GitHub and the GitHub Container Registry (GHCR) runs.
   `GET /api/v1/version` reports. A release tag must equal it exactly, so the
   version a running backend reports is the tag it was installed from.
 
-## What a person runs (once a release is published)
+## What a person runs
 
 ```sh
 git clone --branch v<version> --depth 1 https://github.com/voxelbound/trusttable.git
 cd trusttable
-TRUSTTABLE_VERSION=<version> docker compose -f docker-compose.release.yml up -d
+TRUSTTABLE_VERSION=<version> docker compose -f docker-compose.release.yml pull
+TRUSTTABLE_VERSION=<version> docker compose -f docker-compose.release.yml up -d --no-build
 ```
+
+For `v0.2.0` (`<version>` = `0.2.0`) this is the sequence that was verified on a
+clean host.
 
 `docker-compose.release.yml` is the pull-only twin of `docker-compose.yml`:
 the same two services, ports, restart policy, health checks and host-gateway
@@ -80,7 +87,9 @@ performed by any workflow or automation, and each needs explicit authority:
 - **Package visibility.** A package first published by a workflow may be private
   by default. If the anonymous-pull verification fails for that reason, making
   the package public is a repository-owner action taken in GitHub's package
-  settings, after which the verification can be re-run.
+  settings, after which the verification can be re-run. For `v0.2.0` the
+  credential-free verification passed on its first run, so no visibility change
+  was needed or made.
 - **Removing or replacing a published tag.** Published tags are neither removed
   nor overwritten as routine recovery (a re-run does not push, see above); a bad
   or incomplete release is superseded by a new version.
@@ -99,6 +108,23 @@ performed by any workflow or automation, and each needs explicit authority:
 6. On a fresh Linux host that can reach only GitHub and GHCR, follow
    [`installation-linux.md`](installation-linux.md) with the published version
    and record the result; update the guide to what actually passed.
+
+## Outcome of the first publish (`v0.2.0`)
+
+- The maintainer pushed the annotated tag `v0.2.0`, which points at commit
+  `e0c8dd2aafa197e40f6693be0649e20a9b362996` (the tip of `main` at the time).
+- The workflow checked the version, built and pushed
+  `ghcr.io/voxelbound/trusttable-backend:0.2.0` and
+  `ghcr.io/voxelbound/trusttable-frontend:0.2.0` on the first attempt, and its job
+  with no registry login pulled and started them and passed. No package
+  visibility change was needed.
+- A clean Linux host with no TrustTable images and no GHCR credentials
+  (`docker logout ghcr.io`) cloned the tag, pulled both images, started the stack
+  with `up -d --no-build`, and saw the backend healthy, `GET /api/v1/version`
+  report `0.2.0`, and the frontend answer `HTTP/1.1 200 OK`; `down` removed the
+  containers and network cleanly.
+- What that run did not cover is listed in
+  [`installation-linux.md`](installation-linux.md#restricted-network-installs).
 
 ## See also
 
