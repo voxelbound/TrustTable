@@ -100,6 +100,15 @@ Deliver, in dependency order:
 > the local-AI qualification, then the protected publish with a fresh-Linux-host
 > verification. `v0.2` is not release-qualified until all three are done.
 
+> **Annotation (2026-09-21, `docs/decision-log.md` D-044):** the second of those
+> three steps, the local-AI qualification, is **waived** by the human owner for
+> `v0.2`: no real-model benchmark was completed, it is not a pass, and nothing
+> about minimum, recommended or baseline-tier hardware may be inferred. What
+> remains is the protected publish of the versioned images and a clean-host
+> pull/install/start check against them, then the updated install guide. Live
+> local-AI evaluation is optional in `docs/testing-strategy.md` §8, so the
+> release gates are unaffected.
+
 This is the first promoted portfolio release.
 
 ## v0.3 — Complete manager workflow

@@ -431,3 +431,21 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** performs no measurement of a real model; changes no route, prompt, validator, provider, default, dependency or frontend behavior; does not reopen `D-032`/`D-034`/`D-035`/`D-040`/`D-041`/`D-042`.
 
 **Decided by:** the technical design was selected under delegated implementation authority; it was not chosen by the human owner.
+
+## D-044 — the `REL-02` local-AI hardware/performance qualification is waived for `v0.2`
+
+**Decision:**
+
+1. **Waived, not passed.** The `REL-02` acceptance requirement for a measured local-AI qualification — how reliably the baseline model fills `finding_analysis_v1`, per-finding latency, and a suitable `LLM_TIMEOUT_SECONDS` — is explicitly waived by the human owner for `v0.2`. No real-model benchmark of this path was completed, and none is planned as a replacement. The waiver is not a pass and no result may be inferred from it.
+2. **No hardware claims.** Nothing here defines or implies a minimum, recommended or baseline-tier hardware requirement, or any performance expectation for any machine. Earlier wording that treats a hardware profile as a validated baseline or requirement (for example the "baseline hardware" phrasing in `D-029`, `D-034`, `D-035`, `D-041` and `REL-02`) is unvalidated by this project's own evidence; it is preserved as written and flagged for later correction, not rewritten here.
+3. **Consequences.** `LLM_TIMEOUT_SECONDS` keeps its documented default (`120`) and the guide's example value remains unmeasured guidance; the guide already tells operators on CPU-only machines to raise it. `REL-02` proceeds to the protected publish and a clean-host install smoke. Step (b) of `D-041` is waived by this entry.
+4. **Release gates unaffected.** `docs/testing-strategy.md` §8 lists live local-AI evaluation as *optional*, so no release gate depends on it.
+5. **The instrument remains.** The qualification harness (`D-043`) stays delivered and proven against the real route with stubbed providers only; it is available if a representative measurement is later wanted.
+
+**Basis:** the owner judged that no measurement host available to the project is representative of a useful minimum or recommended hardware target, so a result would have insufficient decision value to justify the operational cost.
+
+**Alternatives considered:** run it anyway and publish figures with caveats (risks being read as hardware guidance); replace it with a smaller benchmark (still specific to one machine); keep it as a release blocker (blocks `v0.2` on evidence the owner does not consider decision-grade).
+
+**Explicit non-scope:** performs no measurement; changes no code, default or setting; does not reopen `D-034`, `D-035`, `D-041` or `D-043`.
+
+**Decided by:** the human owner, 2026-09-21.
