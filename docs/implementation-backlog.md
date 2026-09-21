@@ -542,6 +542,15 @@ rather than inventing the path, and must not close until:
 > against the real explanation route with stubbed providers only; **no real model
 > has been measured**, so the fourth bullet is still unmet and `REL-02` stays
 > **open**.
+>
+> **Annotation (2026-09-21, `docs/decision-log.md` D-044):** the **fourth bullet
+> is waived** by the human owner for `v0.2`. No real-model benchmark of this path
+> was completed and none is planned as a replacement; the waiver is **not a pass**
+> and no minimum, recommended, baseline-tier or general hardware claim may be
+> inferred from it. The bullet's "on baseline hardware" wording is preserved as
+> written and is unvalidated by this project's own evidence. `REL-02` still
+> requires the first three bullets — the published images, the clean-host
+> install check and the updated guide — so it stays **open**.
 
 # Complete manager workflow
 
