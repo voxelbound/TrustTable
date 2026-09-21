@@ -130,9 +130,10 @@ the captured request proves what a model actually received (evidence ids,
 confirmed-only context, no raw prompt-injection excerpt, no dataset
 samples), and every malformed, hostile or failing response is shown to
 leave the full deterministic four-section result and the findings, evidence
-and trust state byte-identical. No live model is used in CI; how reliably
-a real local model fills the schema is measured in the `REL-02`
-local-AI qualification.
+and trust state byte-identical. No live model is used in CI. How reliably
+a real local model fills the schema was to be measured in the `REL-02`
+local-AI qualification; **that measurement is waived for `v0.2`
+(`docs/decision-log.md` D-044) and has not been made.**
 
 ## 3. Prompt-injection adversarial test
 
