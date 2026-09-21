@@ -109,6 +109,13 @@ Deliver, in dependency order:
 > local-AI evaluation is optional in `docs/testing-strategy.md` §8, so the
 > release gates are unaffected.
 
+> **Annotation (2026-09-21, `docs/decision-log.md` D-045):** `v0.2.0` is
+> **published and verified**: both images are on GHCR, the release workflow's
+> credential-free pull-and-start check passed, and a clean Linux host pulled and
+> started the release with no GHCR credentials and AI off. `REL-02`, the last
+> `v0.2` item, is complete. The milestone decision is the project owner's and is
+> recorded separately.
+
 This is the first promoted portfolio release.
 
 ## v0.3 — Complete manager workflow

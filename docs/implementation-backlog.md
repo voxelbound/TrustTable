@@ -551,6 +551,16 @@ rather than inventing the path, and must not close until:
 > written and is unvalidated by this project's own evidence. `REL-02` still
 > requires the first three bullets — the published images, the clean-host
 > install check and the updated guide — so it stays **open**.
+>
+> **Annotation (2026-09-21, `docs/decision-log.md` D-045):** **`REL-02` is
+> complete.** The `v0.2.0` images were published to GHCR (bullet 1), and the
+> pull-only path needs no build step and no PyPI, npm or base-image access. The
+> release was installed on a clean Linux host with only GitHub and GHCR access and
+> no GHCR credentials (bullet 2), **narrowed by the human owner to one AI-off
+> pull, start and health check**: the offline-provisioned model and the model
+> connectivity check were not exercised there. The guide states the verified
+> commands and marks what the run did not cover (bullet 3). Bullet 4 remains
+> waived (D-044); nothing was measured.
 
 # Complete manager workflow
 
