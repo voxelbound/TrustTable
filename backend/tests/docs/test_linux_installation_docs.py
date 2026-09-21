@@ -5,11 +5,12 @@ A guide that names a setting, port, endpoint or file that does not exist is
 worse than no guide. These tests tie what `docs/installation-linux.md` says to
 what the repository actually contains — the real `Settings` fields and
 defaults, the real compose file, the real OpenAPI routes and the README's
-links — and pin the honest statement of what is *not* yet supported so a later
-edit cannot quietly turn a limitation into a claim.
+links — and pin the honest statement of what was verified and what was not, so a
+later edit cannot quietly turn a limitation into a claim (or drop one).
 
-They do not (and cannot) prove the guide works on a fresh Linux host with a
-real model; that is an explicit `REL-02` acceptance requirement.
+They do not (and cannot) prove the guide works on a host. The published `v0.2.0`
+release was verified on a clean Linux host with AI off (`docs/decision-log.md`
+D-045); a run with a real model on a clean host was not made.
 """
 
 from __future__ import annotations
@@ -192,31 +193,42 @@ def test_the_guide_covers_every_required_topic() -> None:
 
 
 # ---------------------------------------------------------------------------
-# The restricted-network limitation is stated, and is a REL-02 requirement
+# The source-build limit and the verified release install are stated exactly
 # ---------------------------------------------------------------------------
 
 
-def test_the_guide_states_the_current_ghcr_only_limitation_exactly() -> None:
+def test_the_guide_states_the_source_build_limit_and_the_verified_release_install() -> None:
     guide = read(GUIDE)
     section = guide.split("## Restricted-network installs", 1)[1]
     for phrase in (
-        "not supported yet",
         "builds both images from source",
         "PyPI",
         "npm",
         "GHCR",
-        "No TrustTable images are published",
+        "verified on a clean Linux host for `v0.2.0`",
+        "no GHCR credentials",
     ):
         assert phrase in section, phrase
-    assert "REL-02" in section
+    # The pre-release statements are gone: each would now be false.
+    for stale in (
+        "No TrustTable images are published",
+        "not supported yet",
+        "not yet published or verified",
+        "no image exists yet",
+        "unverified until",
+    ):
+        assert stale not in guide, stale
 
 
-def test_the_readme_repeats_the_limitation_beside_the_quick_start() -> None:
+def test_the_readme_states_the_release_install_beside_the_quick_start() -> None:
     quick_start = (
         read(README).split("## Quick start (Linux)", 1)[1].split("## Project status", 1)[0]
     )
-    assert "not supported yet" in quick_start
     assert "GitHub-and-GHCR-only" in quick_start
+    assert "published `v0.2.0` images" in quick_start
+    assert "builds the images from source" in quick_start
+    assert "not supported yet" not in quick_start
+    assert "no image has been published yet" not in quick_start
 
 
 def test_the_backlog_orders_ai_08_between_eval_ai_01_and_rel_02_with_linux_requirements() -> None:
@@ -243,7 +255,7 @@ def test_the_backlog_orders_ai_08_between_eval_ai_01_and_rel_02_with_linux_requi
 
 
 # ---------------------------------------------------------------------------
-# The pull-only (GHCR) path is documented as defined, NOT as working
+# The pull-only (GHCR) path is documented as verified, with its limits
 # ---------------------------------------------------------------------------
 
 
@@ -259,10 +271,11 @@ def test_the_release_images_doc_is_linked_from_the_readme_and_the_guide() -> Non
 
 def test_the_guides_pull_only_commands_use_the_real_file_variable_and_image_names() -> None:
     guide = read(GUIDE)
-    section = guide.split("**Pull-only install", 1)[1].split("**What the `v0.2` packaging", 1)[0]
+    section = guide.split("**Pull-only install", 1)[1].split("**What that run did not cover", 1)[0]
     release_compose = read(RELEASE_COMPOSE)
     assert "docker-compose.release.yml" in section
     assert RELEASE_COMPOSE.is_file()
+    assert "up -d --no-build" in section  # the command that was verified
     assert "TRUSTTABLE_VERSION" in section and "TRUSTTABLE_VERSION" in release_compose
     assert "/api/v1/version" in section  # a real route (checked by the API-path test)
     assert "latest" in section  # it says there is no `latest`
@@ -274,23 +287,21 @@ def test_the_guides_pull_only_commands_use_the_real_file_variable_and_image_name
         assert image in doc and image in release_compose, image
 
 
-def test_the_pull_only_path_is_described_as_unpublished_and_unverified_everywhere() -> None:
-    """A later edit must not quietly turn 'defined' into 'works'."""
+def test_the_release_docs_state_what_was_verified_and_what_was_not() -> None:
+    """A later edit must not quietly turn 'verified with AI off' into 'verified with AI'."""
     guide = read(GUIDE)
-    section = guide.split("**Pull-only install", 1)[1].split("**What the `v0.2` packaging", 1)[0]
-    for phrase in ("not yet published or verified", "no image exists yet", "unverified"):
+    section = guide.split("**What that run did not cover**", 1)[1].split("## See also", 1)[0]
+    for phrase in ("not exercised", "not measured", "linux/amd64", "D-044"):
         assert phrase in section, phrase
+    assert "unsigned" in guide
     doc = " ".join(read(RELEASE_DOC).replace(">", " ").split())  # undo Markdown line wrapping
-    assert "defined, not yet published or verified" in doc
-    assert "no image has been published" in doc
-    # The existing limitation statements are still true and still present.
-    assert "No TrustTable images are published" in guide
-    assert "not supported yet" in guide
-    quick_start = (
-        read(README).split("## Quick start (Linux)", 1)[1].split("## Project status", 1)[0]
-    )
-    assert "not supported yet" in quick_start
-    assert "no image has been published yet" in quick_start
+    assert "published and verified for `v0.2.0`" in doc
+    assert "unsigned" in doc
+    assert "no visibility change was needed or made" in doc
+    # The limits are not silently dropped from the README either.
+    readme = " ".join(read(README).split())
+    assert "Not covered by the release verification" in readme
+    assert "waived" in readme
 
 
 def test_the_release_doc_keeps_the_protected_steps_with_the_human_owner() -> None:
