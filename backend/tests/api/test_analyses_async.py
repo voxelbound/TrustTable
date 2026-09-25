@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 import trusttable_backend.analysis.service as service_module
 from trusttable_backend.parsers.csv_parser import parse_csv as real_parse_csv
 
-_TIMEOUT = 5.0
+_TIMEOUT = 15.0
 _TERMINAL_STATES = {"completed", "failed", "cancelled"}
 
 

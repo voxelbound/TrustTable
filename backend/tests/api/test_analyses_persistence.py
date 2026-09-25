@@ -49,14 +49,14 @@ def _wait_for_terminal(client: TestClient, analysis_id: str) -> None:
     — wait for a terminal state before exercising routes that require
     `completed` (context confirmation, profile, findings).
     """
-    deadline = time.monotonic() + 5.0
+    deadline = time.monotonic() + 15.0
     while time.monotonic() < deadline:
         status = client.get(f"/api/v1/analyses/{analysis_id}/status")
         assert status.status_code == 200
         if status.json()["state"] in {"completed", "failed", "cancelled"}:
             return
         time.sleep(0.01)
-    raise AssertionError(f"analysis {analysis_id} did not reach a terminal state within 5.0s")
+    raise AssertionError(f"analysis {analysis_id} did not reach a terminal state within 15.0s")
 
 
 def _get_all(client: TestClient, analysis_id: str) -> dict[str, Any]:

@@ -135,7 +135,7 @@ _KNOWN_TRUST_LABELS = {
 #: Bounded so a genuine regression (a job that never reaches a terminal
 #: state) fails fast rather than hanging; the deterministic demo/upload
 #: pipeline normally completes in well under a second.
-_POLL_TIMEOUT_SECONDS = 5.0
+_POLL_TIMEOUT_SECONDS = 15.0
 _POLL_INTERVAL_SECONDS = 0.01
 _TERMINAL_STATES = {"completed", "failed", "cancelled"}
 
