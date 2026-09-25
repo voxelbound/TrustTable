@@ -41,6 +41,7 @@ import copy
 import json
 import logging
 import re
+import time
 from typing import Any
 
 import pytest
@@ -263,9 +264,22 @@ def _corpus_with_markers(*, only: set[str] | None = None) -> list[Any]:
 
 
 def _create_demo_analysis(client: TestClient) -> str:
+    """`JOB-01` (`WP-075`): the creation response is now always `queued`
+    — wait for the real background worker to finish before returning,
+    since every caller immediately reads findings/evidence that only
+    exist once the analysis is `completed`.
+    """
     response = client.post("/api/v1/demo/sales")
     assert response.status_code == 202
-    return str(response.json()["analysis"]["analysis_id"])
+    analysis_id = str(response.json()["analysis"]["analysis_id"])
+    deadline = time.monotonic() + 15.0
+    while time.monotonic() < deadline:
+        status = client.get(f"/api/v1/analyses/{analysis_id}/status")
+        assert status.status_code == 200
+        if status.json()["state"] in {"completed", "failed", "cancelled"}:
+            return analysis_id
+        time.sleep(0.01)
+    pytest.fail(f"analysis {analysis_id} did not reach a terminal state within 15.0s")
 
 
 def _findings(client: TestClient, analysis_id: str) -> list[dict[str, Any]]:

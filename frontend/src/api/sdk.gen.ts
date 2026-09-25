@@ -21,9 +21,9 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 /**
  * Post Analysis Upload
  *
- * Create an analysis from an uploaded CSV file and run it to
- * completion (`docs/api-specification.md` §6, disclosed CSV-only
- * subset — `WP-029`).
+ * Create an analysis from an uploaded CSV file and submit it to the
+ * background worker pool (`docs/api-specification.md` §6, disclosed
+ * CSV-only subset — `WP-029`; async submission, `JOB-01` `WP-075`).
  *
  * Follows `docs/product-requirements.md` §8.2's ordered validation
  * steps: filename required, `.csv` extension required, size bounded
@@ -54,11 +54,18 @@ export const getAnalysisApiV1AnalysesAnalysisIdGet = <ThrowOnError extends boole
 /**
  * Post Analysis Cancel
  *
- * Cancel a queued analysis (`docs/api-specification.md` §6).
+ * Request cancellation of a queued or actively-running analysis
+ * (`docs/api-specification.md` §6; real mid-pipeline cancellation,
+ * `JOB-01` `WP-075`).
  *
- * Only effective while `queued` — `analysis.service.cancel_analysis`'s
- * own documented behavior (no true mid-pipeline cancellation yet,
- * `JOB-01`); any other known state is returned unchanged, not an error.
+ * Cooperative, not synchronous: for any non-terminal analysis, this
+ * only ever sets a flag `JobPool`'s own worker thread observes at its
+ * next stage checkpoint (never a direct store write from this route —
+ * see `jobs/pool.py`'s own race-avoidance disclosure). The response
+ * reflects the analysis's *current* state, which may still be
+ * non-terminal; poll `GET .../status` for the eventual `cancelled`
+ * outcome. A known but already-terminal analysis is returned
+ * unchanged, not an error.
  */
 export const postAnalysisCancelApiV1AnalysesAnalysisIdCancelPost = <ThrowOnError extends boolean = false>(options: Options<PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostData, ThrowOnError>): RequestResult<PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, ThrowOnError> => (options.client ?? client).post<PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/cancel', ...options });
 
@@ -311,8 +318,10 @@ export const getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet = <ThrowOnError e
 /**
  * Post Demo Sales
  *
- * Create an analysis over the bundled demo dataset and run it to
- * completion (`docs/api-specification.md` §5).
+ * Create an analysis over the bundled demo dataset and submit it to
+ * the background worker pool (`docs/api-specification.md` §5, `JOB-01`
+ * `WP-075`). Returns immediately with `state=queued` — poll
+ * `status_url` (`GET .../status`) for progress.
  */
 export const postDemoSalesApiV1DemoSalesPost = <ThrowOnError extends boolean = false>(options?: Options<PostDemoSalesApiV1DemoSalesPostData, ThrowOnError>): RequestResult<PostDemoSalesApiV1DemoSalesPostResponses, unknown, ThrowOnError> => (options?.client ?? client).post<PostDemoSalesApiV1DemoSalesPostResponses, unknown, ThrowOnError>({ url: '/api/v1/demo/sales', ...options });
 
