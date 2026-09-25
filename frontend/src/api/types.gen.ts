@@ -149,13 +149,15 @@ export type AnalysisResource = {
  * Body for `GET /analyses/{analysis_id}/status` — a lightweight
  * polling endpoint (`docs/api-specification.md` §6).
  *
- * `poll_interval_ms` is a fixed constant: `run_analysis` executes
- * synchronously to completion within one call (`API-01` enabling
- * slice, `WP-023`), so there is no real progress signal to derive a
- * dynamic recommendation from yet (`JOB-01`, not yet built).
- * `retryable`/a numeric `progress_percentage` are deliberately omitted:
- * no retry endpoint exists yet, and synchronous execution has no
- * meaningful partial-progress signal either.
+ * `state` now reflects real, persisted stage progression
+ * (`queued`/`parsing`/`profiling`/`detecting`/terminal — `JOB-01`,
+ * `WP-075`: a bounded worker pool runs the pipeline in the background
+ * instead of synchronously inside the request). `poll_interval_ms`
+ * stays a fixed constant regardless (no adaptive backoff has been
+ * built). `retryable`/a numeric `progress_percentage` remain
+ * deliberately omitted: no retry endpoint exists yet, and there is no
+ * meaningful sub-stage partial-progress signal within one stage
+ * either — both a disclosed, separate follow-up slice.
  */
 export type AnalysisStatusResponse = {
     /**
