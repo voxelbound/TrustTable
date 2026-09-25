@@ -68,8 +68,14 @@ Use this when you would rather not run containers.
 # backend, port 8000
 cd backend
 uv sync
-uv run uvicorn trusttable_backend.main:app --port 8000
+DATABASE_URL="sqlite:///$(pwd)/.local-data/trusttable.db" DATA_DIRECTORY="$(pwd)/.local-data" \
+  uv run uvicorn trusttable_backend.main:create_app --factory --port 8000
 ```
+
+`DATABASE_URL`/`DATA_DIRECTORY` must be overridden for a native run:
+`Settings`' own built-in default targets the Docker Compose stack's `/data`
+volume, not a native filesystem path — see
+[`docs/local-development.md`](local-development.md) for detail.
 
 The Vite dev server does not proxy the API, so for the full UI against a native
 backend use Docker Compose. Native execution is intended for development; see

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Request, Response, status
 
 from trusttable_backend.config import get_settings
+from trusttable_backend.persistence import is_schema_ready
 from trusttable_backend.schemas.health import (
     HealthCheck,
     LivenessResponse,
@@ -43,24 +44,48 @@ def _configuration_check() -> HealthCheck:
     return HealthCheck(name="configuration", status="ok", detail=None)
 
 
-def _run_readiness_checks() -> list[HealthCheck]:
+def _storage_check(request: Request) -> HealthCheck:
+    """Report whether the database schema is migrated to head (`DB-01`).
+
+    `request.app.state.analysis_engine` is set by `main.create_app()` on
+    every real application instance. `main.create_app()` already runs
+    migrations to head before the app starts serving, so this check can
+    only observe "failing" if the schema was altered/rolled back after
+    startup, or if the database has become unreachable — the same
+    "startup already enforced this, this stays a real defensive check"
+    reasoning `_configuration_check` above already documents for
+    `configuration`.
+    """
+    engine = getattr(request.app.state, "analysis_engine", None)
+    if engine is None:
+        return HealthCheck(name="storage", status="not_configured", detail=None)
+    if is_schema_ready(engine):
+        return HealthCheck(name="storage", status="ok", detail=None)
+    return HealthCheck(
+        name="storage",
+        status="failing",
+        detail="database schema is not migrated to the current head",
+    )
+
+
+def _run_readiness_checks(request: Request) -> list[HealthCheck]:
     """Run all registered readiness checks.
 
     FND-01 registered only `process` (always `"ok"`). `FND-02` appends
-    `configuration`. Later backlog items (`DB-01` storage/migrations,
-    `JOB-01` worker_pool) append further checks without changing the
-    response shape.
+    `configuration`. `DB-01` appends `storage`. `JOB-01` (not yet built)
+    will append further checks without changing the response shape.
     """
     return [
         HealthCheck(name="process", status="ok", detail=None),
         _configuration_check(),
+        _storage_check(request),
     ]
 
 
 @router.get("/health/ready", response_model=ReadinessResponse)
-def get_readiness(response: Response) -> ReadinessResponse:
+def get_readiness(request: Request, response: Response) -> ReadinessResponse:
     """Report readiness. HTTP 200 when ready, HTTP 503 when not ready."""
-    checks = _run_readiness_checks()
+    checks = _run_readiness_checks(request)
     is_ready = all(check.status == "ok" for check in checks)
     response.status_code = status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
     return ReadinessResponse(status="ready" if is_ready else "not_ready", checks=checks)

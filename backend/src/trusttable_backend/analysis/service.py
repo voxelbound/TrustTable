@@ -81,6 +81,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Protocol
 
 from ..context_inference.guided_questions import generate_guided_questions
 from ..context_inference.heuristics import infer_dataset_context
@@ -411,10 +412,29 @@ class QuestionNotFoundError(Exception):
         self.question_id = question_id
 
 
+class AnalysisStoreProtocol(Protocol):
+    """The store shape every function in this module actually depends on
+    (`add`/`get`/`replace`) — a type-only extraction (`DB-01`, `WP-074`)
+    letting `persistence.SqlAnalysisStore` stand in for the in-memory
+    `AnalysisStore` below without either type depending on the other.
+    Every function's `store` parameter in this module is typed against
+    this `Protocol`, not the concrete `AnalysisStore` class; `AnalysisStore`
+    itself is unchanged and every existing caller that constructs it
+    directly continues to work unmodified (structural typing).
+    """
+
+    def add(self, analysis: Analysis) -> None: ...
+
+    def get(self, analysis_id: str) -> Analysis | None: ...
+
+    def replace(self, analysis: Analysis) -> None: ...
+
+
 class AnalysisStore:
-    """A minimal in-memory dict-backed store. No persistence
-    (`DB-01`, not yet built) and no concurrency safety — disclosed,
-    matching this package's stated non-goals.
+    """A minimal in-memory dict-backed store. No concurrency safety
+    (disclosed, matching this package's stated non-goals). `DB-01` adds a
+    durable alternative, `persistence.SqlAnalysisStore`, structurally
+    satisfying the same `AnalysisStoreProtocol` above.
     """
 
     def __init__(self) -> None:
@@ -440,7 +460,7 @@ def _generate_demo_content() -> bytes:
     return generated.to_csv_text().encode("utf-8")
 
 
-def create_analysis(store: AnalysisStore) -> Analysis:
+def create_analysis(store: AnalysisStoreProtocol) -> Analysis:
     """Create a new `QUEUED` analysis over the bundled demo dataset and
     store it. Does not run the pipeline — see `run_analysis`.
     """
@@ -485,7 +505,7 @@ def create_analysis(store: AnalysisStore) -> Analysis:
 
 
 def create_analysis_from_upload(
-    store: AnalysisStore, *, content: bytes, original_filename: str
+    store: AnalysisStoreProtocol, *, content: bytes, original_filename: str
 ) -> Analysis:
     """Create a new `QUEUED` analysis over an uploaded CSV file's raw
     bytes and store it (`UI-01`/`API-01`, extending, `WP-029`). Does not
@@ -549,7 +569,7 @@ def create_analysis_from_upload(
 
 
 def run_analysis(
-    store: AnalysisStore, analysis_id: str, *, now: datetime | None = None
+    store: AnalysisStoreProtocol, analysis_id: str, *, now: datetime | None = None
 ) -> Analysis:
     """Run the full pipeline for a `QUEUED` analysis, transitioning it
     through `VALIDATING`/`PARSING`/`PROFILING`/`DETECTING` to `COMPLETED`.
@@ -637,7 +657,7 @@ def run_analysis(
     return completed
 
 
-def get_status(store: AnalysisStore, analysis_id: str) -> Analysis:
+def get_status(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
     """Return the current `Analysis` for `analysis_id`.
 
     Raises `AnalysisNotFoundError` for an unknown ID.
@@ -648,7 +668,7 @@ def get_status(store: AnalysisStore, analysis_id: str) -> Analysis:
     return analysis
 
 
-def get_profile(store: AnalysisStore, analysis_id: str) -> DatasetProfile | None:
+def get_profile(store: AnalysisStoreProtocol, analysis_id: str) -> DatasetProfile | None:
     """Return the `DatasetProfile` for a `COMPLETED` analysis, `None` for
     a known but not-yet-`COMPLETED` analysis.
 
@@ -657,7 +677,7 @@ def get_profile(store: AnalysisStore, analysis_id: str) -> DatasetProfile | None
     return get_status(store, analysis_id).dataset_profile
 
 
-def get_findings(store: AnalysisStore, analysis_id: str) -> tuple[FindingCandidate, ...]:
+def get_findings(store: AnalysisStoreProtocol, analysis_id: str) -> tuple[FindingCandidate, ...]:
     """Return the findings tuple for a `COMPLETED` analysis, an empty
     tuple for a known but not-yet-`COMPLETED` analysis.
 
@@ -666,7 +686,9 @@ def get_findings(store: AnalysisStore, analysis_id: str) -> tuple[FindingCandida
     return get_status(store, analysis_id).findings
 
 
-def get_finding(store: AnalysisStore, analysis_id: str, finding_id: str) -> FindingCandidate:
+def get_finding(
+    store: AnalysisStoreProtocol, analysis_id: str, finding_id: str
+) -> FindingCandidate:
     """Return one `FindingCandidate` by its `finding_id` (`WP-027`).
 
     `finding_id` is a stringified zero-based index into the analysis's
@@ -692,7 +714,7 @@ def get_finding(store: AnalysisStore, analysis_id: str, finding_id: str) -> Find
 
 
 def get_finding_evidence(
-    store: AnalysisStore, analysis_id: str, finding_id: str
+    store: AnalysisStoreProtocol, analysis_id: str, finding_id: str
 ) -> tuple[Evidence, ...]:
     """Return the `Evidence` objects referenced by one finding's own
     `evidence_ids` (`WP-027`), resolved against `Analysis.evidence`, in
@@ -712,7 +734,7 @@ def get_finding_evidence(
 
 
 def get_finding_row_context(
-    store: AnalysisStore,
+    store: AnalysisStoreProtocol,
     analysis_id: str,
     finding_id: str,
     *,
@@ -783,7 +805,7 @@ def get_finding_row_context(
     )
 
 
-def cancel_analysis(store: AnalysisStore, analysis_id: str) -> Analysis:
+def cancel_analysis(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
     """Cancel a `QUEUED` analysis, transitioning it to `CANCELLED`.
 
     For any other known state, returns the `Analysis` unchanged (no
@@ -805,14 +827,14 @@ def cancel_analysis(store: AnalysisStore, analysis_id: str) -> Analysis:
     return cancelled
 
 
-def _require_completed(store: AnalysisStore, analysis_id: str) -> Analysis:
+def _require_completed(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
     analysis = get_status(store, analysis_id)
     if analysis.state is not AnalysisState.COMPLETED:
         raise AnalysisNotReadyError(analysis_id)
     return analysis
 
 
-def get_or_infer_context(store: AnalysisStore, analysis_id: str) -> DatasetContext:
+def get_or_infer_context(store: AnalysisStoreProtocol, analysis_id: str) -> DatasetContext:
     """Return `analysis_id`'s `DatasetContext`, computing and caching it
     on first call for a `COMPLETED` analysis (`API-02`, `WP-059`).
 
@@ -839,7 +861,7 @@ def get_or_infer_context(store: AnalysisStore, analysis_id: str) -> DatasetConte
 
 
 def apply_ai_context_augmentation(
-    store: AnalysisStore, analysis_id: str, augmented_context: DatasetContext
+    store: AnalysisStoreProtocol, analysis_id: str, augmented_context: DatasetContext
 ) -> DatasetContext:
     """Persist an AI-augmented `DatasetContext` the caller already
     computed (`UI-02` slice 2 revision, `WP-064` r2; `docs/decision-log.md`
@@ -877,7 +899,7 @@ def apply_ai_context_augmentation(
 
 
 def get_guided_questions(
-    store: AnalysisStore, analysis_id: str
+    store: AnalysisStoreProtocol, analysis_id: str
 ) -> tuple[ClarificationQuestion, ...]:
     """Return `analysis_id`'s guided questions, inferring context first
     if not yet done (`API-02`, `WP-059`).
@@ -894,7 +916,7 @@ def _confirmed_or_corrected(current_value: str, new_value: str) -> Provenance:
 
 
 def confirm_context_fields(
-    store: AnalysisStore,
+    store: AnalysisStoreProtocol,
     analysis_id: str,
     edits: Mapping[ContextField, str],
     *,
@@ -957,7 +979,7 @@ def confirm_context_fields(
 
 
 def answer_guided_question(
-    store: AnalysisStore,
+    store: AnalysisStoreProtocol,
     analysis_id: str,
     question_id: str,
     *,
@@ -1033,7 +1055,9 @@ def answer_guided_question(
     return updated_context, updated_question, answer
 
 
-def finalize_context(store: AnalysisStore, analysis_id: str, *, expected_version: int) -> Analysis:
+def finalize_context(
+    store: AnalysisStoreProtocol, analysis_id: str, *, expected_version: int
+) -> Analysis:
     """Mark `analysis_id`'s context finalized (`API-02`, `WP-059`,
     `docs/api-specification.md` §9's `POST .../finalize`).
 
