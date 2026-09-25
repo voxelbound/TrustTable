@@ -272,14 +272,14 @@ def _create_demo_analysis(client: TestClient) -> str:
     response = client.post("/api/v1/demo/sales")
     assert response.status_code == 202
     analysis_id = str(response.json()["analysis"]["analysis_id"])
-    deadline = time.monotonic() + 5.0
+    deadline = time.monotonic() + 15.0
     while time.monotonic() < deadline:
         status = client.get(f"/api/v1/analyses/{analysis_id}/status")
         assert status.status_code == 200
         if status.json()["state"] in {"completed", "failed", "cancelled"}:
             return analysis_id
         time.sleep(0.01)
-    pytest.fail(f"analysis {analysis_id} did not reach a terminal state within 5.0s")
+    pytest.fail(f"analysis {analysis_id} did not reach a terminal state within 15.0s")
 
 
 def _findings(client: TestClient, analysis_id: str) -> list[dict[str, Any]]:

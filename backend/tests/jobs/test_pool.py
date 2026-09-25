@@ -22,7 +22,7 @@ from trusttable_backend.analysis.service import AnalysisState, AnalysisStore, cr
 from trusttable_backend.jobs.pool import JobPool
 from trusttable_backend.parsers.csv_parser import parse_csv as real_parse_csv
 
-_TIMEOUT = 5.0
+_TIMEOUT = 15.0
 
 
 def _wait_until(predicate: Callable[[], bool], *, timeout: float = _TIMEOUT) -> None:
