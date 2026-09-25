@@ -14,6 +14,8 @@ the only inputs, keeping the tests deterministic.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -303,10 +305,18 @@ def test_llm_base_url_sentinel_absent_from_repr() -> None:
 
 
 def test_database_url_sentinel_absent_from_api_responses(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """`postgresql://` is not this project's supported backend (ADR-004:
+    SQLite only) and `create_app()` (`DB-01`) now genuinely connects and
+    migrates — the sentinel is embedded directly in a real, connectable
+    `sqlite:///` path instead, which is what a `database_url` with an
+    embedded secret-looking value would actually look like for this
+    project's one real backend.
+    """
     _clear_all_env(monkeypatch)
-    monkeypatch.setenv("DATABASE_URL", f"postgresql://user:{SENTINEL_SECRET}@host/db")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / SENTINEL_SECRET}.db")
+    monkeypatch.setenv("DATA_DIRECTORY", str(tmp_path))
     get_settings.cache_clear()
 
     with TestClient(create_app()) as test_client:

@@ -39,6 +39,12 @@ services:
     env_file:
       - path: .env
         required: false
+    # `DB-01`: a named volume at `/data`, matching `Settings.data_directory`'s
+    # own built-in default, so the SQLite database file created there
+    # survives `docker compose restart`/container recreation instead of
+    # living only in the writable container layer.
+    volumes:
+      - trusttable-data:/data
     healthcheck:
       test:
         [
@@ -67,3 +73,7 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+
+volumes:
+  # `DB-01`: backs the `backend` service's `/data` mount above.
+  trusttable-data:

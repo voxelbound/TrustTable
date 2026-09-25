@@ -176,6 +176,18 @@ Test:
 - failed migration behavior
 - application readiness blocked during invalid schema state
 
+**Proven (`DB-01`):** empty-database-to-head (`test_run_migrations_creates_the_analyses_table`),
+readiness blocked during an invalid/pre-migration schema state and ready
+once migrated (`test_readiness_reports_503_and_storage_failing_before_migration`/
+`test_readiness_reports_200_and_storage_ok_once_migrated`,
+`backend/tests/api/test_health.py`), and a real Docker Compose
+container-restart-survives proof
+(`tests/integration/test_docker_compose_persistence.py`) — all in
+`backend/tests/persistence/`. **Not yet applicable:** upgrade-from-
+previous-released-revision has no prior revision to upgrade from yet
+(this is the first migration ever written); downgrade stays
+unsupported, matching "only when explicitly supported."
+
 ## 5. Browser matrix
 
 Pull requests:
