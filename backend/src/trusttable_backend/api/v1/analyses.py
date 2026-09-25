@@ -17,17 +17,18 @@ A durable `SqlAnalysisStore` (`DB-01`) is held on
 instance in `main.create_app()` — every route below reaches it only
 through `AnalysisStoreProtocol`, never the concrete class, so this
 module is unaffected by which store implementation is actually wired in.
-No true background execution or concurrent-write safety exists yet
-(`JOB-01`, not yet built; `WP-023`'s original disclosed non-goal, now
-narrowed to that remaining scope). Both `POST /demo/sales` and
-`POST /analyses` create *and*
-run the pipeline synchronously within the same request-response cycle —
-there is no background worker yet, so the returned analysis is typically
-already `completed` (or `failed`) by the time the response is sent, not
-`queued`. Still documented and returned as `202 Accepted` per
-`docs/api-specification.md` §5/§6's response shape, since the
-client-facing contract (poll `status_url`) remains forward-compatible
-with a future real background-execution package.
+
+A bounded `JobPool` (`JOB-01`, `WP-075`) is held on
+`app.state.job_pool`. `POST /demo/sales` and `POST /analyses` create the
+analysis and submit it to the pool, returning immediately with
+`state=queued` — the real pipeline runs on a background worker thread,
+genuinely honoring the already-documented `202 Accepted`/poll-`status_url`
+contract (`docs/api-specification.md` §5/§6) for the first time.
+`POST .../cancel` requests cooperative cancellation for any non-terminal
+analysis, not only `queued` — see `get_job_pool`/`post_analysis_cancel`
+below and `jobs/pool.py`'s own race-avoidance disclosure. The retry
+endpoint (`docs/api-specification.md`'s `POST .../retry`) remains a
+disclosed, separate follow-up (`JOB-01` is not yet fully delivered).
 """
 
 from __future__ import annotations
@@ -50,7 +51,6 @@ from trusttable_backend.analysis import (
     RowNotInFindingError,
     answer_guided_question,
     apply_ai_context_augmentation,
-    cancel_analysis,
     confirm_context_fields,
     create_analysis,
     create_analysis_from_upload,
@@ -61,7 +61,6 @@ from trusttable_backend.analysis import (
     get_guided_questions,
     get_or_infer_context,
     get_status,
-    run_analysis,
 )
 from trusttable_backend.config import get_settings
 from trusttable_backend.context_inference.ai_context import (
@@ -88,6 +87,7 @@ from trusttable_backend.explanation.ai_explanation import (
     run_finding_explanation,
 )
 from trusttable_backend.explanation.deterministic import build_deterministic_explanation
+from trusttable_backend.jobs import JobPool
 from trusttable_backend.profiling.schemas import ColumnProfile, DatasetProfile, ProfilingWarning
 from trusttable_backend.risk.scoring import TrustAssessment
 from trusttable_backend.schemas.analysis import (
@@ -155,6 +155,14 @@ def get_analysis_store(request: Request) -> AnalysisStoreProtocol:
     """
     store: AnalysisStoreProtocol = request.app.state.analysis_store
     return store
+
+
+def get_job_pool(request: Request) -> JobPool:
+    """Return the current app's bounded `JobPool` (`JOB-01`, `WP-075`;
+    `main.create_app` creates exactly one per application instance).
+    """
+    job_pool: JobPool = request.app.state.job_pool
+    return job_pool
 
 
 def _not_found(analysis_id: str) -> AppError:
@@ -271,12 +279,26 @@ def _analysis_resource(analysis: Analysis) -> AnalysisResource:
     )
 
 
+#: Every state `run_analysis` (`JOB-01`, `WP-075`) can still transition
+#: out of — cooperative cancellation is meaningful for any of these, not
+#: only `queued` (widened from the pre-`JOB-01` queued-only behavior).
+_NON_TERMINAL_STATES = frozenset(
+    {
+        AnalysisState.QUEUED,
+        AnalysisState.VALIDATING,
+        AnalysisState.PARSING,
+        AnalysisState.PROFILING,
+        AnalysisState.DETECTING,
+    }
+)
+
+
 def _analysis_status(analysis: Analysis) -> AnalysisStatusResponse:
     return AnalysisStatusResponse(
         analysis_id=analysis.analysis_id,
         state=analysis.state.value,
         message=_STATUS_MESSAGES[analysis.state],
-        cancellable=analysis.state is AnalysisState.QUEUED,
+        cancellable=analysis.state in _NON_TERMINAL_STATES,
         poll_interval_ms=_POLL_INTERVAL_MS,
     )
 
@@ -858,9 +880,9 @@ def post_analysis_finalize(
 
 @router.post("/analyses", response_model=UploadAnalysisResponse, status_code=202)
 async def post_analysis_upload(file: UploadFile, request: Request) -> UploadAnalysisResponse:
-    """Create an analysis from an uploaded CSV file and run it to
-    completion (`docs/api-specification.md` §6, disclosed CSV-only
-    subset — `WP-029`).
+    """Create an analysis from an uploaded CSV file and submit it to the
+    background worker pool (`docs/api-specification.md` §6, disclosed
+    CSV-only subset — `WP-029`; async submission, `JOB-01` `WP-075`).
 
     Follows `docs/product-requirements.md` §8.2's ordered validation
     steps: filename required, `.csv` extension required, size bounded
@@ -921,19 +943,21 @@ async def post_analysis_upload(file: UploadFile, request: Request) -> UploadAnal
     analysis = create_analysis_from_upload(
         store, content=content, original_filename=sanitize_filename(original_name)
     )
-    analysis = run_analysis(store, analysis.analysis_id)
+    get_job_pool(request).submit(analysis.analysis_id)
     status_url = f"/api/v1/analyses/{analysis.analysis_id}/status"
     return UploadAnalysisResponse(analysis=_analysis_resource(analysis), status_url=status_url)
 
 
 @router.post("/demo/sales", response_model=DemoAnalysisResponse, status_code=202)
 def post_demo_sales(request: Request) -> DemoAnalysisResponse:
-    """Create an analysis over the bundled demo dataset and run it to
-    completion (`docs/api-specification.md` §5).
+    """Create an analysis over the bundled demo dataset and submit it to
+    the background worker pool (`docs/api-specification.md` §5, `JOB-01`
+    `WP-075`). Returns immediately with `state=queued` — poll
+    `status_url` (`GET .../status`) for progress.
     """
     store = get_analysis_store(request)
     analysis = create_analysis(store)
-    analysis = run_analysis(store, analysis.analysis_id)
+    get_job_pool(request).submit(analysis.analysis_id)
     status_url = f"/api/v1/analyses/{analysis.analysis_id}/status"
     return DemoAnalysisResponse(analysis=_analysis_resource(analysis), status_url=status_url)
 
@@ -1070,15 +1094,21 @@ def get_analysis_finding_row_context(
 
 @router.post("/analyses/{analysis_id}/cancel", response_model=AnalysisResource)
 def post_analysis_cancel(analysis_id: str, request: Request) -> AnalysisResource:
-    """Cancel a queued analysis (`docs/api-specification.md` §6).
+    """Request cancellation of a queued or actively-running analysis
+    (`docs/api-specification.md` §6; real mid-pipeline cancellation,
+    `JOB-01` `WP-075`).
 
-    Only effective while `queued` — `analysis.service.cancel_analysis`'s
-    own documented behavior (no true mid-pipeline cancellation yet,
-    `JOB-01`); any other known state is returned unchanged, not an error.
+    Cooperative, not synchronous: for any non-terminal analysis, this
+    only ever sets a flag `JobPool`'s own worker thread observes at its
+    next stage checkpoint (never a direct store write from this route —
+    see `jobs/pool.py`'s own race-avoidance disclosure). The response
+    reflects the analysis's *current* state, which may still be
+    non-terminal; poll `GET .../status` for the eventual `cancelled`
+    outcome. A known but already-terminal analysis is returned
+    unchanged, not an error.
     """
     store = get_analysis_store(request)
-    try:
-        analysis = cancel_analysis(store, analysis_id)
-    except AnalysisNotFoundError as exc:
-        raise _not_found(analysis_id) from exc
+    analysis = _get_or_404(store, analysis_id)
+    if analysis.state in _NON_TERMINAL_STATES:
+        get_job_pool(request).request_cancel(analysis_id)
     return _analysis_resource(analysis)

@@ -30,8 +30,8 @@ Optionally add a **local AI model** (`llama.cpp`, no account or API key, no Hugg
 
 **Current milestone: v0.3 — Complete manager workflow (in progress).**
 
-- **Delivered so far:** `DB-01` — durable SQLAlchemy 2 + Alembic persistence for the Analysis aggregate, replacing the in-memory store (see "Delivered work" below).
-- **Remaining for `v0.3`:** `JOB-01` (bounded background worker/job state), `REM-01`/`RULE-01`/`RULE-02` (rule engine), `REV-01` (persisted review decisions), `EXP-01` (report export), `DEL-01` (analysis deletion), `UI-03`, and `REL-03` — none of these are implemented yet.
+- **Delivered so far:** `DB-01` — durable SQLAlchemy 2 + Alembic persistence for the Analysis aggregate, replacing the in-memory store; `JOB-01` (slice 1) — a bounded in-process background worker pool with real cooperative cancellation, replacing synchronous in-request pipeline execution (see "Delivered work" below).
+- **Remaining for `v0.3`:** the `JOB-01` retry endpoint, `REM-01`/`RULE-01`/`RULE-02` (rule engine), `REV-01` (persisted review decisions), `EXP-01` (report export), `DEL-01` (analysis deletion), `UI-03`, and `REL-03` — none of these are implemented yet.
 
 **v0.2 — Local AI beta (released as `v0.2.0`).**
 
@@ -108,6 +108,7 @@ The product, domain model, API boundaries, detector framework, frontend architec
 **Complete manager workflow (v0.3 — begun)**
 
 - **DB-01** — durable persistence for the Analysis aggregate: SQLAlchemy 2 + Alembic, SQLite (`docs/architecture.md` §8, `ADR-004`). A completed (or in-progress) analysis — dataset metadata, raw content, profile, findings, evidence, context, guided questions, and trust assessment, exactly as `analysis.service.Analysis` already defines it — now survives an application process restart unchanged; an analysis left in a non-terminal state by an unexpected restart is deterministically marked failed the next time the real application starts, rather than staying stuck. Alembic migrations run automatically at startup, and `/health/ready` gained a `storage` check reporting the migration state. `docker-compose.yml`'s backend service gained a named `/data` volume so the database survives container recreation. No AI-interpretation/review/rule/report persistence yet — those domain objects don't exist as implemented code — and no API response shape changed.
+- **JOB-01 (slice 1)** — a bounded in-process background worker pool (`docs/architecture.md` §9, `ADR-004`), replacing synchronous in-request pipeline execution for the first time. `POST /demo/sales`/`POST /analyses` now return immediately with `state=queued`; the real pipeline runs on a background worker, with real, persisted `parsing`/`profiling`/`detecting` stage progression observable through `GET /status`. Cancelling an in-flight analysis (`POST .../cancel`) now actually stops it cooperatively at the next checkpoint — not only a not-yet-started one, as before. The retry endpoint (`POST .../retry`) remains a disclosed, separate follow-up slice.
 
 The first production target is a local, single-instance application that:
 

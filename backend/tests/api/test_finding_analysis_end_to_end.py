@@ -29,6 +29,7 @@ from __future__ import annotations
 import copy
 import json
 import re
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -166,9 +167,20 @@ def configure_llama(
 
 
 def create_demo_analysis(client: TestClient) -> str:
+    """`JOB-01` (`WP-075`): the creation response is now always `queued`
+    — wait for the real background worker to finish before returning.
+    """
     response = client.post("/api/v1/demo/sales")
     assert response.status_code == 202
-    return str(response.json()["analysis"]["analysis_id"])
+    analysis_id = str(response.json()["analysis"]["analysis_id"])
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        status = client.get(f"/api/v1/analyses/{analysis_id}/status")
+        assert status.status_code == 200
+        if status.json()["state"] in {"completed", "failed", "cancelled"}:
+            return analysis_id
+        time.sleep(0.01)
+    pytest.fail(f"analysis {analysis_id} did not reach a terminal state within 5.0s")
 
 
 def findings(client: TestClient, analysis_id: str) -> list[dict[str, Any]]:

@@ -77,7 +77,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -569,10 +569,14 @@ def create_analysis_from_upload(
 
 
 def run_analysis(
-    store: AnalysisStoreProtocol, analysis_id: str, *, now: datetime | None = None
+    store: AnalysisStoreProtocol,
+    analysis_id: str,
+    *,
+    now: datetime | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> Analysis:
     """Run the full pipeline for a `QUEUED` analysis, transitioning it
-    through `VALIDATING`/`PARSING`/`PROFILING`/`DETECTING` to `COMPLETED`.
+    through `PARSING`/`PROFILING`/`DETECTING` to `COMPLETED`.
 
     Idempotent: calling this on a non-`QUEUED` analysis returns the
     current `Analysis` unchanged without re-executing anything. Any
@@ -588,6 +592,20 @@ def run_analysis(
     reasoning `compute_dataset_profile` itself already documents for its
     own `as_of` parameter.
 
+    `cancel_check` (`JOB-01`, `WP-075`) is an optional callback consulted
+    at four checkpoints — before `PARSING` starts, and after each of
+    `PARSING`/`PROFILING`/`DETECTING` finishes (the last of these is
+    consulted immediately before the analysis would otherwise be
+    persisted `COMPLETED`, so a cancellation requested during the final
+    stage is never silently missed). The first time it returns `True`,
+    the analysis is persisted `CANCELLED` (with `cancelled_at` set) and
+    this function returns immediately. `None` (the default) preserves
+    this function's exact prior behavior — every existing direct caller
+    is unaffected. Each stage transition is persisted to `store`
+    *before* that stage runs, so `store.get(analysis_id)` observes real
+    progress during a long-running call — the mechanism `JobPool` relies
+    on to make `GET /status` genuinely reflect an in-flight analysis.
+
     Raises `AnalysisNotFoundError` for an unknown `analysis_id`.
     """
     analysis = store.get(analysis_id)
@@ -599,16 +617,47 @@ def run_analysis(
     effective_now = now if now is not None else datetime.now(UTC)
     started_at = datetime.now(UTC)
 
+    def _cancelled_if_requested(current: Analysis) -> Analysis | None:
+        if cancel_check is None or not cancel_check():
+            return None
+        cancelled = replace(
+            current,
+            state=AnalysisState.CANCELLED,
+            started_at=started_at,
+            cancelled_at=datetime.now(UTC),
+        )
+        store.replace(cancelled)
+        return cancelled
+
+    maybe_cancelled = _cancelled_if_requested(analysis)
+    if maybe_cancelled is not None:
+        return maybe_cancelled
+
     try:
+        analysis = replace(analysis, state=AnalysisState.PARSING, started_at=started_at)
+        store.replace(analysis)
         parsed = parse_csv(analysis.content)
         columns = parsed.parsed_dataset.columns
 
+        maybe_cancelled = _cancelled_if_requested(analysis)
+        if maybe_cancelled is not None:
+            return maybe_cancelled
+
+        analysis = replace(analysis, state=AnalysisState.PROFILING)
+        store.replace(analysis)
         dataset_profile = compute_dataset_profile(
             columns,
             parsed.rows,
             parsed.parsed_dataset.sampling,
             as_of=effective_now.date(),
         )
+
+        maybe_cancelled = _cancelled_if_requested(analysis)
+        if maybe_cancelled is not None:
+            return maybe_cancelled
+
+        analysis = replace(analysis, state=AnalysisState.DETECTING)
+        store.replace(analysis)
         mapping_rows = tuple(
             {column.internal_key: row[column.ordinal] for column in columns} for row in parsed.rows
         )
@@ -629,11 +678,20 @@ def run_analysis(
         trust_assessment = calculate_trust_assessment(
             findings, priority_scores, security_exposure=analysis.security_exposure
         )
+
+        maybe_cancelled = _cancelled_if_requested(analysis)
+        if maybe_cancelled is not None:
+            return maybe_cancelled
     except Exception:  # noqa: BLE001 - isolated per DET-01 engine.py precedent
         failed_at = datetime.now(UTC)
         failed = replace(
             analysis,
             state=AnalysisState.FAILED,
+            dataset_profile=None,
+            findings=(),
+            priority_scores=(),
+            evidence=(),
+            trust_assessment=None,
             failure=AnalysisFailure(code=_FAILURE_CODE, message=_FAILURE_MESSAGE),
             started_at=started_at,
             failed_at=failed_at,
