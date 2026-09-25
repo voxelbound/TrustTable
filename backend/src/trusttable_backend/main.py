@@ -25,6 +25,8 @@ isolated `DATABASE_URL`/`DATA_DIRECTORY` (`backend/tests/conftest.py`'s
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -35,6 +37,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from trusttable_backend.api.v1.router import router as api_v1_router
 from trusttable_backend.config import get_settings
 from trusttable_backend.errors import AppError
+from trusttable_backend.jobs import JobPool
 from trusttable_backend.persistence import (
     SqlAnalysisStore,
     build_engine,
@@ -164,20 +167,36 @@ def create_app() -> FastAPI:
     the false positive of building this and never actually wiring it
     in). `app.state.analysis_engine` is also kept for
     `api.v1.health`'s `storage` readiness check.
+
+    `JOB-01` (`WP-075`): wires `app.state.job_pool`, a bounded
+    `JobPool` sized from `Settings.background_worker_count` — the real
+    production construction point that makes `POST /demo/sales`/`POST
+    /analyses` submit to a background worker instead of running the
+    pipeline inside the request (see `jobs/pool.py`'s own false-positive
+    disclosure). The `lifespan` context manager's shutdown half ensures
+    no worker thread outlives this app instance.
     """
     settings = get_settings()
-    app = FastAPI(
-        title="TrustTable API",
-        version=get_application_version(),
-    )
-    app.add_middleware(RequestIdMiddleware)
-    register_exception_handlers(app)
-    app.include_router(api_v1_router)
-
     engine = build_engine(settings)
     run_migrations(settings)
     store = SqlAnalysisStore(engine)
     reconcile_interrupted_analyses(store)
+    job_pool = JobPool(store, settings.background_worker_count)
+
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+        yield
+        job_pool.shutdown(wait=True)
+
+    app = FastAPI(
+        title="TrustTable API",
+        version=get_application_version(),
+        lifespan=_lifespan,
+    )
+    app.add_middleware(RequestIdMiddleware)
+    register_exception_handlers(app)
+    app.include_router(api_v1_router)
     app.state.analysis_engine = engine
     app.state.analysis_store = store
+    app.state.job_pool = job_pool
     return app

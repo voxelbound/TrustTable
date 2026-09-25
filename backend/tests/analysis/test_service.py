@@ -27,6 +27,7 @@ sequence against the committed demo dataset.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -585,6 +586,122 @@ def test_run_analysis_isolates_pipeline_failure(monkeypatch: pytest.MonkeyPatch)
     assert failed.priority_scores == ()
     assert failed.evidence == ()
     assert failed.trust_assessment is None
+
+
+# ---------------------------------------------------------------------------
+# JOB-01 (WP-075): persisted stage transitions and cooperative cancellation
+# ---------------------------------------------------------------------------
+
+
+def test_run_analysis_persists_each_stage_transition_before_running_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`run_analysis` writes `parsing`/`profiling`/`detecting` to the
+    store *before* the corresponding step runs — the mechanism `JobPool`
+    relies on to make `GET /status` observe real progress.
+    """
+    store = AnalysisStore()
+    created = create_analysis(store)
+    observed_states: list[AnalysisState] = []
+
+    def _record(real: Callable[..., object]) -> Callable[..., object]:
+        def _wrapper(*args: object, **kwargs: object) -> object:
+            current = store.get(created.analysis_id)
+            assert current is not None
+            observed_states.append(current.state)
+            return real(*args, **kwargs)
+
+        return _wrapper
+
+    monkeypatch.setattr("trusttable_backend.analysis.service.parse_csv", _record(parse_csv))
+    monkeypatch.setattr(
+        "trusttable_backend.analysis.service.compute_dataset_profile",
+        _record(compute_dataset_profile),
+    )
+    monkeypatch.setattr(
+        "trusttable_backend.analysis.service.run_detectors",
+        _record(run_detectors),
+    )
+
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+    assert observed_states == [
+        AnalysisState.PARSING,
+        AnalysisState.PROFILING,
+        AnalysisState.DETECTING,
+    ]
+    assert completed.state is AnalysisState.COMPLETED
+
+
+def test_run_analysis_with_no_cancel_check_behaves_exactly_as_before() -> None:
+    """The new `cancel_check` parameter defaults to `None`: every
+    pre-existing direct caller (tests, `ai_benchmark`) is unaffected.
+    """
+    store = AnalysisStore()
+    created = create_analysis(store)
+
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+    assert completed.state is AnalysisState.COMPLETED
+
+
+def test_run_analysis_cancel_check_true_before_start_cancels_without_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+
+    def _fail_if_called(*args: object, **kwargs: object) -> object:
+        raise AssertionError("parse_csv must not run once cancel_check is already True")
+
+    monkeypatch.setattr("trusttable_backend.analysis.service.parse_csv", _fail_if_called)
+
+    cancelled = run_analysis(store, created.analysis_id, now=FIXED_NOW, cancel_check=lambda: True)
+
+    assert cancelled.state is AnalysisState.CANCELLED
+    assert cancelled.cancelled_at is not None
+    assert cancelled.dataset_profile is None
+    assert cancelled.findings == ()
+
+
+@pytest.mark.parametrize("cancel_after_calls", [1, 2, 3])
+def test_run_analysis_cancel_check_true_mid_pipeline_stops_at_next_checkpoint(
+    monkeypatch: pytest.MonkeyPatch, cancel_after_calls: int
+) -> None:
+    """Cancellation is consulted at every one of the three stage
+    checkpoints (after `parse_csv`, after `compute_dataset_profile`,
+    after `run_detectors`) — parameterized so becoming `True` after any
+    of the three real pipeline calls still results in `CANCELLED`, never
+    `COMPLETED`.
+    """
+    store = AnalysisStore()
+    created = create_analysis(store)
+    calls = 0
+
+    def _cancel_after_n() -> bool:
+        nonlocal calls
+        calls += 1
+        return calls > cancel_after_calls
+
+    cancelled = run_analysis(
+        store, created.analysis_id, now=FIXED_NOW, cancel_check=_cancel_after_n
+    )
+
+    assert cancelled.state is AnalysisState.CANCELLED
+    assert cancelled.cancelled_at is not None
+    assert cancelled.dataset_profile is None
+    assert cancelled.findings == ()
+    assert cancelled.trust_assessment is None
+
+
+def test_run_analysis_cancel_check_false_throughout_completes_normally() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW, cancel_check=lambda: False)
+
+    assert completed.state is AnalysisState.COMPLETED
+    assert completed.findings  # the demo dataset must yield at least one finding
 
 
 # ---------------------------------------------------------------------------

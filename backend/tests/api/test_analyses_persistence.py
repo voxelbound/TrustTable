@@ -12,6 +12,7 @@ require.
 
 from __future__ import annotations
 
+import time
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
@@ -43,6 +44,21 @@ _ANALYSIS_ROUTES = (
 )
 
 
+def _wait_for_terminal(client: TestClient, analysis_id: str) -> None:
+    """`JOB-01` (`WP-075`): analyses now run on a real background worker
+    — wait for a terminal state before exercising routes that require
+    `completed` (context confirmation, profile, findings).
+    """
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        status = client.get(f"/api/v1/analyses/{analysis_id}/status")
+        assert status.status_code == 200
+        if status.json()["state"] in {"completed", "failed", "cancelled"}:
+            return
+        time.sleep(0.01)
+    raise AssertionError(f"analysis {analysis_id} did not reach a terminal state within 5.0s")
+
+
 def _get_all(client: TestClient, analysis_id: str) -> dict[str, Any]:
     responses: dict[str, Any] = {}
     for template in _ANALYSIS_ROUTES:
@@ -69,6 +85,7 @@ def test_two_independent_app_instances_sharing_one_database_are_byte_identical()
         created = first_client.post("/api/v1/demo/sales")
         assert created.status_code == 202
         analysis_id = created.json()["analysis"]["analysis_id"]
+        _wait_for_terminal(first_client, analysis_id)
 
         # Exercise context confirmation and finalization through the real
         # routes too, so the restart proof covers the finalized context
