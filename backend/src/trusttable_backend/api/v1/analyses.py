@@ -12,11 +12,15 @@ delegates to `trusttable_backend.analysis.service`'s existing,
 already-tested public functions (`docs/architecture.md` §3: "API routes
 -> Application services").
 
-The `AnalysisStore` is held on `app.state.analysis_store`, created once
-per `FastAPI` application instance in `main.create_app()` — in-memory,
-lost on process restart, no concurrency safety (`DB-01`/`JOB-01`, not yet
-built; the same disclosed non-goal `WP-023` already recorded for the
-store itself). Both `POST /demo/sales` and `POST /analyses` create *and*
+A durable `SqlAnalysisStore` (`DB-01`) is held on
+`app.state.analysis_store`, created once per `FastAPI` application
+instance in `main.create_app()` — every route below reaches it only
+through `AnalysisStoreProtocol`, never the concrete class, so this
+module is unaffected by which store implementation is actually wired in.
+No true background execution or concurrent-write safety exists yet
+(`JOB-01`, not yet built; `WP-023`'s original disclosed non-goal, now
+narrowed to that remaining scope). Both `POST /demo/sales` and
+`POST /analyses` create *and*
 run the pipeline synchronously within the same request-response cycle —
 there is no background worker yet, so the returned analysis is typically
 already `completed` (or `failed`) by the time the response is sent, not
@@ -38,7 +42,7 @@ from trusttable_backend.analysis import (
     AnalysisNotFoundError,
     AnalysisNotReadyError,
     AnalysisState,
-    AnalysisStore,
+    AnalysisStoreProtocol,
     ContextFieldNotEditableError,
     ContextVersionConflictError,
     FindingNotFoundError,
@@ -145,11 +149,11 @@ _STATUS_MESSAGES: dict[AnalysisState, str] = {
 _POLL_INTERVAL_MS = 500
 
 
-def get_analysis_store(request: Request) -> AnalysisStore:
-    """Return the current app's in-memory `AnalysisStore`
+def get_analysis_store(request: Request) -> AnalysisStoreProtocol:
+    """Return the current app's durable `SqlAnalysisStore`
     (`main.create_app` creates exactly one per application instance).
     """
-    store: AnalysisStore = request.app.state.analysis_store
+    store: AnalysisStoreProtocol = request.app.state.analysis_store
     return store
 
 
@@ -162,7 +166,7 @@ def _not_found(analysis_id: str) -> AppError:
     )
 
 
-def _get_or_404(store: AnalysisStore, analysis_id: str) -> Analysis:
+def _get_or_404(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
     try:
         return get_status(store, analysis_id)
     except AnalysisNotFoundError as exc:
@@ -179,7 +183,7 @@ def _finding_not_found(analysis_id: str, finding_id: str) -> AppError:
 
 
 def _get_finding_or_404(
-    store: AnalysisStore, analysis_id: str, finding_id: str
+    store: AnalysisStoreProtocol, analysis_id: str, finding_id: str
 ) -> FindingCandidate:
     try:
         return get_finding(store, analysis_id, finding_id)

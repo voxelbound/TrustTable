@@ -897,6 +897,23 @@ Persist:
 
 Large validated profile structures may be stored as JSON where normalization adds no practical value.
 
+**Implemented (`DB-01`):** analysis metadata, file metadata, stage and
+failure state, profile, context, questions and answers, findings, and
+evidence — the full `analysis.service.Analysis` aggregate as it exists
+today — persist through `backend/src/trusttable_backend/persistence/`
+(`SqlAnalysisStore`, one row per analysis; scalar columns for
+`analysis_id`/`state`/the four terminal timestamps, JSON columns for the
+rest, matching this section's own "large structures as JSON" permission).
+Raw dataset `content` is a `LargeBinary` column in the same row (not yet
+moved to filesystem storage under `Dataset.storage_location`). Alembic
+migrations run automatically at application startup
+(`main.create_app()`), and any analysis a restart finds in a non-terminal
+state is deterministically marked `FAILED`
+(`persistence.reconcile_interrupted_analyses`). AI interpretations,
+review decisions, rules, and exports are **not yet persisted** — none of
+those domain objects exist as implemented code yet; their own later
+backlog items (`REV-01`, `RULE-01`/`RULE-02`, `EXP-01`) own that work.
+
 ## 9. Background work
 
 Use a bounded in-process worker pool.
@@ -923,6 +940,12 @@ Required endpoints include:
 - `/health/live`
 - `/health/ready`
 - `/version`
+
+`/health/ready` reports `process` and `configuration` checks (`FND-01`/
+`FND-02`) plus a `storage` check (`DB-01`): `"ok"` when the database
+schema is migrated to the current Alembic head, `"failing"` otherwise
+(blocking readiness). `JOB-01` (not yet built) will append further
+checks without changing the response shape.
 
 Production frontend:
 

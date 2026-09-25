@@ -4,7 +4,9 @@ Exercises the six documented behaviors
 (`docs/implementation-backlog.md#API-01`): create analysis / load demo
 (`POST /demo/sales`), status, profile, findings, and cancel — against the
 real app via the shared `client` fixture (`conftest.py`), each test
-getting a fresh in-memory `AnalysisStore` (one per `create_app()` call).
+getting a fresh, isolated, durable `SqlAnalysisStore` (`DB-01`; one per
+`create_app()` call, backed by that test's own isolated on-disk SQLite
+database — see `conftest.py`'s `_hermetic_settings` fixture).
 
 `POST /demo/sales` runs the pipeline synchronously to completion within
 the same request — there is no background worker yet (`JOB-01`) — so the
@@ -31,8 +33,9 @@ from trusttable_backend.ai_provider.contract import (
     ProviderRequest,
     ProviderResponse,
 )
-from trusttable_backend.analysis import AnalysisStore, create_analysis, get_finding_evidence
+from trusttable_backend.analysis import AnalysisStoreProtocol, create_analysis, get_finding_evidence
 from trusttable_backend.config import get_settings
+from trusttable_backend.persistence.models import AnalysisRecord
 from trusttable_backend.request_context import REQUEST_ID_HEADER
 
 _VALID_AI_OUTPUT = {
@@ -139,7 +142,7 @@ def _create_queued_analysis_id(client: TestClient) -> str:
     — the only way to reach the not-yet-`completed` code paths, since
     `POST /demo/sales` always runs synchronously to completion.
     """
-    store: AnalysisStore = client.app.state.analysis_store  # type: ignore[attr-defined]
+    store: AnalysisStoreProtocol = client.app.state.analysis_store  # type: ignore[attr-defined]
     analysis = create_analysis(store)
     return analysis.analysis_id
 
@@ -959,7 +962,7 @@ def test_get_analysis_finding_explanation_preserves_canonical_evidence_when_sani
     # White-box: the canonical local Evidence, reached the same way the
     # explanation route itself reaches it, still carries the real raw
     # excerpt — the fix never touches this object.
-    store: AnalysisStore = client.app.state.analysis_store  # type: ignore[attr-defined]
+    store: AnalysisStoreProtocol = client.app.state.analysis_store  # type: ignore[attr-defined]
     evidence_items = get_finding_evidence(store, analysis_id, finding_id)
     security_pattern_items = [
         item for item in evidence_items if item.evidence_type.value == "security_pattern"
@@ -1592,15 +1595,27 @@ def test_post_analyses_upload_oversized_file_returns_structured_413(
     assert body["error"]["details"]["max_bytes"] == max_bytes
 
 
+def _persisted_analysis_count(client: TestClient) -> int:
+    """Test-only introspection of the real database row count (`DB-01`):
+    reaches past `AnalysisStoreProtocol` into the concrete
+    `SqlAnalysisStore`'s own session factory, the direct successor to
+    this file's original in-memory-dict-length introspection.
+    """
+    from sqlalchemy import func, select
+
+    store = client.app.state.analysis_store  # type: ignore[attr-defined]
+    with store._session_factory() as session:  # noqa: SLF001 - white-box, test-only
+        return session.scalar(select(func.count()).select_from(AnalysisRecord)) or 0
+
+
 def test_post_analyses_upload_no_analysis_created_on_rejection(client: TestClient) -> None:
     """A rejected upload (wrong extension) must not leave a stray
-    `AnalysisStore` entry behind."""
-    store: AnalysisStore = client.app.state.analysis_store  # type: ignore[attr-defined]
-    before = len(store._analyses)  # test-only introspection of the in-memory dict
+    persisted analysis behind."""
+    before = _persisted_analysis_count(client)
 
     response = _upload_csv(client, filename="sample.txt")
 
     assert response.status_code == 415
-    after = len(store._analyses)
+    after = _persisted_analysis_count(client)
     assert after == before
     assert response.json()["error"]["code"] == "UNSUPPORTED_FILE_TYPE"
