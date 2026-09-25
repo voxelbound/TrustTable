@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi.testclient import TestClient
 
@@ -42,8 +43,8 @@ _ANALYSIS_ROUTES = (
 )
 
 
-def _get_all(client: TestClient, analysis_id: str) -> dict[str, object]:
-    responses: dict[str, object] = {}
+def _get_all(client: TestClient, analysis_id: str) -> dict[str, Any]:
+    responses: dict[str, Any] = {}
     for template in _ANALYSIS_ROUTES:
         path = template.format(id=analysis_id)
         response = client.get(path)
