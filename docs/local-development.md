@@ -26,15 +26,26 @@ the local AI runtime, and running the test suites.
 ```sh
 cd backend
 uv sync
-uv run uvicorn trusttable_backend.main:app --reload --port 8000
+DATABASE_URL="sqlite:///$(pwd)/.local-data/trusttable.db" DATA_DIRECTORY="$(pwd)/.local-data" \
+  uv run uvicorn trusttable_backend.main:create_app --factory --reload --port 8000
 ```
 
 - `GET http://127.0.0.1:8000/api/v1/health/live`
 - `GET http://127.0.0.1:8000/api/v1/health/ready`
 - `GET http://127.0.0.1:8000/api/v1/version`
 
-Configuration is validated at startup and works with no setup at all —
-see [`docs/configuration.md`](configuration.md) for every setting, its
+`--factory` is required: `create_app()` (`DB-01`) builds the database
+engine and runs migrations as part of application construction, so it
+must be invoked once by Uvicorn itself, not imported as a ready-made
+`app` object.
+
+`DATABASE_URL`/`DATA_DIRECTORY` must be overridden for a native run:
+`Settings`' own built-in default (`sqlite:////data/trusttable.db`,
+`data_directory=/data`) targets the Docker Compose stack's own `/data`
+volume mount (see "Full stack — Docker Compose" below) and is not
+writable outside a container. Every other setting is validated at
+startup and works with no setup at all — see
+[`docs/configuration.md`](configuration.md) for every setting, its
 default, and effect. To override a default, copy `.env.example` to `.env`
 at the repository root (read automatically, native and Docker) or export
 environment variables directly; an invalid value stops startup with a

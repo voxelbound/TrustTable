@@ -1,11 +1,25 @@
 """FastAPI application factory.
 
 Registers operational endpoints (`FND-01`) and the `API-01` analysis
-routes (`api.v1.analyses`), backed by an in-memory `AnalysisStore`
-created fresh per application instance. No persistence or AI boundary is
-wired into the HTTP surface yet (`DB-01`/`AI-01`, not yet built).
-`FND-04` adds the cross-cutting structured-error/request-ID layer that
-every route inherits automatically.
+routes (`api.v1.analyses`), backed by a durable `SqlAnalysisStore`
+(`DB-01`) built from `Settings.database_url`/`data_directory` — the first
+real consumer of those two settings (`FND-02`). No AI boundary is wired
+into the HTTP surface yet (`AI-01`, not yet built). `FND-04` adds the
+cross-cutting structured-error/request-ID layer that every route
+inherits automatically.
+
+`create_app()` is a factory, not a module-level singleton: the real
+process boots it via Uvicorn's `--factory` flag
+(`trusttable_backend.main:create_app`, see `Dockerfile`'s `CMD` and
+`docs/local-development.md`/`docs/installation-linux.md`) rather than an
+eagerly-constructed `app = create_app()` module attribute. A real engine
+build + Alembic migration run now has a genuine, non-trivial side effect
+(creating/migrating a file on disk) that must never happen merely because
+some other module imports a name from this one (for example
+`export_openapi.py`, or any test importing `create_app` itself without
+calling it) — every test that does call `create_app()` supplies its own
+isolated `DATABASE_URL`/`DATA_DIRECTORY` (`backend/tests/conftest.py`'s
+`_hermetic_settings` fixture).
 """
 
 from __future__ import annotations
@@ -18,10 +32,15 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from trusttable_backend.analysis import AnalysisStore
 from trusttable_backend.api.v1.router import router as api_v1_router
 from trusttable_backend.config import get_settings
 from trusttable_backend.errors import AppError
+from trusttable_backend.persistence import (
+    SqlAnalysisStore,
+    build_engine,
+    reconcile_interrupted_analyses,
+    run_migrations,
+)
 from trusttable_backend.request_context import (
     REQUEST_ID_HEADER,
     RequestIdMiddleware,
@@ -135,8 +154,18 @@ def create_app() -> FastAPI:
     Loads and validates `Settings` first (FND-02): an invalid environment
     value raises here, before the app object exists, so the process fails
     to start rather than serving traffic with unvalidated configuration.
+
+    `DB-01`: builds the SQLAlchemy engine, runs Alembic migrations to
+    `head`, reconciles any analysis a prior process restart left
+    non-terminal, and wires the real `SqlAnalysisStore` into
+    `app.state.analysis_store` — the one production construction point
+    that makes this package's persistence real rather than merely
+    available (see `persistence/reconciliation.py`'s own docstring on
+    the false positive of building this and never actually wiring it
+    in). `app.state.analysis_engine` is also kept for
+    `api.v1.health`'s `storage` readiness check.
     """
-    get_settings()
+    settings = get_settings()
     app = FastAPI(
         title="TrustTable API",
         version=get_application_version(),
@@ -144,12 +173,11 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
     app.include_router(api_v1_router)
-    # `API-01`: one in-memory `AnalysisStore` per application instance —
-    # lost on process restart, no concurrency safety (`DB-01`/`JOB-01`,
-    # not yet built; disclosed non-goal, matching `WP-023`'s own
-    # `AnalysisStore` precedent).
-    app.state.analysis_store = AnalysisStore()
+
+    engine = build_engine(settings)
+    run_migrations(settings)
+    store = SqlAnalysisStore(engine)
+    reconcile_interrupted_analyses(store)
+    app.state.analysis_engine = engine
+    app.state.analysis_store = store
     return app
-
-
-app = create_app()

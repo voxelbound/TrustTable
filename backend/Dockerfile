@@ -22,14 +22,29 @@ RUN uv sync --locked --no-install-project --no-dev
 
 COPY README.md ./
 COPY src ./src
+COPY alembic.ini ./
+COPY alembic ./alembic
 RUN uv sync --locked --no-dev
 
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app \
+    # `DB-01`: pre-create `/data` (`Settings.data_directory`'s own
+    # default) owned by `appuser` before `docker-compose.yml`'s named
+    # volume is mounted there. Docker initializes an empty named volume's
+    # content *and permissions* from the image directory it is mounted
+    # over on first creation; without this, the volume mount is created
+    # root-owned and the non-root `appuser` process cannot open the
+    # SQLite file under it (`sqlite3.OperationalError: unable to open
+    # database file` — reproduced against a real Compose stack).
+    && mkdir -p /data && chown appuser:appuser /data
 USER appuser
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
 EXPOSE 8000
 
-CMD ["uvicorn", "trusttable_backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# `--factory`: `create_app()` (`DB-01`) now has a genuine, non-trivial
+# side effect (building the database engine and running migrations), so
+# it must run exactly once, at actual process startup, rather than as an
+# eagerly-imported module attribute (see `main.py`'s own docstring).
+CMD ["uvicorn", "trusttable_backend.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

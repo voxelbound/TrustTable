@@ -1,9 +1,14 @@
 """Export the application's OpenAPI schema as JSON (FND-05).
 
 A thin, network-free wrapper around `create_app().openapi()`: no live
-server, no Docker, no database. `create_app()` already runs standalone
-(every `Settings` field has a default — see `config.py`), so this module
-needs no special environment to run.
+server, no Docker, no external database. `create_app()` (`DB-01`) now
+builds a real SQLite engine and runs migrations as part of application
+construction, so this module no longer runs on `Settings`' own built-in
+default (a container-only `/data` path) — `get_openapi_schema` points
+`DATABASE_URL`/`DATA_DIRECTORY` at a private temporary directory first,
+only when the caller has not already configured them (a test importing
+this module inside `backend/tests/conftest.py`'s own per-test isolated
+database already has; the standalone CLI invocation below has not).
 
 Used by `frontend/package.json`'s `generate:api-types` script (piped into
 `openapi-typescript`) and by the CI `contract` job's drift check.
@@ -18,7 +23,9 @@ it is written to that path instead.
 from __future__ import annotations
 
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 from trusttable_backend.main import create_app
@@ -26,8 +33,11 @@ from trusttable_backend.main import create_app
 
 def get_openapi_schema() -> dict[str, object]:
     """Return the application's OpenAPI schema as a plain dict."""
-    app = create_app()
-    schema = app.openapi()
+    with tempfile.TemporaryDirectory(prefix="trusttable-openapi-export-") as tmp_dir:
+        os.environ.setdefault("DATABASE_URL", f"sqlite:///{Path(tmp_dir) / 'openapi-export.db'}")
+        os.environ.setdefault("DATA_DIRECTORY", tmp_dir)
+        app = create_app()
+        schema = app.openapi()
     return schema
 
 

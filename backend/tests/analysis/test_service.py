@@ -1448,14 +1448,17 @@ def test_no_ai_boundary_or_ai_provider_import_in_service_module() -> None:
 
 # ---------------------------------------------------------------------------
 # API-02 (WP-059): a real subprocess uvicorn boot, mirroring the
-# Dockerfile's exact CMD (`uvicorn trusttable_backend.main:app`), added
-# after a CI-reported "Docker Compose integration smoke tests" failure
-# on this package's own branch was investigated. Existing tests only
-# ever exercise `create_app()` in-process via `TestClient`/direct calls
-# (`conftest.py`, `test_analyses.py`); none previously proved the app
-# can actually boot as a genuinely separate OS process and serve
-# `/health/live` — a real, previously-uncovered gap this investigation
-# surfaced, kept here permanently rather than discarded after diagnosis.
+# Dockerfile's exact CMD (`uvicorn trusttable_backend.main:create_app
+# --factory`, `DB-01`, `WP-074`), added after a CI-reported "Docker
+# Compose integration smoke tests" failure on this package's own branch
+# was investigated. Existing tests only ever exercise `create_app()`
+# in-process via `TestClient`/direct calls (`conftest.py`,
+# `test_analyses.py`); none previously proved the app can actually boot
+# as a genuinely separate OS process and serve `/health/live` — a real,
+# previously-uncovered gap this investigation surfaced, kept here
+# permanently rather than discarded after diagnosis. `--factory` is
+# required since `DB-01`: `trusttable_backend.main` no longer exposes an
+# eagerly-constructed `app` object (see `main.py`'s own docstring).
 # ---------------------------------------------------------------------------
 
 
@@ -1470,12 +1473,19 @@ def test_real_uvicorn_subprocess_boots_and_serves_health_live() -> None:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
 
+    # `conftest.py`'s `_hermetic_settings` fixture already set
+    # `DATABASE_URL`/`DATA_DIRECTORY` in the real process environment
+    # (`monkeypatch.setenv` mutates `os.environ` directly) to this test's
+    # own isolated `tmp_path`-backed SQLite database — this subprocess
+    # inherits that environment automatically, so it never touches
+    # `Settings`' own Docker-only `/data` default.
     process = subprocess.Popen(
         [
             sys.executable,
             "-m",
             "uvicorn",
-            "trusttable_backend.main:app",
+            "trusttable_backend.main:create_app",
+            "--factory",
             "--host",
             "127.0.0.1",
             "--port",
