@@ -173,8 +173,13 @@ def create_app() -> FastAPI:
     production construction point that makes `POST /demo/sales`/`POST
     /analyses` submit to a background worker instead of running the
     pipeline inside the request (see `jobs/pool.py`'s own false-positive
-    disclosure). The `lifespan` context manager's shutdown half ensures
-    no worker thread outlives this app instance.
+    disclosure). The `lifespan` context manager's shutdown half joins
+    every worker thread first (`job_pool.shutdown(wait=True)`), then
+    disposes the engine's own connection pool (`engine.dispose()`) —
+    each real app instance (one per test, in the test suite) otherwise
+    leaves its SQLite connections open for the rest of the process
+    lifetime, a real resource leak only `JOB-01`'s own additional
+    `create_app()`-per-test tests made large enough to surface.
     """
     settings = get_settings()
     engine = build_engine(settings)
@@ -187,6 +192,7 @@ def create_app() -> FastAPI:
     async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
         job_pool.shutdown(wait=True)
+        engine.dispose()
 
     app = FastAPI(
         title="TrustTable API",
