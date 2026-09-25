@@ -29,6 +29,7 @@ from __future__ import annotations
 import copy
 import json
 import re
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -165,10 +166,30 @@ def configure_llama(
 # ---------------------------------------------------------------------------
 
 
+def _wait_for_terminal_state(client: TestClient, analysis_id: str) -> None:
+    """`JOB-01` (`WP-075`): every analysis now runs on a real background
+    worker — wait for a terminal state before exercising anything that
+    requires `completed` (findings, evidence, explanations, context).
+    """
+    deadline = time.monotonic() + 15.0
+    while time.monotonic() < deadline:
+        status = client.get(f"/api/v1/analyses/{analysis_id}/status")
+        assert status.status_code == 200
+        if status.json()["state"] in {"completed", "failed", "cancelled"}:
+            return
+        time.sleep(0.01)
+    pytest.fail(f"analysis {analysis_id} did not reach a terminal state within 15.0s")
+
+
 def create_demo_analysis(client: TestClient) -> str:
+    """`JOB-01` (`WP-075`): the creation response is now always `queued`
+    — wait for the real background worker to finish before returning.
+    """
     response = client.post("/api/v1/demo/sales")
     assert response.status_code == 202
-    return str(response.json()["analysis"]["analysis_id"])
+    analysis_id = str(response.json()["analysis"]["analysis_id"])
+    _wait_for_terminal_state(client, analysis_id)
+    return analysis_id
 
 
 def findings(client: TestClient, analysis_id: str) -> list[dict[str, Any]]:
@@ -877,6 +898,7 @@ def test_no_cell_value_reaches_the_provider_through_any_evidence_type(
     response = client.post("/api/v1/analyses", files={"file": ("notes.csv", csv_bytes, "text/csv")})
     assert response.status_code == 202
     analysis_id = str(response.json()["analysis"]["analysis_id"])
+    _wait_for_terminal_state(client, analysis_id)
     items = findings(client, analysis_id)
     detectors = {item["detector_id"] for item in items}
     assert "consistency.inconsistent_capitalization" in detectors
@@ -927,6 +949,7 @@ def test_the_context_route_sends_no_cell_value_or_derived_id_either(
         files={"file": ("notes.csv", ("\n".join(lines) + "\n").encode("utf-8"), "text/csv")},
     )
     analysis_id = str(response.json()["analysis"]["analysis_id"])
+    _wait_for_terminal_state(client, analysis_id)
     assert "consistency.inconsistent_capitalization" in {
         item["detector_id"] for item in findings(client, analysis_id)
     }

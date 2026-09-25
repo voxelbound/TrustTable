@@ -89,10 +89,31 @@ def compose_stack() -> Iterator[None]:
         )
 
 
+def _wait_for_terminal_state(analysis_id: str, timeout: float) -> None:
+    """`JOB-01` (`WP-075`): the real deployed backend now runs every
+    analysis on a background worker too — `POST /demo/sales` returns
+    `queued` immediately, so the persisted-and-restart-surviving state
+    this test proves must be captured only after the analysis actually
+    reaches a terminal state, not the creation response itself.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status = httpx.get(f"{BACKEND_URL}/api/v1/analyses/{analysis_id}/status", timeout=5)
+        assert status.status_code == 200
+        if status.json()["state"] in {"completed", "failed", "cancelled"}:
+            return
+        time.sleep(0.5)
+    raise AssertionError(f"analysis {analysis_id} did not reach a terminal state within {timeout}s")
+
+
 def test_analysis_survives_backend_container_restart(compose_stack: None) -> None:
     created = httpx.post(f"{BACKEND_URL}/api/v1/demo/sales", timeout=30)
     assert created.status_code == 202
-    before = created.json()
+    analysis_id = created.json()["analysis"]["analysis_id"]
+    _wait_for_terminal_state(analysis_id, READY_POLL_TIMEOUT_SECONDS)
+
+    before = httpx.get(f"{BACKEND_URL}/api/v1/analyses/{analysis_id}", timeout=5)
+    assert before.status_code == 200
 
     restart_result = _run_compose("restart", "backend", timeout=RESTART_TIMEOUT_SECONDS)
     assert restart_result.returncode == 0, (
@@ -106,6 +127,6 @@ def test_analysis_survives_backend_container_restart(compose_stack: None) -> Non
     storage_check = next(c for c in ready.json()["checks"] if c["name"] == "storage")
     assert storage_check == {"name": "storage", "status": "ok", "detail": None}
 
-    after = httpx.get(f"{BACKEND_URL}/api/v1/analyses/{before['analysis']['analysis_id']}", timeout=5)
+    after = httpx.get(f"{BACKEND_URL}/api/v1/analyses/{analysis_id}", timeout=5)
     assert after.status_code == 200
-    assert after.json() == before["analysis"]
+    assert after.json() == before.json()

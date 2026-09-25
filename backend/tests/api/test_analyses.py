@@ -8,20 +8,23 @@ getting a fresh, isolated, durable `SqlAnalysisStore` (`DB-01`; one per
 `create_app()` call, backed by that test's own isolated on-disk SQLite
 database — see `conftest.py`'s `_hermetic_settings` fixture).
 
-`POST /demo/sales` runs the pipeline synchronously to completion within
-the same request — there is no background worker yet (`JOB-01`) — so the
-public HTTP contract alone never produces an observable `queued`
-analysis. The not-yet-`completed` profile/findings/cancel paths are
-exercised with **white-box** setup: reaching into
-`client.app.state.analysis_store` and calling
-`trusttable_backend.analysis.create_analysis` directly (without
-`run_analysis`) to construct a real `queued` analysis, then driving it
-through the HTTP layer — clearly distinguished from the black-box tests
-above it in each test's own docstring/naming.
+`POST /demo/sales`/`POST /analyses` submit to a real bounded background
+worker pool (`JOB-01`, `WP-075`) instead of running the pipeline inside
+the request — the creation response itself is always `queued`.
+`_create_demo_analysis` (below) polls `GET .../status` until a terminal
+state before returning, so every test that only ever inspects the
+*final* analysis (the overwhelming majority) needs no change of its own.
+A genuinely still-`queued`, never-submitted analysis for the not-yet-
+`completed` profile/findings/cancel paths is still constructed with
+**white-box** setup: reaching into `client.app.state.analysis_store` and
+calling `trusttable_backend.analysis.create_analysis` directly (bypassing
+both `run_analysis` and the job pool) — clearly distinguished from the
+black-box tests above it in each test's own docstring/naming.
 """
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import pytest
@@ -129,18 +132,59 @@ _KNOWN_TRUST_LABELS = {
 }
 
 
+#: Bounded so a genuine regression (a job that never reaches a terminal
+#: state) fails fast rather than hanging; the deterministic demo/upload
+#: pipeline normally completes in well under a second.
+_POLL_TIMEOUT_SECONDS = 15.0
+_POLL_INTERVAL_SECONDS = 0.01
+_TERMINAL_STATES = {"completed", "failed", "cancelled"}
+
+
+def _wait_for_terminal(client: TestClient, analysis_id: str) -> dict[str, Any]:
+    """Poll `GET .../status` until `analysis_id` reaches a terminal
+    state (`JOB-01`, `WP-075`: analyses now run on a real background
+    worker, so a caller can no longer assume synchronous completion by
+    the time the creation response returns), then return the final
+    `GET /analyses/{id}` resource.
+    """
+    deadline = time.monotonic() + _POLL_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        status = client.get(f"/api/v1/analyses/{analysis_id}/status")
+        assert status.status_code == 200
+        if status.json()["state"] in _TERMINAL_STATES:
+            break
+        time.sleep(_POLL_INTERVAL_SECONDS)
+    else:
+        pytest.fail(
+            f"analysis {analysis_id} did not reach a terminal state within {_POLL_TIMEOUT_SECONDS}s"
+        )
+    final = client.get(f"/api/v1/analyses/{analysis_id}")
+    assert final.status_code == 200
+    return final.json()  # type: ignore[no-any-return]
+
+
 def _create_demo_analysis(client: TestClient) -> dict[str, Any]:
-    """Black-box: `POST /demo/sales`, returning the parsed response body."""
+    """Black-box: `POST /demo/sales`, then wait for the real background
+    worker (`JOB-01`, `WP-075`) to finish. Returns
+    `{"analysis": <final, terminal resource>, "status_url": ...}` — the
+    same shape every existing caller already expects, since none of them
+    inspect the transient `queued` creation response itself.
+    """
     response = client.post("/api/v1/demo/sales")
     assert response.status_code == 202
-    return response.json()  # type: ignore[no-any-return]
+    body = response.json()
+    assert body["analysis"]["state"] == "queued"
+    final_analysis = _wait_for_terminal(client, body["analysis"]["analysis_id"])
+    return {"analysis": final_analysis, "status_url": body["status_url"]}
 
 
 def _create_queued_analysis_id(client: TestClient) -> str:
-    """White-box: construct a real `queued` (not yet run) analysis
-    directly against the app's store, bypassing the HTTP layer entirely
-    — the only way to reach the not-yet-`completed` code paths, since
-    `POST /demo/sales` always runs synchronously to completion.
+    """White-box: construct a real `queued` analysis directly against the
+    app's store, bypassing both the HTTP layer and the job pool
+    (`JOB-01`, `WP-075`) — a deterministic, never-submitted `queued`
+    analysis for the not-yet-`completed` profile/findings/cancel-request
+    code paths, since polling a real black-box submission for a `queued`
+    snapshot would be an inherently racy way to reach the same state.
     """
     store: AnalysisStoreProtocol = client.app.state.analysis_store  # type: ignore[attr-defined]
     analysis = create_analysis(store)
@@ -1447,16 +1491,25 @@ def test_get_analysis_finding_explanation_ignores_unfinalized_context(
 # --- POST /analyses/{id}/cancel ------------------------------------------
 
 
-def test_cancel_queued_analysis_transitions_to_cancelled(client: TestClient) -> None:
-    """White-box: only a real `queued` analysis is ever cancellable."""
+def test_cancel_queued_analysis_returns_current_state_and_requests_cancellation(
+    client: TestClient,
+) -> None:
+    """White-box: cancellation is cooperative (`JOB-01`, `WP-075`), never
+    a synchronous store write from this route — the response reflects
+    the analysis's *current* state. This helper's analysis was never
+    submitted to the job pool, so nothing ever observes the requested
+    flag and it stays `queued`; a genuinely pool-managed job's real
+    transition to `cancelled` is proven end-to-end in
+    `test_analyses_async.py`.
+    """
     analysis_id = _create_queued_analysis_id(client)
 
     response = client.post(f"/api/v1/analyses/{analysis_id}/cancel")
 
     assert response.status_code == 200
     body = response.json()
-    assert body["state"] == "cancelled"
-    assert body["cancelled_at"] is not None
+    assert body["state"] == "queued"
+    assert body["cancelled_at"] is None
 
 
 def test_cancel_completed_analysis_returns_unchanged_state(client: TestClient) -> None:
@@ -1497,11 +1550,13 @@ def test_post_analyses_upload_returns_202_with_completed_analysis(client: TestCl
 
     assert response.status_code == 202
     body = response.json()
-    assert body["analysis"]["state"] == "completed"
-    assert body["analysis"]["dataset"]["source_type"] == "upload"
-    assert body["analysis"]["dataset"]["format"] == "csv"
-    assert body["analysis"]["dataset"]["byte_size"] == len(_VALID_CSV)
-    assert body["analysis"]["dataset"]["content_hash"]
+    assert body["analysis"]["state"] == "queued"
+    final = _wait_for_terminal(client, body["analysis"]["analysis_id"])
+    assert final["state"] == "completed"
+    assert final["dataset"]["source_type"] == "upload"
+    assert final["dataset"]["format"] == "csv"
+    assert final["dataset"]["byte_size"] == len(_VALID_CSV)
+    assert final["dataset"]["content_hash"]
 
 
 def test_post_analyses_upload_runs_real_pipeline_and_finds_issues(client: TestClient) -> None:
@@ -1509,7 +1564,8 @@ def test_post_analyses_upload_runs_real_pipeline_and_finds_issues(client: TestCl
 
     assert response.status_code == 202
     body = response.json()
-    assert body["analysis"]["finding_count"] > 0
+    final = _wait_for_terminal(client, body["analysis"]["analysis_id"])
+    assert final["finding_count"] > 0
 
 
 def test_post_analyses_upload_response_has_exact_top_level_fields(client: TestClient) -> None:
