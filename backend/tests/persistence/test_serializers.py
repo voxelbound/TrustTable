@@ -141,7 +141,7 @@ def test_decoded_dataclass_is_still_frozen() -> None:
     decoded = decode(encode(ColumnReference(original_name="x", internal_key="x", ordinal=0)))
 
     with pytest.raises(FrozenInstanceError):
-        decoded.ordinal = 1  # type: ignore[misc]
+        decoded.ordinal = 1
 
 
 def test_decode_reruns_post_init_and_raises_on_invariant_violation() -> None:
