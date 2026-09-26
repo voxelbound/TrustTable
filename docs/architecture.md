@@ -939,10 +939,9 @@ itself observes at four checkpoints — never a direct store write from
 the cancel route, avoiding a race with the worker's own concurrent
 writes. Restart-marks-interrupted-work-failed is `DB-01`'s
 `reconcile_interrupted_analyses`, unchanged by this package. **Safe
-retry** (`JOB-01` slice 2, `WP-076`; `project-ops/decisions/
-013-job01-retry-creates-new-analysis.md`, `DEC-013`): `POST
-/analyses/{id}/retry` on a `FAILED` analysis creates a new, independent
-`Analysis` over the same dataset content, linked via
+retry** (`JOB-01` slice 2): `POST /analyses/{id}/retry` on a `FAILED`
+analysis creates a new, independent `Analysis` over the same dataset
+content, linked via
 `retry_source_analysis_id`, submitted to the same pool — never a
 versioned attempt reusing the original `analysis_id`. The original
 analysis is never mutated.

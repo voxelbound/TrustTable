@@ -28,10 +28,8 @@ contract (`docs/api-specification.md` §5/§6) for the first time.
 analysis, not only `queued` — see `get_job_pool`/`post_analysis_cancel`
 below and `jobs/pool.py`'s own race-avoidance disclosure. `POST
 .../retry` (`JOB-01` slice 2, `WP-076`) retries a `FAILED` analysis by
-creating a new, independent analysis over the same dataset content, per
-`project-ops/decisions/013-job01-retry-creates-new-analysis.md`
-(`DEC-013`) — see `post_analysis_retry` below. `JOB-01` is now fully
-delivered.
+creating a new, independent analysis over the same dataset content — see
+`post_analysis_retry` below. `JOB-01` is now fully delivered.
 """
 
 from __future__ import annotations
@@ -1135,10 +1133,8 @@ def post_analysis_cancel(analysis_id: str, request: Request) -> AnalysisResource
 def post_analysis_retry(analysis_id: str, request: Request) -> RetryAnalysisResponse:
     """Retry a `FAILED` analysis by creating a new, independent analysis
     over the same dataset content, submitted to the background worker
-    pool (`docs/api-specification.md` §6; `JOB-01` slice 2, `WP-076`;
-    `project-ops/decisions/013-job01-retry-creates-new-analysis.md`,
-    `DEC-013`: a new `analysis_id`, never a versioned attempt reusing the
-    original).
+    pool (`docs/api-specification.md` §6; `JOB-01` slice 2: a new
+    `analysis_id`, never a versioned attempt reusing the original).
 
     Raises `ANALYSIS_NOT_FOUND` (404) for an unknown `analysis_id` and
     `ANALYSIS_NOT_RETRYABLE` (409) for a known analysis not in the
