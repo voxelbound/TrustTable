@@ -255,10 +255,9 @@ class Analysis:
     context_finalized: bool = False
     retry_source_analysis_id: str | None = None
     """The originating `analysis_id` when this analysis is itself a retry
-    (`JOB-01` slice 2, `WP-076`, `DEC-013`: retry creates a new,
-    independent `Analysis`, never a versioned attempt reusing the same
-    `analysis_id`). `None` for every analysis that is not a retry —
-    every pre-`WP-076` caller of `create_analysis`/
+    (`JOB-01` slice 2: retry creates a new, independent `Analysis`, never
+    a versioned attempt reusing the same `analysis_id`). `None` for every
+    analysis that is not a retry — every prior caller of `create_analysis`/
     `create_analysis_from_upload`/this dataclass's own constructor is
     unaffected (defaults to `None`). Set exactly once, at construction,
     by `retry_analysis` below; never mutated afterward."""
@@ -916,10 +915,8 @@ def cancel_analysis(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
 def retry_analysis(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
     """Create a new, independent `QUEUED` analysis over a `FAILED`
     analysis's own dataset `content`, linked via `retry_source_analysis_id`
-    (`JOB-01` slice 2, `WP-076`; `project-ops/decisions/
-    013-job01-retry-creates-new-analysis.md`, `DEC-013`: retry creates a
-    new analysis, never a versioned attempt reusing the same
-    `analysis_id`).
+    (`JOB-01` slice 2: retry creates a new analysis, never a versioned
+    attempt reusing the same `analysis_id`).
 
     Mirrors `create_analysis`/`create_analysis_from_upload`'s existing
     create-then-store-then-return-unstarted shape exactly: this function

@@ -152,13 +152,11 @@ class UploadAnalysisResponse(BaseModel):
 class RetryAnalysisResponse(BaseModel):
     """Body for `POST /analyses/{analysis_id}/retry` (`JOB-01` slice 2,
     `WP-076`; `docs/api-specification.md` §6: "202 Accepted, new attempt
-    ID or updated attempt resource"). `project-ops/decisions/
-    013-job01-retry-creates-new-analysis.md` (`DEC-013`) resolved this
-    as a new, independent `Analysis` — `analysis.analysis_id` is the
-    "new attempt ID"; `retry_source_analysis_id` echoes the original
-    analysis that was retried, for a client that only has the response
-    body (also visible via `AnalysisResource.retry_source_analysis_id`
-    on any later `GET`).
+    ID or updated attempt resource"), resolved as a new, independent
+    `Analysis` — `analysis.analysis_id` is the "new attempt ID";
+    `retry_source_analysis_id` echoes the original analysis that was
+    retried, for a client that only has the response body (also visible
+    via `AnalysisResource.retry_source_analysis_id` on any later `GET`).
     """
 
     analysis: AnalysisResource

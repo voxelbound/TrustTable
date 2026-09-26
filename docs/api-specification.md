@@ -193,13 +193,11 @@ Returns:
 
 ### POST `/analyses/{analysis_id}/retry`
 
-Implemented (`JOB-01` slice 2, `WP-076`; `project-ops/decisions/
-013-job01-retry-creates-new-analysis.md`, `DEC-013`): only a `FAILED`
-analysis is retryable (`ANALYSIS_NOT_RETRYABLE` otherwise). Creates a
-new, independent analysis over the original's own dataset content,
-linked via `retry_source_analysis_id` — never a versioned attempt
-reusing the original `analysis_id`. The original analysis is never
-mutated.
+Implemented (`JOB-01` slice 2): only a `FAILED` analysis is retryable
+(`ANALYSIS_NOT_RETRYABLE` otherwise). Creates a new, independent analysis
+over the original's own dataset content, linked via
+`retry_source_analysis_id` — never a versioned attempt reusing the
+original `analysis_id`. The original analysis is never mutated.
 
 Returns:
 
