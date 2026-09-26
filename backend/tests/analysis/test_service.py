@@ -38,6 +38,7 @@ from trusttable_backend.analysis.service import (
     AnalysisFailure,
     AnalysisNotFoundError,
     AnalysisNotReadyError,
+    AnalysisNotRetryableError,
     AnalysisState,
     AnalysisStore,
     ContextFieldNotEditableError,
@@ -59,6 +60,7 @@ from trusttable_backend.analysis.service import (
     get_or_infer_context,
     get_profile,
     get_status,
+    retry_analysis,
     run_analysis,
 )
 from trusttable_backend.demo_data import SEED, generate
@@ -348,6 +350,15 @@ def test_analysis_cancelled_requires_cancelled_at() -> None:
 def test_analysis_non_cancelled_rejects_cancelled_at() -> None:
     with pytest.raises(ValueError, match="cancelled_at"):
         _make_analysis(cancelled_at=FIXED_NOW)
+
+
+def test_analysis_retry_source_analysis_id_defaults_to_none() -> None:
+    assert _make_analysis().retry_source_analysis_id is None
+
+
+def test_analysis_retry_source_analysis_id_rejects_self_reference() -> None:
+    with pytest.raises(ValueError, match="retry_source_analysis_id"):
+        _make_analysis(analysis_id="analysis-1", retry_source_analysis_id="analysis-1")
 
 
 def test_analysis_priority_scores_must_match_findings_length() -> None:
@@ -1109,6 +1120,99 @@ def test_cancel_analysis_unknown_id_raises() -> None:
     store = AnalysisStore()
     with pytest.raises(AnalysisNotFoundError):
         cancel_analysis(store, "unknown-id")
+
+
+# ---------------------------------------------------------------------------
+# retry_analysis (JOB-01 slice 2, WP-076, DEC-013)
+# ---------------------------------------------------------------------------
+
+
+def _make_failed_analysis(monkeypatch: pytest.MonkeyPatch, store: AnalysisStore) -> Analysis:
+    created = create_analysis(store)
+
+    def _boom(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("synthetic pipeline failure for retry tests")
+
+    monkeypatch.setattr("trusttable_backend.analysis.service.parse_csv", _boom)
+    return run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+
+def test_retry_analysis_failed_creates_new_independent_queued_analysis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = AnalysisStore()
+    failed = _make_failed_analysis(monkeypatch, store)
+
+    retried = retry_analysis(store, failed.analysis_id)
+
+    assert retried.analysis_id != failed.analysis_id
+    assert retried.state is AnalysisState.QUEUED
+    assert retried.retry_source_analysis_id == failed.analysis_id
+    assert retried.content == failed.content
+    assert retried.dataset.original_filename == failed.dataset.original_filename
+    assert retried.dataset.dataset_id != failed.dataset.dataset_id
+
+
+def test_retry_analysis_does_not_mutate_original(monkeypatch: pytest.MonkeyPatch) -> None:
+    store = AnalysisStore()
+    failed = _make_failed_analysis(monkeypatch, store)
+
+    retry_analysis(store, failed.analysis_id)
+
+    assert store.get(failed.analysis_id) == failed
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        AnalysisState.QUEUED,
+        AnalysisState.VALIDATING,
+        AnalysisState.PARSING,
+        AnalysisState.PROFILING,
+        AnalysisState.DETECTING,
+        AnalysisState.CANCELLED,
+    ],
+)
+def test_retry_analysis_non_failed_non_completed_states_raise(state: AnalysisState) -> None:
+    store = AnalysisStore()
+    fields: dict[str, object] = {"state": state}
+    if state is AnalysisState.CANCELLED:
+        fields["cancelled_at"] = FIXED_NOW
+    analysis = _make_analysis(**fields)
+    store.add(analysis)
+
+    with pytest.raises(AnalysisNotRetryableError) as exc_info:
+        retry_analysis(store, analysis.analysis_id)
+    assert exc_info.value.analysis_id == analysis.analysis_id
+    assert exc_info.value.state is state
+
+
+def test_retry_analysis_completed_state_raises() -> None:
+    store = AnalysisStore()
+    completed = _make_completed_analysis()
+    store.add(completed)
+
+    with pytest.raises(AnalysisNotRetryableError) as exc_info:
+        retry_analysis(store, completed.analysis_id)
+    assert exc_info.value.state is AnalysisState.COMPLETED
+
+
+def test_retry_analysis_unknown_id_raises() -> None:
+    store = AnalysisStore()
+    with pytest.raises(AnalysisNotFoundError):
+        retry_analysis(store, "unknown-id")
+
+
+def test_retry_analysis_bundled_demo_source_type_preserved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = AnalysisStore()
+    failed = _make_failed_analysis(monkeypatch, store)
+
+    retried = retry_analysis(store, failed.analysis_id)
+
+    assert retried.dataset.source_type is DatasetSourceType.BUNDLED_DEMO
+    assert retried.dataset.storage_location == failed.dataset.storage_location
 
 
 # ---------------------------------------------------------------------------

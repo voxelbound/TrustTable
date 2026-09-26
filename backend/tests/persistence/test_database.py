@@ -110,3 +110,44 @@ def test_is_schema_ready_false_for_unreachable_database() -> None:
     engine = create_engine("sqlite:////this/path/does/not/exist/trusttable.db")
 
     assert is_schema_ready(engine) is False
+
+
+# ---------------------------------------------------------------------------
+# JOB-01 slice 2 (WP-076): migration 0002 reversibility (AC-06)
+# ---------------------------------------------------------------------------
+
+
+def test_migration_0002_upgrades_downgrades_and_reupgrades_cleanly(tmp_path: Path) -> None:
+    """`0002_add_retry_source_analysis_id.py` is additive and reversible:
+    `upgrade head` adds the column/index, `downgrade -1` removes exactly
+    them (restoring `0001`'s exact schema, unlike `0001` itself, whose own
+    `downgrade` deliberately raises `NotImplementedError`), and a second
+    `upgrade head` restores the column again — all against a fresh
+    database, matching this package's own additive-migration acceptance
+    criterion.
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    from trusttable_backend.persistence.database import _BACKEND_ROOT
+
+    settings = _settings(tmp_path)
+    engine = build_engine(settings)
+    config = Config(str(_BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(_BACKEND_ROOT / "alembic"))
+    config.set_main_option("sqlalchemy.url", settings.database_url)
+
+    command.upgrade(config, "head")
+    inspector = inspect(engine)
+    columns_after_upgrade = {col["name"] for col in inspector.get_columns("analyses")}
+    assert "retry_source_analysis_id" in columns_after_upgrade
+
+    command.downgrade(config, "-1")
+    inspector = inspect(engine)
+    columns_after_downgrade = {col["name"] for col in inspector.get_columns("analyses")}
+    assert "retry_source_analysis_id" not in columns_after_downgrade
+
+    command.upgrade(config, "head")
+    inspector = inspect(engine)
+    columns_after_reupgrade = {col["name"] for col in inspector.get_columns("analyses")}
+    assert "retry_source_analysis_id" in columns_after_reupgrade

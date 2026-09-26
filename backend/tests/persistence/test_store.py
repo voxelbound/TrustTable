@@ -16,6 +16,7 @@ from trusttable_backend.analysis.service import (
     create_analysis,
     finalize_context,
     get_or_infer_context,
+    retry_analysis,
     run_analysis,
 )
 from trusttable_backend.analysis.service import (
@@ -153,6 +154,45 @@ def test_get_raises_on_a_corrupted_persisted_row(store: SqlAnalysisStore) -> Non
 
     with pytest.raises(ValueError, match="original_filename"):
         store.get(analysis.analysis_id)
+
+
+# ---------------------------------------------------------------------------
+# retry_source_analysis_id round trip (JOB-01 slice 2, WP-076, DEC-013)
+# ---------------------------------------------------------------------------
+
+
+def test_retry_source_analysis_id_round_trips(
+    store: SqlAnalysisStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    working_store = InMemoryStore()
+    created = create_analysis(working_store)
+
+    def _boom(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("synthetic")
+
+    monkeypatch.setattr("trusttable_backend.analysis.service.parse_csv", _boom)
+    failed = run_analysis(working_store, created.analysis_id)
+    assert failed.state is AnalysisState.FAILED
+
+    retried = retry_analysis(working_store, failed.analysis_id)
+    assert retried.retry_source_analysis_id == failed.analysis_id
+
+    store.add(retried)
+    round_tripped = store.get(retried.analysis_id)
+
+    assert round_tripped == retried
+    assert round_tripped is not None
+    assert round_tripped.retry_source_analysis_id == failed.analysis_id
+
+
+def test_analysis_without_retry_source_round_trips_as_none(store: SqlAnalysisStore) -> None:
+    analysis = create_analysis(InMemoryStore())
+
+    store.add(analysis)
+    round_tripped = store.get(analysis.analysis_id)
+
+    assert round_tripped is not None
+    assert round_tripped.retry_source_analysis_id is None
 
 
 def test_non_terminal_analysis_ids_excludes_terminal_states(store: SqlAnalysisStore) -> None:

@@ -126,6 +126,7 @@ class AnalysisResource(BaseModel):
     completed_at: datetime | None
     failed_at: datetime | None
     cancelled_at: datetime | None
+    retry_source_analysis_id: str | None = None
 
 
 class DemoAnalysisResponse(BaseModel):
@@ -148,6 +149,23 @@ class UploadAnalysisResponse(BaseModel):
     status_url: str
 
 
+class RetryAnalysisResponse(BaseModel):
+    """Body for `POST /analyses/{analysis_id}/retry` (`JOB-01` slice 2,
+    `WP-076`; `docs/api-specification.md` §6: "202 Accepted, new attempt
+    ID or updated attempt resource"). `project-ops/decisions/
+    013-job01-retry-creates-new-analysis.md` (`DEC-013`) resolved this
+    as a new, independent `Analysis` — `analysis.analysis_id` is the
+    "new attempt ID"; `retry_source_analysis_id` echoes the original
+    analysis that was retried, for a client that only has the response
+    body (also visible via `AnalysisResource.retry_source_analysis_id`
+    on any later `GET`).
+    """
+
+    analysis: AnalysisResource
+    status_url: str
+    retry_source_analysis_id: str
+
+
 class AnalysisStatusResponse(BaseModel):
     """Body for `GET /analyses/{analysis_id}/status` — a lightweight
     polling endpoint (`docs/api-specification.md` §6).
@@ -157,16 +175,20 @@ class AnalysisStatusResponse(BaseModel):
     `WP-075`: a bounded worker pool runs the pipeline in the background
     instead of synchronously inside the request). `poll_interval_ms`
     stays a fixed constant regardless (no adaptive backoff has been
-    built). `retryable`/a numeric `progress_percentage` remain
-    deliberately omitted: no retry endpoint exists yet, and there is no
-    meaningful sub-stage partial-progress signal within one stage
-    either — both a disclosed, separate follow-up slice.
+    built). `retryable` is `true` if and only if `state` is `failed`
+    (`JOB-01` slice 2, `WP-076`: `POST .../retry` exists now, restricted
+    to `FAILED` per `docs/product-requirements.md`'s "retry failed
+    work"). A numeric `progress_percentage` remains deliberately
+    omitted: there is no meaningful sub-stage partial-progress signal
+    within one stage — a disclosed, permanent non-goal, not a follow-up
+    slice.
     """
 
     analysis_id: str
     state: str
     message: str
     cancellable: bool
+    retryable: bool
     poll_interval_ms: int
 
 

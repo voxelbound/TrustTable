@@ -26,9 +26,12 @@ genuinely honoring the already-documented `202 Accepted`/poll-`status_url`
 contract (`docs/api-specification.md` §5/§6) for the first time.
 `POST .../cancel` requests cooperative cancellation for any non-terminal
 analysis, not only `queued` — see `get_job_pool`/`post_analysis_cancel`
-below and `jobs/pool.py`'s own race-avoidance disclosure. The retry
-endpoint (`docs/api-specification.md`'s `POST .../retry`) remains a
-disclosed, separate follow-up (`JOB-01` is not yet fully delivered).
+below and `jobs/pool.py`'s own race-avoidance disclosure. `POST
+.../retry` (`JOB-01` slice 2, `WP-076`) retries a `FAILED` analysis by
+creating a new, independent analysis over the same dataset content, per
+`project-ops/decisions/013-job01-retry-creates-new-analysis.md`
+(`DEC-013`) — see `post_analysis_retry` below. `JOB-01` is now fully
+delivered.
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ from trusttable_backend.analysis import (
     AnalysisFailure,
     AnalysisNotFoundError,
     AnalysisNotReadyError,
+    AnalysisNotRetryableError,
     AnalysisState,
     AnalysisStoreProtocol,
     ContextFieldNotEditableError,
@@ -61,6 +65,7 @@ from trusttable_backend.analysis import (
     get_guided_questions,
     get_or_infer_context,
     get_status,
+    retry_analysis,
 )
 from trusttable_backend.config import get_settings
 from trusttable_backend.context_inference.ai_context import (
@@ -118,6 +123,7 @@ from trusttable_backend.schemas.analysis import (
     FindingsListResponse,
     ProfilingTimingResponse,
     ProposedValidationRuleResponse,
+    RetryAnalysisResponse,
     RowContextEntryResponse,
     RowContextResponse,
     SampleMetadataResponse,
@@ -276,6 +282,7 @@ def _analysis_resource(analysis: Analysis) -> AnalysisResource:
         completed_at=analysis.completed_at,
         failed_at=analysis.failed_at,
         cancelled_at=analysis.cancelled_at,
+        retry_source_analysis_id=analysis.retry_source_analysis_id,
     )
 
 
@@ -299,7 +306,17 @@ def _analysis_status(analysis: Analysis) -> AnalysisStatusResponse:
         state=analysis.state.value,
         message=_STATUS_MESSAGES[analysis.state],
         cancellable=analysis.state in _NON_TERMINAL_STATES,
+        retryable=analysis.state is AnalysisState.FAILED,
         poll_interval_ms=_POLL_INTERVAL_MS,
+    )
+
+
+def _analysis_not_retryable(analysis_id: str, state: AnalysisState) -> AppError:
+    return AppError(
+        "ANALYSIS_NOT_RETRYABLE",
+        "This analysis is not in a retryable state.",
+        status_code=409,
+        details={"analysis_id": analysis_id, "state": state.value},
     )
 
 
@@ -1112,3 +1129,31 @@ def post_analysis_cancel(analysis_id: str, request: Request) -> AnalysisResource
     if analysis.state in _NON_TERMINAL_STATES:
         get_job_pool(request).request_cancel(analysis_id)
     return _analysis_resource(analysis)
+
+
+@router.post("/analyses/{analysis_id}/retry", response_model=RetryAnalysisResponse, status_code=202)
+def post_analysis_retry(analysis_id: str, request: Request) -> RetryAnalysisResponse:
+    """Retry a `FAILED` analysis by creating a new, independent analysis
+    over the same dataset content, submitted to the background worker
+    pool (`docs/api-specification.md` §6; `JOB-01` slice 2, `WP-076`;
+    `project-ops/decisions/013-job01-retry-creates-new-analysis.md`,
+    `DEC-013`: a new `analysis_id`, never a versioned attempt reusing the
+    original).
+
+    Raises `ANALYSIS_NOT_FOUND` (404) for an unknown `analysis_id` and
+    `ANALYSIS_NOT_RETRYABLE` (409) for a known analysis not in the
+    `FAILED` state. The original analysis is never mutated by this call.
+    """
+    store = get_analysis_store(request)
+    _get_or_404(store, analysis_id)
+    try:
+        retry = retry_analysis(store, analysis_id)
+    except AnalysisNotRetryableError as exc:
+        raise _analysis_not_retryable(analysis_id, exc.state) from exc
+    get_job_pool(request).submit(retry.analysis_id)
+    status_url = f"/api/v1/analyses/{retry.analysis_id}/status"
+    return RetryAnalysisResponse(
+        analysis=_analysis_resource(retry),
+        status_url=status_url,
+        retry_source_analysis_id=analysis_id,
+    )
