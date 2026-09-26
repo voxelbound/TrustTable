@@ -225,6 +225,7 @@ def test_post_demo_sales_analysis_has_exact_fields(client: TestClient) -> None:
         "completed_at",
         "failed_at",
         "cancelled_at",
+        "retry_source_analysis_id",  # JOB-01 slice 2, WP-076
     }
 
 
@@ -304,10 +305,12 @@ def test_get_analysis_status_for_completed_analysis(client: TestClient) -> None:
         "state",
         "message",
         "cancellable",
+        "retryable",  # JOB-01 slice 2, WP-076
         "poll_interval_ms",
     }
     assert body["state"] == "completed"
     assert body["cancellable"] is False
+    assert body["retryable"] is False
     assert body["message"] == "Analysis completed."
     assert body["poll_interval_ms"] > 0
 

@@ -44,7 +44,10 @@ class AnalysisRecord(Base):
     """One persisted `analysis.service.Analysis` (`DB-01`)."""
 
     __tablename__ = "analyses"
-    __table_args__ = (Index("ix_analyses_state", "state"),)
+    __table_args__ = (
+        Index("ix_analyses_state", "state"),
+        Index("ix_analyses_retry_source_analysis_id", "retry_source_analysis_id"),
+    )
 
     analysis_id: Mapped[str] = mapped_column(String, primary_key=True)
     state: Mapped[str] = mapped_column(String, nullable=False)
@@ -70,3 +73,9 @@ class AnalysisRecord(Base):
 
     context_version: Mapped[int] = mapped_column(nullable=False, default=0)
     context_finalized: Mapped[bool] = mapped_column(nullable=False, default=False)
+
+    retry_source_analysis_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    """The originating `analysis_id` when this row is a retry (`JOB-01`
+    slice 2, `WP-076`, `DEC-013`) -- `NULL` for every analysis that is not
+    itself a retry, including every row persisted before this column
+    existed (`0002_add_retry_source_analysis_id.py`)."""

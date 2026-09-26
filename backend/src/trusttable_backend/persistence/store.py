@@ -65,6 +65,7 @@ def _analysis_to_row_values(analysis: Analysis) -> dict[str, object]:
         "guided_questions_json": serializers.encode(analysis.guided_questions),
         "context_version": analysis.context_version,
         "context_finalized": analysis.context_finalized,
+        "retry_source_analysis_id": analysis.retry_source_analysis_id,
     }
 
 
@@ -94,6 +95,7 @@ def _row_to_analysis(row: AnalysisRecord) -> Analysis:
         guided_questions=serializers.decode(row.guided_questions_json),
         context_version=row.context_version,
         context_finalized=row.context_finalized,
+        retry_source_analysis_id=row.retry_source_analysis_id,
     )
 
 
