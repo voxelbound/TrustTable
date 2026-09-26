@@ -313,10 +313,8 @@ export const postAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionI
  *
  * Retry a `FAILED` analysis by creating a new, independent analysis
  * over the same dataset content, submitted to the background worker
- * pool (`docs/api-specification.md` §6; `JOB-01` slice 2, `WP-076`;
- * `project-ops/decisions/013-job01-retry-creates-new-analysis.md`,
- * `DEC-013`: a new `analysis_id`, never a versioned attempt reusing the
- * original).
+ * pool (`docs/api-specification.md` §6; `JOB-01` slice 2: a new
+ * `analysis_id`, never a versioned attempt reusing the original).
  *
  * Raises `ANALYSIS_NOT_FOUND` (404) for an unknown `analysis_id` and
  * `ANALYSIS_NOT_RETRYABLE` (409) for a known analysis not in the
