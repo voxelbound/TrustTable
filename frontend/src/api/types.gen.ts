@@ -131,6 +131,10 @@ export type AnalysisResource = {
      * Finding Count
      */
     finding_count: number;
+    /**
+     * Retry Source Analysis Id
+     */
+    retry_source_analysis_id?: string | null;
     security_exposure: SecurityExposureResponse;
     /**
      * Started At
@@ -154,10 +158,13 @@ export type AnalysisResource = {
  * `WP-075`: a bounded worker pool runs the pipeline in the background
  * instead of synchronously inside the request). `poll_interval_ms`
  * stays a fixed constant regardless (no adaptive backoff has been
- * built). `retryable`/a numeric `progress_percentage` remain
- * deliberately omitted: no retry endpoint exists yet, and there is no
- * meaningful sub-stage partial-progress signal within one stage
- * either — both a disclosed, separate follow-up slice.
+ * built). `retryable` is `true` if and only if `state` is `failed`
+ * (`JOB-01` slice 2, `WP-076`: `POST .../retry` exists now, restricted
+ * to `FAILED` per `docs/product-requirements.md`'s "retry failed
+ * work"). A numeric `progress_percentage` remains deliberately
+ * omitted: there is no meaningful sub-stage partial-progress signal
+ * within one stage — a disclosed, permanent non-goal, not a follow-up
+ * slice.
  */
 export type AnalysisStatusResponse = {
     /**
@@ -176,6 +183,10 @@ export type AnalysisStatusResponse = {
      * Poll Interval Ms
      */
     poll_interval_ms: number;
+    /**
+     * Retryable
+     */
+    retryable: boolean;
     /**
      * State
      */
@@ -1017,6 +1028,29 @@ export type ReadinessResponse = {
 };
 
 /**
+ * RetryAnalysisResponse
+ *
+ * Body for `POST /analyses/{analysis_id}/retry` (`JOB-01` slice 2,
+ * `WP-076`; `docs/api-specification.md` §6: "202 Accepted, new attempt
+ * ID or updated attempt resource"), resolved as a new, independent
+ * `Analysis` — `analysis.analysis_id` is the "new attempt ID";
+ * `retry_source_analysis_id` echoes the original analysis that was
+ * retried, for a client that only has the response body (also visible
+ * via `AnalysisResource.retry_source_analysis_id` on any later `GET`).
+ */
+export type RetryAnalysisResponse = {
+    analysis: AnalysisResource;
+    /**
+     * Retry Source Analysis Id
+     */
+    retry_source_analysis_id: string;
+    /**
+     * Status Url
+     */
+    status_url: string;
+};
+
+/**
  * RowContextEntryResponse
  *
  * One row in a `RowContextResponse` window (`FIND-01`, `WP-038`).
@@ -1710,6 +1744,36 @@ export type PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionId
 };
 
 export type PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponse = PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses[keyof PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses];
+
+export type PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/retry';
+};
+
+export type PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostError = PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostErrors[keyof PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostErrors];
+
+export type PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponses = {
+    /**
+     * Successful Response
+     */
+    202: RetryAnalysisResponse;
+};
+
+export type PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponse = PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponses[keyof PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponses];
 
 export type GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetData = {
     body?: never;

@@ -193,12 +193,17 @@ Returns:
 
 ### POST `/analyses/{analysis_id}/retry`
 
-Creates or starts a linked retry according to implementation policy.
+Implemented (`JOB-01` slice 2): only a `FAILED` analysis is retryable
+(`ANALYSIS_NOT_RETRYABLE` otherwise). Creates a new, independent analysis
+over the original's own dataset content, linked via
+`retry_source_analysis_id` — never a versioned attempt reusing the
+original `analysis_id`. The original analysis is never mutated.
 
 Returns:
 
 - `202 Accepted`
-- new attempt ID or updated attempt resource
+- the new analysis resource (its own `analysis_id` is the "new attempt
+  ID"), `status_url`, and `retry_source_analysis_id`
 
 ### DELETE `/analyses/{analysis_id}`
 
