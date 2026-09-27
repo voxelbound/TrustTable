@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   BusinessImpactStatementResponse,
   ProposedValidationRuleResponse,
+  RemediationOptionResponse,
 } from '../../api'
 import {
   BusinessImpactSection,
@@ -34,6 +35,25 @@ const ASSUMPTION: BusinessImpactStatementResponse = {
   evidence_ids: [],
   context_fields: [],
   assumption: 'the rows feed order-count reporting',
+}
+
+function makeOption(
+  overrides: Partial<RemediationOptionResponse> = {},
+): RemediationOptionResponse {
+  return {
+    remediation_id: 'rem.1',
+    action_summary: 'Check the duplicates, then remove them at source.',
+    responsible_role: 'The data owner',
+    urgency: 'Before the next report',
+    historical_correction_guidance:
+      'Check whether the rows are true duplicates.',
+    source_system_prevention_guidance: 'Remove true duplicates at source.',
+    risk_warning: 'Removing a legitimate row by mistake loses real data.',
+    verification_step: 'Re-run this check and confirm the count is zero.',
+    technical_example: null,
+    evidence_ids: ['ev-1'],
+    ...overrides,
+  }
 }
 
 const RULE: ProposedValidationRuleResponse = {
@@ -135,35 +155,70 @@ describe('BusinessImpactSection', () => {
 })
 
 describe('RemediationSection', () => {
-  it('lists steps in order and states that the advice is advisory only', () => {
-    render(
-      <RemediationSection
-        steps={['Check the duplicates.', 'Remove true duplicates at source.']}
-        aiAssisted={false}
-      />,
-    )
+  it('lists each structured option and states that the advice is advisory only', () => {
+    const first = makeOption({ remediation_id: 'rem.1' })
+    const second = makeOption({
+      remediation_id: 'rem.2',
+      action_summary: 'Confirm the export mapping.',
+    })
+    render(<RemediationSection options={[first, second]} aiAssisted={false} />)
     expect(
       screen.getByRole('heading', { name: 'Remediation' }),
     ).toBeInTheDocument()
     expect(
       screen.getByText(/never changes your uploaded data/),
     ).toBeInTheDocument()
-    const steps = screen.getAllByRole('listitem')
-    expect(steps.map((li) => li.textContent)).toEqual([
-      'Check the duplicates.',
-      'Remove true duplicates at source.',
-    ])
+    const options = screen.getAllByRole('listitem')
+    expect(options).toHaveLength(2)
+    expect(within(options[0]!).getByText(first.action_summary)).toBeTruthy()
+    expect(within(options[0]!).getByText(first.responsible_role)).toBeTruthy()
+    expect(within(options[0]!).getByText(first.urgency)).toBeTruthy()
+    expect(
+      within(options[0]!).getByText(first.historical_correction_guidance),
+    ).toBeTruthy()
+    expect(
+      within(options[0]!).getByText(first.source_system_prevention_guidance),
+    ).toBeTruthy()
+    expect(within(options[0]!).getByText(first.verification_step)).toBeTruthy()
+    expect(within(options[0]!).getByText(first.risk_warning)).toBeTruthy()
+    expect(within(options[1]!).getByText(second.action_summary)).toBeTruthy()
   })
 
-  it('notes AI assistance when an AI interpretation produced the steps', () => {
-    render(<RemediationSection steps={['Do x.']} aiAssisted={true} />)
+  it('always shows a risk warning, even a low-risk one', () => {
+    const option = makeOption({ risk_warning: 'This action carries low risk.' })
+    render(<RemediationSection options={[option]} aiAssisted={false} />)
+    expect(
+      screen.getByText('This action carries low risk.'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows an optional technical example only when present', () => {
+    const withExample = makeOption({ technical_example: '=SUM(A2:A10)' })
+    const { rerender } = render(
+      <RemediationSection options={[withExample]} aiAssisted={false} />,
+    )
+    expect(screen.getByText('=SUM(A2:A10)')).toBeInTheDocument()
+
+    rerender(
+      <RemediationSection
+        options={[makeOption({ technical_example: null })]}
+        aiAssisted={false}
+      />,
+    )
+    expect(screen.queryByText('Example')).not.toBeInTheDocument()
+  })
+
+  it('notes AI assistance when an AI interpretation produced the options', () => {
+    render(<RemediationSection options={[makeOption()]} aiAssisted={true} />)
     expect(screen.getByText(/These suggestions were AI-assisted/)).toBeTruthy()
   })
 
   it('shows an honest empty state', () => {
-    render(<RemediationSection steps={[]} aiAssisted={false} />)
+    render(<RemediationSection options={[]} aiAssisted={false} />)
     expect(
-      screen.getByText('No remediation steps were produced for this finding.'),
+      screen.getByText(
+        'No remediation options were produced for this finding.',
+      ),
     ).toBeInTheDocument()
   })
 })

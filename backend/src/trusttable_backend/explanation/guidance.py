@@ -1,7 +1,8 @@
 """Deterministic built-in guidance for every finding (`AI-08`,
-`docs/decision-log.md` D-040): possible business impact, an advisory
-remediation and a proposed validation rule, authored once per detector and
-rendered with no AI at all.
+`docs/decision-log.md` D-040; remediation restructured by `REM-01`,
+`docs/domain-model.md` §16): possible business impact, a structured
+remediation recommendation and a proposed validation rule, authored once
+per detector and rendered with no AI at all.
 
 This is what makes the four Finding Detail sections useful when AI is
 disabled (`docs/product-requirements.md` §5.7), when a provider fails, and
@@ -14,8 +15,13 @@ model boundary and everything is shown to users:
   condition stated. A deterministic template cannot know a dataset's
   business use, so it never asserts a consequence as a fact and never
   claims `EVIDENCE` or `CONFIRMED_CONTEXT` backing;
-- remediation is advice to a person; the wording says changes belong in the
-  source system (TrustTable never edits an uploaded file);
+- remediation is one structured `RemediationOption` (`REM-01`): advice to a
+  person, never a claim that TrustTable itself changed anything. Its two
+  guidance texts stay split exactly as before REM-01's restructuring —
+  correcting rows already affected (`historical_correction_guidance`) and
+  fixing the source system so it does not recur
+  (`source_system_prevention_guidance`) — now joined by a role, an urgency,
+  an always-populated risk warning, and a verification step;
 - the rule is a *proposal* (`ProposedValidationRule`, status constant
   `"proposed"`) of a type from `docs/product-requirements.md` §13; nothing
   runs or enforces it (the rule engine is `RULE-01`, a later item).
@@ -34,6 +40,7 @@ from ..domain.explanation import (
     BusinessImpactStatement,
     ImpactBasis,
     ProposedValidationRule,
+    RemediationOption,
     ValidationRuleType,
 )
 
@@ -46,14 +53,30 @@ class FindingGuidance:
     """The three advisory sections for one finding."""
 
     business_impact: tuple[BusinessImpactStatement, ...]
-    remediation: tuple[str, ...]
+    remediation: tuple[RemediationOption, ...]
     validation_rule: ProposedValidationRule
+
+
+@dataclass(frozen=True, slots=True)
+class _RemediationTemplate:
+    """One detector's authored remediation content, before `{columns}` is
+    substituted. Field names mirror `RemediationOption` exactly except
+    `remediation_id`/`evidence_ids` (assigned by the caller — see
+    `build_deterministic_guidance`)."""
+
+    action_summary: str
+    responsible_role: str
+    urgency: str
+    historical_correction_guidance: str
+    source_system_prevention_guidance: str
+    risk_warning: str
+    verification_step: str
 
 
 @dataclass(frozen=True, slots=True)
 class _Template:
     impact: tuple[tuple[str, str], ...]  # (statement, assumption)
-    remediation: tuple[str, ...]
+    remediation: _RemediationTemplate
     rule_type: ValidationRuleType
     rule_description: str
 
@@ -67,10 +90,30 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "the rows are aggregated or counted without removing duplicates first",
             ),
         ),
-        remediation=(
-            "Check whether the repeated rows are true duplicates or legitimate repeated records.",
-            "If they are true duplicates, remove or merge them in the source system; "
-            "TrustTable never edits your file.",
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Confirm whether the repeated rows are true duplicates, then remove or "
+                "merge them in the source system."
+            ),
+            responsible_role="The person who owns or enters data in the source system",
+            urgency="Before the next report that counts or totals these rows",
+            historical_correction_guidance=(
+                "Check whether the repeated rows are true duplicates or legitimate "
+                "repeated records."
+            ),
+            source_system_prevention_guidance=(
+                "If they are true duplicates, remove or merge them in the source system; "
+                "TrustTable never edits your file."
+            ),
+            risk_warning=(
+                "Removing a row that only looks like a duplicate could delete a "
+                "legitimate repeated transaction; confirm each one individually before "
+                "deleting."
+            ),
+            verification_step=(
+                "Re-run this check after the source system is updated and confirm the "
+                "duplicate count drops to zero."
+            ),
         ),
         rule_type=ValidationRuleType.UNIQUE,
         rule_description="Each row should be unique across {columns}.",
@@ -83,10 +126,29 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "the column is expected to hold values that reports rely on",
             ),
         ),
-        remediation=(
-            "Confirm whether {columns} should contain data and, if so, fix the export or "
-            "mapping that produces it.",
-            "If the column is not needed, leave it out of the export.",
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Confirm whether {columns} should hold data and fix the export or mapping "
+                "that produces it."
+            ),
+            responsible_role="The person who maintains the export or integration",
+            urgency="Before this data is used in the next report",
+            historical_correction_guidance=(
+                "Confirm whether {columns} should contain data and, if so, fix the export "
+                "or mapping that produces it."
+            ),
+            source_system_prevention_guidance=(
+                "If the column is not needed, leave it out of the export."
+            ),
+            risk_warning=(
+                "Leaving a genuinely required column empty can silently hide missing "
+                "information from downstream reports; do not assume the column is unused "
+                "without checking."
+            ),
+            verification_step=(
+                "Re-run this check after fixing the export and confirm the column now "
+                "contains the expected values."
+            ),
         ),
         rule_type=ValidationRuleType.NOT_NULL,
         rule_description="Values in {columns} should not be blank.",
@@ -98,11 +160,28 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "the column feeds calculations or filters that assume it is filled in",
             ),
         ),
-        remediation=(
-            "Find out why values in {columns} are missing (an optional field, a failed "
-            "export or a data-entry gap) before deciding how to handle them.",
-            "Fill in or correct the missing values in the source system where the true "
-            "value is known.",
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Find out why {columns} is missing values, then fill in or correct them "
+                "at the source."
+            ),
+            responsible_role="The person who owns the source system or data-entry process",
+            urgency="Before {columns} is used in any calculation or filter",
+            historical_correction_guidance=(
+                "Find out why values in {columns} are missing (an optional field, a "
+                "failed export or a data-entry gap) before deciding how to handle them."
+            ),
+            source_system_prevention_guidance=(
+                "Fill in or correct the missing values in the source system where the "
+                "true value is known."
+            ),
+            risk_warning=(
+                "Filling in missing values with a guessed default can be worse than "
+                "leaving them blank; only fill in values you can verify from the source."
+            ),
+            verification_step=(
+                "Re-run this check after correction and confirm the missing share has dropped."
+            ),
         ),
         rule_type=ValidationRuleType.MAX_MISSING_PERCENTAGE,
         rule_description=(
@@ -117,10 +196,26 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "the identifier is used to join or reconcile records",
             ),
         ),
-        remediation=(
-            "Recover the missing identifiers in {columns} from the source system.",
-            "Decide whether records that cannot be identified should be excluded from "
-            "analysis until they are corrected.",
+        remediation=_RemediationTemplate(
+            action_summary="Recover the missing identifiers in {columns} from the source system.",
+            responsible_role="The person who owns the source system",
+            urgency="Before these records are joined or reconciled with other data",
+            historical_correction_guidance=(
+                "Recover the missing identifiers in {columns} from the source system."
+            ),
+            source_system_prevention_guidance=(
+                "Decide whether records that cannot be identified should be excluded "
+                "from analysis until they are corrected."
+            ),
+            risk_warning=(
+                "Assigning a new identifier without confirming the original risks "
+                "merging two different records together; only restore identifiers you "
+                "can verify."
+            ),
+            verification_step=(
+                "Confirm the recovered identifiers match the source system's own "
+                "records before using them."
+            ),
         ),
         rule_type=ValidationRuleType.NOT_NULL,
         rule_description="Every row should have a value in {columns}.",
@@ -133,9 +228,25 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "the column is used for grouping, filtering or joining",
             ),
         ),
-        remediation=(
-            "Standardize the capitalization of values in {columns} in the source system.",
-            "Agree on one canonical spelling for each category.",
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Agree on one canonical spelling for each category and standardize "
+                "{columns} in the source system."
+            ),
+            responsible_role="The person who maintains the source system or data-entry standards",
+            urgency="Before the next grouped or filtered report",
+            historical_correction_guidance=(
+                "Standardize the capitalization of values in {columns} in the source system."
+            ),
+            source_system_prevention_guidance="Agree on one canonical spelling for each category.",
+            risk_warning=(
+                "Standardizing capitalization by find-and-replace can silently rewrite "
+                "an unrelated value that happens to match; review the affected values "
+                "before changing them at the source."
+            ),
+            verification_step=(
+                "Re-run this check and confirm the values now group as a single category."
+            ),
         ),
         rule_type=ValidationRuleType.ACCEPTED_VALUES,
         rule_description=(
@@ -151,9 +262,28 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "values in the column are matched or grouped by exact text",
             ),
         ),
-        remediation=(
-            "Trim leading and trailing spaces from values in {columns} at the source.",
-            "Add trimming to the process that exports or enters this data.",
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Trim leading and trailing spaces from {columns} at the source and add "
+                "trimming to the export or entry process."
+            ),
+            responsible_role="The person who maintains the export or entry form",
+            urgency="Before this column is used for matching or grouping",
+            historical_correction_guidance=(
+                "Trim leading and trailing spaces from values in {columns} at the source."
+            ),
+            source_system_prevention_guidance=(
+                "Add trimming to the process that exports or enters this data."
+            ),
+            risk_warning=(
+                "Automated trimming tools can also strip meaningful spacing inside a "
+                "value if applied too broadly; trim only leading and trailing "
+                "whitespace, not internal spacing."
+            ),
+            verification_step=(
+                "Re-run this check and confirm no values remain with leading or trailing "
+                "whitespace."
+            ),
         ),
         rule_type=ValidationRuleType.REGEX,
         rule_description="Values in {columns} should not start or end with whitespace.",
@@ -166,9 +296,23 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "the column is meant to record events that have already happened",
             ),
         ),
-        remediation=(
-            "Check the flagged rows and correct any mistyped dates in the source.",
-            "If the dates are genuine scheduled events, consider keeping them in a separate field.",
+        remediation=_RemediationTemplate(
+            action_summary="Check the flagged rows and correct any mistyped dates in the source.",
+            responsible_role="The person who entered or owns the record",
+            urgency="Before this data is used in a time-based report",
+            historical_correction_guidance=(
+                "Check the flagged rows and correct any mistyped dates in the source."
+            ),
+            source_system_prevention_guidance=(
+                "If the dates are genuine scheduled events, consider keeping them in a "
+                "separate field."
+            ),
+            risk_warning=(
+                "Changing a date without checking the original document can turn a "
+                "genuine future-dated event into an incorrect one; verify against the "
+                "source document first."
+            ),
+            verification_step="Re-run this check and confirm no unexpected future dates remain.",
         ),
         rule_type=ValidationRuleType.DATE_RANGE,
         rule_description=(
@@ -183,9 +327,24 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "the column is expected to hold only zero or positive amounts",
             ),
         ),
-        remediation=(
-            "Review the flagged rows to tell legitimate adjustments from entry errors.",
-            "Correct erroneous values in the source system.",
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Review the flagged rows to tell legitimate adjustments from entry "
+                "errors, then correct errors in the source."
+            ),
+            responsible_role="The person who owns the source system",
+            urgency="Before this column is totalled or averaged",
+            historical_correction_guidance=(
+                "Review the flagged rows to tell legitimate adjustments from entry errors."
+            ),
+            source_system_prevention_guidance="Correct erroneous values in the source system.",
+            risk_warning=(
+                "Treating every negative value as an error could remove a legitimate "
+                "refund or adjustment; confirm each flagged row individually."
+            ),
+            verification_step=(
+                "Re-run this check and confirm only expected negative values, if any, remain."
+            ),
         ),
         rule_type=ValidationRuleType.NUMERIC_RANGE,
         rule_description="Values in {columns} should be zero or greater.",
@@ -198,10 +357,24 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "the percentage is used to compute amounts such as discounts or taxes",
             ),
         ),
-        remediation=(
-            "Check whether values in {columns} were entered inconsistently as fractions and "
-            "whole numbers.",
-            "Correct out-of-range values in the source system.",
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Check whether {columns} was entered inconsistently as fractions and "
+                "whole numbers, then correct out-of-range values at the source."
+            ),
+            responsible_role="The person who owns the source system",
+            urgency="Before this percentage is used in a calculation",
+            historical_correction_guidance=(
+                "Check whether values in {columns} were entered inconsistently as "
+                "fractions and whole numbers."
+            ),
+            source_system_prevention_guidance="Correct out-of-range values in the source system.",
+            risk_warning=(
+                "Rescaling every value by 100 without checking can turn an "
+                "already-correct percentage into a wrong one; confirm each flagged "
+                "value's original scale first."
+            ),
+            verification_step="Re-run this check and confirm all values fall within 0-100.",
         ),
         rule_type=ValidationRuleType.NUMERIC_RANGE,
         rule_description="Percentage values in {columns} should be between 0 and 100.",
@@ -214,10 +387,29 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "the stored total is used for reporting or reconciliation",
             ),
         ),
-        remediation=(
-            "Compare the flagged rows' total with the fields it is computed from to see "
-            "which value is wrong.",
-            "Correct the wrong value in the source, or recompute the total there.",
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Compare the flagged rows' total with the fields it should be computed "
+                "from and correct the wrong value at the source."
+            ),
+            responsible_role="The person who owns the source system or reconciliation process",
+            urgency="Before this total is used in reporting or reconciliation",
+            historical_correction_guidance=(
+                "Compare the flagged rows' total with the fields it is computed from to "
+                "see which value is wrong."
+            ),
+            source_system_prevention_guidance=(
+                "Correct the wrong value in the source, or recompute the total there."
+            ),
+            risk_warning=(
+                "Recomputing and overwriting the stored total without checking which "
+                "side is wrong could replace a correct total with an incorrect one; "
+                "identify the actual error first."
+            ),
+            verification_step=(
+                "Re-run this check and confirm the total and its components now agree "
+                "within tolerance."
+            ),
         ),
         rule_type=ValidationRuleType.APPROXIMATE_EQUALITY,
         rule_description=(
@@ -233,9 +425,28 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "the column is expected to vary between records",
             ),
         ),
-        remediation=(
-            "Confirm whether a single value is expected for {columns}.",
-            "If it is not, check the process that fills the column in.",
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Confirm whether a single value is expected for {columns}; if not, check "
+                "the process that fills it in."
+            ),
+            responsible_role="The person who maintains the source system or integration",
+            urgency="Before this column is relied on to vary",
+            historical_correction_guidance=(
+                "Confirm whether a single value is expected for {columns}."
+            ),
+            source_system_prevention_guidance=(
+                "If it is not, check the process that fills the column in."
+            ),
+            risk_warning=(
+                "Assuming the constant value is always wrong could mask a legitimately "
+                "fixed field, such as a fixed currency code; confirm the expected "
+                "behavior before changing anything."
+            ),
+            verification_step=(
+                "Re-run this check after the process is fixed and confirm the column "
+                "now varies as expected."
+            ),
         ),
         rule_type=ValidationRuleType.ACCEPTED_VALUES,
         rule_description=(
@@ -250,10 +461,29 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "the column feeds averages, totals or thresholds",
             ),
         ),
-        remediation=(
-            "Review the flagged rows to see whether the extreme values in {columns} are genuine.",
-            "Correct entry errors at the source; keep genuine extreme values but consider "
-            "reporting them separately.",
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Review the flagged rows to see whether the extreme values in {columns} "
+                "are genuine, then correct entry errors at the source."
+            ),
+            responsible_role="The person who owns the source system",
+            urgency="Before this column feeds an average, total or threshold",
+            historical_correction_guidance=(
+                "Review the flagged rows to see whether the extreme values in {columns} "
+                "are genuine."
+            ),
+            source_system_prevention_guidance=(
+                "Correct entry errors at the source; keep genuine extreme values but "
+                "consider reporting them separately."
+            ),
+            risk_warning=(
+                "Removing or capping a genuine extreme value could hide a real event, "
+                "such as a large but valid order; confirm each flagged value "
+                "individually."
+            ),
+            verification_step=(
+                "Re-run this check and confirm remaining extreme values are genuine and expected."
+            ),
         ),
         rule_type=ValidationRuleType.NUMERIC_RANGE,
         rule_description=(
@@ -268,10 +498,30 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "an AI tool or assistant reads values from this column",
             ),
         ),
-        remediation=(
-            "Review the flagged cells and remove instruction-like text that does not belong "
-            "in the data.",
-            "Treat the contents of {columns} as untrusted whenever they are passed to any AI tool.",
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Review the flagged cells and remove instruction-like text that does not "
+                "belong in the data."
+            ),
+            responsible_role="The person who owns the source system or data-entry process",
+            urgency="Before this column is passed to any AI tool",
+            historical_correction_guidance=(
+                "Review the flagged cells and remove instruction-like text that does not "
+                "belong in the data."
+            ),
+            source_system_prevention_guidance=(
+                "Treat the contents of {columns} as untrusted whenever they are passed to "
+                "any AI tool."
+            ),
+            risk_warning=(
+                "Removing text that only looks instruction-like without checking could "
+                "delete a legitimate customer comment or note; review each flagged cell "
+                "before editing."
+            ),
+            verification_step=(
+                "Re-run this check and confirm the flagged instruction-like content no "
+                "longer appears; keep treating {columns} as untrusted for any AI tool."
+            ),
         ),
         rule_type=ValidationRuleType.REGEX,
         rule_description=(
@@ -290,9 +540,24 @@ _GENERIC_TEMPLATE: Final[_Template] = _Template(
             "the affected data is used in reports or decisions",
         ),
     ),
-    remediation=(
-        "Review the flagged rows and confirm whether the values in {columns} are correct.",
-        "Correct genuine errors in the source system.",
+    remediation=_RemediationTemplate(
+        action_summary=(
+            "Review the flagged rows and confirm whether the values in {columns} are "
+            "correct, then correct genuine errors at the source."
+        ),
+        responsible_role="The person who owns the source system",
+        urgency="Before this data is used in a report or decision",
+        historical_correction_guidance=(
+            "Review the flagged rows and confirm whether the values in {columns} are correct."
+        ),
+        source_system_prevention_guidance="Correct genuine errors in the source system.",
+        risk_warning=(
+            "Correcting a value without confirming it against the source record risks "
+            "introducing a new error; verify before changing anything."
+        ),
+        verification_step=(
+            "Re-run this check after correction and confirm the condition no longer appears."
+        ),
     ),
     rule_type=ValidationRuleType.CONDITIONAL_RULE,
     rule_description=(
@@ -333,7 +598,24 @@ def build_deterministic_guidance(finding: FindingCandidate) -> FindingGuidance:
         )
         for statement, assumption in template.impact
     )
-    remediation = tuple(step.format(columns=columns) for step in template.remediation)
+    remediation_template = template.remediation
+    remediation = (
+        RemediationOption(
+            remediation_id="rem.1",
+            action_summary=remediation_template.action_summary.format(columns=columns),
+            responsible_role=remediation_template.responsible_role,
+            urgency=remediation_template.urgency,
+            historical_correction_guidance=(
+                remediation_template.historical_correction_guidance.format(columns=columns)
+            ),
+            source_system_prevention_guidance=(
+                remediation_template.source_system_prevention_guidance.format(columns=columns)
+            ),
+            risk_warning=remediation_template.risk_warning,
+            verification_step=remediation_template.verification_step.format(columns=columns),
+            evidence_ids=finding.evidence_ids,
+        ),
+    )
     rule = ProposedValidationRule(
         rule_type=template.rule_type,
         columns=finding.affected_columns,

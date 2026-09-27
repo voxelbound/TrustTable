@@ -412,6 +412,30 @@ class BusinessImpactStatementResponse(BaseModel):
     assumption: str
 
 
+class RemediationOptionResponse(BaseModel):
+    """One structured remediation recommendation (`REM-01`), mirroring
+    `domain.explanation.RemediationOption`.
+
+    `risk_warning` is always populated (never `null`/empty) — a documented
+    simplification of `docs/domain-model.md` §16's conditional "destructive
+    actions include risk warnings" invariant, avoiding fragile keyword-based
+    destructiveness classification. `technical_example` is `null` when no
+    concrete example applies. Advisory only — TrustTable never changes
+    uploaded data; nothing here claims that it did.
+    """
+
+    remediation_id: str
+    action_summary: str
+    responsible_role: str
+    urgency: str
+    historical_correction_guidance: str
+    source_system_prevention_guidance: str
+    risk_warning: str
+    verification_step: str
+    technical_example: str | None
+    evidence_ids: list[str]
+
+
 class ProposedValidationRuleResponse(BaseModel):
     """A validation rule *proposal* (`AI-08`), mirroring
     `domain.explanation.ProposedValidationRule`.
@@ -528,7 +552,7 @@ class FindingExplanationResponse(BaseModel):
     referenced_evidence_ids: list[str]
     referenced_columns: list[ColumnReferenceResponse]
     business_impact: list[BusinessImpactStatementResponse]
-    remediation: list[str]
+    remediation: list[RemediationOptionResponse]
     validation_rule: ProposedValidationRuleResponse | None
 
 

@@ -279,7 +279,7 @@ export function FindingDetailRoute() {
       {explanation && (
         <>
           <RemediationSection
-            steps={explanation.remediation}
+            options={explanation.remediation}
             aiAssisted={explanation.provenance === 'ai_interpretation'}
           />
           <ValidationRuleSection

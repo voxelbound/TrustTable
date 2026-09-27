@@ -829,7 +829,7 @@ export type FindingExplanationResponse = {
     /**
      * Remediation
      */
-    remediation: Array<string>;
+    remediation: Array<RemediationOptionResponse>;
     validation_rule: ProposedValidationRuleResponse | null;
 };
 
@@ -1025,6 +1025,62 @@ export type ReadinessResponse = {
      * Status
      */
     status: 'ready' | 'not_ready';
+};
+
+/**
+ * RemediationOptionResponse
+ *
+ * One structured remediation recommendation (`REM-01`), mirroring
+ * `domain.explanation.RemediationOption`.
+ *
+ * `risk_warning` is always populated (never `null`/empty) — a documented
+ * simplification of `docs/domain-model.md` §16's conditional "destructive
+ * actions include risk warnings" invariant, avoiding fragile keyword-based
+ * destructiveness classification. `technical_example` is `null` when no
+ * concrete example applies. Advisory only — TrustTable never changes
+ * uploaded data; nothing here claims that it did.
+ */
+export type RemediationOptionResponse = {
+    /**
+     * Action Summary
+     */
+    action_summary: string;
+    /**
+     * Evidence Ids
+     */
+    evidence_ids: Array<string>;
+    /**
+     * Historical Correction Guidance
+     */
+    historical_correction_guidance: string;
+    /**
+     * Remediation Id
+     */
+    remediation_id: string;
+    /**
+     * Responsible Role
+     */
+    responsible_role: string;
+    /**
+     * Risk Warning
+     */
+    risk_warning: string;
+    /**
+     * Source System Prevention Guidance
+     */
+    source_system_prevention_guidance: string;
+    /**
+     * Technical Example
+     */
+    technical_example: string | null;
+    /**
+     * Urgency
+     */
+    urgency: string;
+    /**
+     * Verification Step
+     */
+    verification_step: string;
 };
 
 /**

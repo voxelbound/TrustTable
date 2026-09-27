@@ -523,6 +523,18 @@ Invariants:
 - destructive actions include risk warnings
 - AI-generated options reference a finding and evidence
 
+**Implemented (`REM-01`, `WP-077`):** `domain.explanation.RemediationOption`
+realizes this field list except `provenance`, covered instead by the
+existing response-level `FindingExplanation.provenance` (redundant per
+option today, since one finding's remediation is wholly AI-generated or
+wholly built-in guidance, never mixed). `risk_warning` is always
+populated — a documented, safe superset of the conditional "destructive
+actions include risk warnings" invariant above, chosen to avoid a
+fragile keyword-based destructiveness classification. Not yet
+persisted: remediation stays a per-request `finding_analysis`
+computation, as it was after `AI-08` (no `RemediationOption` table or
+durable `remediation ID`).
+
 ## 17. FindingReview
 
 ### Fields

@@ -9,8 +9,9 @@ direction) replaces the earlier single free-prose narrative with the
 versioned `finding_analysis_v1` output contract
 (`ai_boundary.finding_analysis`): an explanation, 1-3 business-impact
 *potential*-impact statements (each stating its condition; TrustTable, not the
-model, derives how each is labelled), 1-3 advisory remediation steps and one
-*proposed* validation rule. The request
+model, derives how each is labelled), 1-3 structured `RemediationOption`s
+(`REM-01`, `docs/domain-model.md` §16) and one *proposed* validation rule.
+The request
 carries the contract (so a constrained-decoding runtime can only emit
 evidence ids, columns and context fields that were actually supplied) and
 the response is validated role by role; `EVAL-AI-01`'s claim screen still
@@ -66,6 +67,7 @@ from ..domain.explanation import (
     BusinessImpactStatement,
     FindingExplanation,
     ProposedValidationRule,
+    RemediationOption,
     ValidationRuleType,
     derive_impact_basis,
 )
@@ -287,6 +289,30 @@ def _build_explanation(
             )
         )
 
+    remediation_entries = raw_output["remediation"]
+    assert isinstance(remediation_entries, list | tuple)
+    remediation: list[RemediationOption] = []
+    for ordinal, entry in enumerate(remediation_entries, start=1):
+        assert isinstance(entry, Mapping)
+        technical_example = entry["technical_example"]
+        assert isinstance(technical_example, str)
+        remediation.append(
+            RemediationOption(
+                remediation_id=f"rem.{ordinal}",
+                action_summary=str(entry["action_summary"]),
+                responsible_role=str(entry["responsible_role"]),
+                urgency=str(entry["urgency"]),
+                historical_correction_guidance=str(entry["historical_correction_guidance"]),
+                source_system_prevention_guidance=str(entry["source_system_prevention_guidance"]),
+                risk_warning=str(entry["risk_warning"]),
+                verification_step=str(entry["verification_step"]),
+                technical_example=technical_example.strip() or None,
+                evidence_ids=tuple(
+                    alias_to_real[alias] for alias in _string_tuple(entry["evidence_ids"])
+                ),
+            )
+        )
+
     rule = raw_output["validation_rule"]
     assert isinstance(rule, Mapping)
     description = rule["description"]
@@ -303,7 +329,7 @@ def _build_explanation(
         provider_name=provider_name,
         model_identifier=model_identifier,
         business_impact=tuple(impact),
-        remediation=_string_tuple(raw_output["remediation"]),
+        remediation=tuple(remediation),
         validation_rule=ProposedValidationRule(
             rule_type=ValidationRuleType(str(rule["rule_type"])),
             columns=rule_columns,
