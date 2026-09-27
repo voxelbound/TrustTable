@@ -19,7 +19,8 @@ rendered separately:
   condition and carrying an `ImpactBasis` that TrustTable derives (informed
   by confirmed context, or conditional), so a possible consequence is never
   presented as a fact and no model can award itself the label;
-- `remediation` — advisory steps only; nothing here mutates source data;
+- `remediation` — 1-3 `RemediationOption`s (`REM-01`, `docs/domain-
+  model.md` §16); advisory only, nothing here mutates source data;
 - `validation_rule` — a `ProposedValidationRule`, a proposal that is never
   active or authoritative (`status` is always `"proposed"`).
 
@@ -166,6 +167,75 @@ class ProposedValidationRule:
 
 
 @dataclass(frozen=True, slots=True)
+class RemediationOption:
+    """One structured remediation recommendation (`REM-01`, `docs/domain-
+    model.md` §16), reconciling `AI-05`/`WP-061`'s disclosed narrower
+    interim shape (a bare advisory string) into the approved domain type.
+
+    Fields:
+        remediation_id: a stable identifier within one response (mirrors
+            `Evidence.evidence_id`'s per-request alias convention), not a
+            durable cross-request identity (remediation is not yet
+            persisted).
+        action_summary: the core actionable step, one or two sentences.
+        responsible_role: who should act (free text — no closed
+            taxonomy is specified by the domain model, and inventing one
+            is out of scope for `REM-01`; see the work package's
+            disclosed Non-goals).
+        urgency: how soon (free text, same reasoning as `responsible_role`).
+        historical_correction_guidance: how to correct rows already
+            affected.
+        source_system_prevention_guidance: how to prevent recurrence at
+            the source system.
+        risk_warning: always populated — a safe superset of the domain
+            model's conditional "destructive actions include risk
+            warnings" invariant, avoiding fragile keyword-based
+            destructiveness classification.
+        verification_step: how a person confirms the correction worked.
+        technical_example: an optional concrete example (e.g. a formula
+            or query), `None` when not applicable.
+        evidence_ids: the `Evidence.evidence_id`s this option is grounded
+            in. An AI-generated option's ids are validated against the
+            envelope's own evidence (`ai_boundary.finding_analysis`);
+            built-in guidance options may leave this empty (no per-call
+            envelope to ground against).
+
+    Invariants:
+
+    - never states that TrustTable itself changed the data;
+    - `risk_warning` is never empty (see field docstring above).
+    """
+
+    remediation_id: str
+    action_summary: str
+    responsible_role: str
+    urgency: str
+    historical_correction_guidance: str
+    source_system_prevention_guidance: str
+    risk_warning: str
+    verification_step: str
+    technical_example: str | None = None
+    evidence_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        required_fields = {
+            "remediation_id": self.remediation_id,
+            "action_summary": self.action_summary,
+            "responsible_role": self.responsible_role,
+            "urgency": self.urgency,
+            "historical_correction_guidance": self.historical_correction_guidance,
+            "source_system_prevention_guidance": self.source_system_prevention_guidance,
+            "risk_warning": self.risk_warning,
+            "verification_step": self.verification_step,
+        }
+        for name, value in required_fields.items():
+            if not value or not value.strip():
+                raise ValueError(f"RemediationOption.{name} must not be empty")
+        if self.technical_example is not None and not self.technical_example.strip():
+            raise ValueError("RemediationOption.technical_example must not be blank when provided")
+
+
+@dataclass(frozen=True, slots=True)
 class FindingExplanation:
     """A grounded analysis of one finding.
 
@@ -194,7 +264,7 @@ class FindingExplanation:
     provider_name: str | None = None
     model_identifier: str | None = None
     business_impact: tuple[BusinessImpactStatement, ...] = ()
-    remediation: tuple[str, ...] = ()
+    remediation: tuple[RemediationOption, ...] = ()
     validation_rule: ProposedValidationRule | None = None
 
     def __post_init__(self) -> None:
@@ -206,8 +276,8 @@ class FindingExplanation:
                 f"{sorted(member.value for member in _ALLOWED_EXPLANATION_PROVENANCE)}, "
                 f"got {self.provenance.value!r}"
             )
-        if any(not step for step in self.remediation):
-            raise ValueError("FindingExplanation.remediation steps must not be empty")
+        if self.remediation and not 1 <= len(self.remediation) <= 3:
+            raise ValueError("FindingExplanation.remediation must have 1-3 options when present")
 
 
 __all__ = [
@@ -215,6 +285,7 @@ __all__ = [
     "FindingExplanation",
     "ImpactBasis",
     "ProposedValidationRule",
+    "RemediationOption",
     "ValidationRuleType",
     "derive_impact_basis",
 ]

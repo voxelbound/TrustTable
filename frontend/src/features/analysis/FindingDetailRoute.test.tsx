@@ -213,7 +213,24 @@ describe('FindingDetailRoute', () => {
                   assumption: 'the affected values feed reports',
                 },
               ],
-              remediation: ['Fix the flagged dates at the source.'],
+              remediation: [
+                {
+                  remediation_id: 'rem.1',
+                  action_summary: 'Fix the flagged dates at the source.',
+                  responsible_role: 'The person who owns the record',
+                  urgency: 'Before this data is used in a report',
+                  historical_correction_guidance:
+                    'Fix the flagged dates at the source.',
+                  source_system_prevention_guidance:
+                    'Add a date-range check to the entry form.',
+                  risk_warning:
+                    'Changing a date without checking the original document risks introducing a new error.',
+                  verification_step:
+                    'Re-run this check and confirm no unexpected dates remain.',
+                  technical_example: null,
+                  evidence_ids: [],
+                },
+              ],
               validation_rule: {
                 rule_type: 'not_null',
                 columns: [],
@@ -316,7 +333,9 @@ describe('FindingDetailRoute', () => {
       ),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('No remediation steps were produced for this finding.'),
+      screen.getByText(
+        'No remediation options were produced for this finding.',
+      ),
     ).toBeInTheDocument()
     expect(
       screen.getByText('No validation rule was proposed for this finding.'),

@@ -97,11 +97,32 @@ def grounded_output(payload: dict[str, Any], *, use_context: bool = True) -> dic
             }
         )
     return {
-        "schema_version": "finding_analysis_v1",
+        "schema_version": "finding_analysis_v2",
         "provenance": "ai_interpretation",
         "explanation": f"The evidence records {row_count} affected row(s).",
         "business_impact": impact,
-        "remediation": ["Review the flagged values in the source system and correct them there."],
+        "remediation": [
+            {
+                "action_summary": (
+                    "Review the flagged values in the source system and correct them there."
+                ),
+                "responsible_role": "The person who owns the source system",
+                "urgency": "Before the next report using this data",
+                "historical_correction_guidance": (
+                    "Review the flagged values in the source system and correct them there."
+                ),
+                "source_system_prevention_guidance": (
+                    "Add a check at the source so this condition cannot recur."
+                ),
+                "risk_warning": (
+                    "Correcting a value without checking the source record risks introducing "
+                    "a new error."
+                ),
+                "verification_step": "Re-run this check after correcting the source data.",
+                "technical_example": "",
+                "evidence_ids": ids[:1],
+            }
+        ],
         "validation_rule": {
             "rule_type": "not_null",
             "columns": columns[:5],
@@ -275,7 +296,7 @@ def test_a_real_finding_detail_request_yields_four_sections_grounded_in_the_capt
     # The provider was asked for the structured contract, as a constrained
     # decoding schema, with the contract's own instructions.
     assert request_body["response_format"]["type"] == "json_schema"
-    assert request_body["response_format"]["json_schema"]["name"] == "finding_analysis_v1"
+    assert request_body["response_format"]["json_schema"]["name"] == "finding_analysis_v2"
     assert FINDING_ANALYSIS_INSTRUCTIONS in request_body["messages"][0]["content"]
 
     # Grounding: what the response cites is exactly what was sent, and that in
@@ -523,6 +544,24 @@ def _legacy_shape(_: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def remediation_option(action_summary: str, **overrides: Any) -> dict[str, Any]:
+    """A well-formed `RemediationOption` (`REM-01`) raw entry with `action_summary`
+    overridden, for tests that probe one advice-text field."""
+    base: dict[str, Any] = {
+        "action_summary": action_summary,
+        "responsible_role": "The person who owns the source system",
+        "urgency": "Before the next report using this data",
+        "historical_correction_guidance": "Correct the affected rows in the source system.",
+        "source_system_prevention_guidance": "Add a check at the source to prevent recurrence.",
+        "risk_warning": "Correcting a value without checking the source risks a new error.",
+        "verification_step": "Re-run this check after correcting the source data.",
+        "technical_example": "",
+        "evidence_ids": [],
+    }
+    base.update(overrides)
+    return base
+
+
 def _add_context_impact(output: dict[str, Any]) -> None:
     output["business_impact"].append(
         {
@@ -589,12 +628,16 @@ ATTACKS: list[tuple[str, Callable[[dict[str, Any]], Any], str]] = [
     ("context-field-not-sent", _add_context_impact, "unknown_context_field"),
     (
         "remediation-claims-automatic-change",
-        lambda o: o.update(remediation=["TrustTable will automatically fix these rows."]),
+        lambda o: o.update(
+            remediation=[remediation_option("TrustTable will automatically fix these rows.")]
+        ),
         "unsupported_action_claim",
     ),
     (
         "remediation-claims-data-was-changed",
-        lambda o: o.update(remediation=["The duplicate rows have been removed from the file."]),
+        lambda o: o.update(
+            remediation=[remediation_option("The duplicate rows have been removed from the file.")]
+        ),
         "unsupported_action_claim",
     ),
     (

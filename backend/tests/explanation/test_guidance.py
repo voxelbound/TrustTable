@@ -61,6 +61,20 @@ ALL_DETECTOR_IDS = sorted(
 )  # the real registered catalogue
 
 
+def remediation_texts(option: object) -> tuple[str, ...]:
+    """Every free-text field on one `RemediationOption` (`REM-01`), for
+    tests that scan advice text without caring which field it came from."""
+    return (
+        option.action_summary,  # type: ignore[attr-defined]
+        option.responsible_role,  # type: ignore[attr-defined]
+        option.urgency,  # type: ignore[attr-defined]
+        option.historical_correction_guidance,  # type: ignore[attr-defined]
+        option.source_system_prevention_guidance,  # type: ignore[attr-defined]
+        option.risk_warning,  # type: ignore[attr-defined]
+        option.verification_step,  # type: ignore[attr-defined]
+    )
+
+
 def test_the_table_covers_every_registered_detector_exactly() -> None:
     assert len(ALL_DETECTOR_IDS) == 13
     assert frozenset(ALL_DETECTOR_IDS) == GUIDED_DETECTOR_IDS
@@ -82,8 +96,11 @@ def test_every_detector_gets_non_empty_conditional_impact_remediation_and_a_prop
         assert statement.assumption
         assert statement.context_fields == ()
         assert statement.evidence_ids == ("ev-1", "ev-2")
-    assert len(guidance.remediation) >= 1
-    assert all(step.strip() for step in guidance.remediation)
+    assert 1 <= len(guidance.remediation) <= 3
+    for option in guidance.remediation:
+        assert all(text.strip() for text in remediation_texts(option))
+        assert option.risk_warning.strip()  # always populated (REM-01)
+        assert option.evidence_ids == ("ev-1", "ev-2")
     rule = guidance.validation_rule
     assert rule.rule_type in set(ValidationRuleType)
     assert rule.description
@@ -96,7 +113,10 @@ def test_guidance_text_never_claims_data_was_changed_or_a_rule_is_active(
     detector_id: str,
 ) -> None:
     guidance = build_deterministic_guidance(finding_for(detector_id, (col("quantity"),)))
-    texts = [*guidance.remediation, guidance.validation_rule.description]
+    texts = [
+        *(text for option in guidance.remediation for text in remediation_texts(option)),
+        guidance.validation_rule.description,
+    ]
     forbidden = re.compile(
         r"\b(?:has|have|was|were)\s+been\b|\bautomatically\b|\bis\s+(?:now\s+)?active\b|"
         r"\bwe\s+(?:fixed|removed|corrected)\b|\btrusttable\s+(?:will|has)\b",
@@ -121,8 +141,9 @@ def test_guidance_never_asserts_whole_dataset_quality_or_disregard_of_findings(
 
 def test_remediation_states_that_changes_belong_in_the_source_system() -> None:
     guidance = build_deterministic_guidance(finding_for("structural.exact_duplicate_rows"))
-    assert any("source system" in step for step in guidance.remediation)
-    assert any("never edits your file" in step for step in guidance.remediation)
+    texts = [text for option in guidance.remediation for text in remediation_texts(option)]
+    assert any("source system" in text for text in texts)
+    assert any("never edits your file" in text for text in texts)
 
 
 def test_columns_are_named_from_the_finding_and_bounded() -> None:
@@ -130,7 +151,10 @@ def test_columns_are_named_from_the_finding_and_bounded() -> None:
     guidance = build_deterministic_guidance(
         finding_for("completeness.excessive_missing_values", columns)
     )
-    text = " ".join(guidance.remediation) + guidance.validation_rule.description
+    text = (
+        " ".join(text for option in guidance.remediation for text in remediation_texts(option))
+        + guidance.validation_rule.description
+    )
     assert "'c0'" in text and "'c1'" in text and "'c2'" in text
     assert "'c3'" not in text
     assert "other columns" in text
@@ -139,7 +163,7 @@ def test_columns_are_named_from_the_finding_and_bounded() -> None:
 
 def test_a_finding_without_columns_uses_a_neutral_phrase() -> None:
     guidance = build_deterministic_guidance(finding_for("structural.empty_column"))
-    assert "the affected columns" in guidance.remediation[0]
+    assert "the affected columns" in guidance.remediation[0].action_summary
     assert guidance.validation_rule.columns == ()
 
 
