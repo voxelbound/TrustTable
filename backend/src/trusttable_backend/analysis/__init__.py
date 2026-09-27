@@ -12,6 +12,7 @@ from .service import (
     AnalysisFailure,
     AnalysisNotFoundError,
     AnalysisNotReadyError,
+    AnalysisNotRetryableError,
     AnalysisState,
     AnalysisStore,
     AnalysisStoreProtocol,
@@ -35,6 +36,7 @@ from .service import (
     get_or_infer_context,
     get_profile,
     get_status,
+    retry_analysis,
     run_analysis,
 )
 
@@ -43,6 +45,7 @@ __all__ = [
     "AnalysisFailure",
     "AnalysisNotFoundError",
     "AnalysisNotReadyError",
+    "AnalysisNotRetryableError",
     "AnalysisState",
     "AnalysisStore",
     "AnalysisStoreProtocol",
@@ -66,5 +69,6 @@ __all__ = [
     "get_or_infer_context",
     "get_profile",
     "get_status",
+    "retry_analysis",
     "run_analysis",
 ]

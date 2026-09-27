@@ -323,6 +323,7 @@ export function makeStatusResponse(
     state: 'completed',
     message: 'Analysis complete.',
     cancellable: false,
+    retryable: false,
     poll_interval_ms: 1000,
     ...overrides,
   }

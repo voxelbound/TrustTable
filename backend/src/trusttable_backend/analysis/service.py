@@ -253,6 +253,14 @@ class Analysis:
     guided_questions: tuple[ClarificationQuestion, ...] = ()
     context_version: int = 0
     context_finalized: bool = False
+    retry_source_analysis_id: str | None = None
+    """The originating `analysis_id` when this analysis is itself a retry
+    (`JOB-01` slice 2: retry creates a new, independent `Analysis`, never
+    a versioned attempt reusing the same `analysis_id`). `None` for every
+    analysis that is not a retry — every prior caller of `create_analysis`/
+    `create_analysis_from_upload`/this dataclass's own constructor is
+    unaffected (defaults to `None`). Set exactly once, at construction,
+    by `retry_analysis` below; never mutated afterward."""
 
     def __post_init__(self) -> None:
         if not self.analysis_id:
@@ -310,6 +318,9 @@ class Analysis:
         is_cancelled = self.state is AnalysisState.CANCELLED
         if (self.cancelled_at is not None) != is_cancelled:
             raise ValueError("Analysis.cancelled_at must be set if and only if state is CANCELLED")
+
+        if self.retry_source_analysis_id == self.analysis_id:
+            raise ValueError("Analysis.retry_source_analysis_id must not equal its own analysis_id")
 
 
 class AnalysisNotFoundError(Exception):
@@ -410,6 +421,22 @@ class QuestionNotFoundError(Exception):
         super().__init__(f"Guided question not found: {question_id} (analysis {analysis_id})")
         self.analysis_id = analysis_id
         self.question_id = question_id
+
+
+class AnalysisNotRetryableError(Exception):
+    """Raised by `retry_analysis` (`JOB-01` slice 2, `WP-076`) for a known
+    analysis not in the `FAILED` state — matching
+    `docs/product-requirements.md`'s "retry failed work": only a `FAILED`
+    analysis may be retried in this slice. A `CANCELLED` analysis is not
+    itself retryable (a disclosed, reversible scope boundary — see
+    `WP-076`'s own Non-goals); a client can simply create a new analysis
+    normally instead.
+    """
+
+    def __init__(self, analysis_id: str, state: AnalysisState) -> None:
+        super().__init__(f"Analysis not retryable in state {state.value}: {analysis_id}")
+        self.analysis_id = analysis_id
+        self.state = state
 
 
 class AnalysisStoreProtocol(Protocol):
@@ -883,6 +910,72 @@ def cancel_analysis(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
     cancelled = replace(analysis, state=AnalysisState.CANCELLED, cancelled_at=cancelled_at)
     store.replace(cancelled)
     return cancelled
+
+
+def retry_analysis(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
+    """Create a new, independent `QUEUED` analysis over a `FAILED`
+    analysis's own dataset `content`, linked via `retry_source_analysis_id`
+    (`JOB-01` slice 2: retry creates a new analysis, never a versioned
+    attempt reusing the same `analysis_id`).
+
+    Mirrors `create_analysis`/`create_analysis_from_upload`'s existing
+    create-then-store-then-return-unstarted shape exactly: this function
+    does not itself run the pipeline (`run_analysis`) or submit to a
+    `JobPool` — that remains the caller's responsibility (`api/v1/
+    analyses.py`'s route), matching those two functions' own established
+    separation. The original analysis is read but never mutated —
+    every existing immutable-terminal-facts invariant is unaffected.
+
+    Raises `AnalysisNotFoundError` for an unknown `analysis_id` and
+    `AnalysisNotRetryableError` for a known analysis not in the `FAILED`
+    state.
+    """
+    original = get_status(store, analysis_id)
+    if original.state is not AnalysisState.FAILED:
+        raise AnalysisNotRetryableError(analysis_id, original.state)
+
+    now = datetime.now(UTC)
+    dataset_id = str(uuid.uuid4())
+    stored_filename = f"{dataset_id}.csv"
+    storage_location = (
+        _DEMO_STORAGE_LOCATION
+        if original.dataset.source_type is DatasetSourceType.BUNDLED_DEMO
+        else f"uploads/{dataset_id}/{stored_filename}"
+    )
+    dataset = Dataset(
+        dataset_id=dataset_id,
+        original_filename=original.dataset.original_filename,
+        stored_filename=stored_filename,
+        format=original.dataset.format,
+        byte_size=original.dataset.byte_size,
+        content_hash=original.dataset.content_hash,
+        selected_worksheet=original.dataset.selected_worksheet,
+        created_at=now,
+        deleted_at=None,
+        storage_location=storage_location,
+        source_type=original.dataset.source_type,
+    )
+    retry = Analysis(
+        analysis_id=str(uuid.uuid4()),
+        dataset=dataset,
+        content=original.content,
+        state=AnalysisState.QUEUED,
+        security_exposure=_NO_EXPOSURE,
+        dataset_profile=None,
+        findings=(),
+        priority_scores=(),
+        evidence=(),
+        trust_assessment=None,
+        failure=None,
+        created_at=now,
+        started_at=None,
+        completed_at=None,
+        failed_at=None,
+        cancelled_at=None,
+        retry_source_analysis_id=original.analysis_id,
+    )
+    store.add(retry)
+    return retry
 
 
 def _require_completed(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:

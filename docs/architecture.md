@@ -927,7 +927,7 @@ Requirements:
 - restart marks interrupted work failed
 - no distributed queue
 
-**Implemented (`JOB-01` slice 1):** `backend/src/trusttable_backend/jobs/`
+**Implemented (`JOB-01`, complete):** `backend/src/trusttable_backend/jobs/`
 provides `JobPool`, a `concurrent.futures.ThreadPoolExecutor` sized from
 `Settings.background_worker_count`. `POST /demo/sales`/`POST /analyses`
 submit to the pool and return immediately (`state=queued`);
@@ -938,9 +938,13 @@ is a cooperative in-memory flag (`JobPool.request_cancel`) the worker
 itself observes at four checkpoints — never a direct store write from
 the cancel route, avoiding a race with the worker's own concurrent
 writes. Restart-marks-interrupted-work-failed is `DB-01`'s
-`reconcile_interrupted_analyses`, unchanged by this package. **Not yet
-implemented:** the `POST .../retry` endpoint ("safe retry") — a
-disclosed, separate follow-up slice.
+`reconcile_interrupted_analyses`, unchanged by this package. **Safe
+retry** (`JOB-01` slice 2): `POST /analyses/{id}/retry` on a `FAILED`
+analysis creates a new, independent `Analysis` over the same dataset
+content, linked via
+`retry_source_analysis_id`, submitted to the same pool — never a
+versioned attempt reusing the original `analysis_id`. The original
+analysis is never mutated.
 
 ## 10. Operational interfaces
 
