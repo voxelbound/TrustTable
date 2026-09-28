@@ -226,7 +226,23 @@ export function makeFindingExplanationResponse(
       },
     ],
     remediation: [
-      'Check the flagged rows and correct any mistyped dates in the source.',
+      {
+        remediation_id: 'rem.1',
+        action_summary:
+          'Check the flagged rows and correct any mistyped dates in the source.',
+        responsible_role: 'The person who entered or owns the record',
+        urgency: 'Before this data is used in a time-based report',
+        historical_correction_guidance:
+          'Correct any mistyped dates found in the flagged rows.',
+        source_system_prevention_guidance:
+          'If the dates are genuine scheduled events, consider keeping them in a separate field.',
+        risk_warning:
+          'Changing a date without checking the original document can turn a genuine future-dated event into an incorrect one.',
+        verification_step:
+          'Re-run this check and confirm no unexpected future dates remain.',
+        technical_example: null,
+        evidence_ids: ['validity.future_dates.evidence.order_date'],
+      },
     ],
     validation_rule: {
       rule_type: 'date_range',

@@ -12,6 +12,7 @@ from trusttable_backend.domain.explanation import (
     FindingExplanation,
     ImpactBasis,
     ProposedValidationRule,
+    RemediationOption,
     ValidationRuleType,
     derive_impact_basis,
 )
@@ -184,16 +185,71 @@ def test_a_proposed_rule_needs_a_description() -> None:
         ProposedValidationRule(rule_type=ValidationRuleType.UNIQUE, columns=(), description="")
 
 
+def make_remediation_option(**overrides: object) -> RemediationOption:
+    fields: dict[str, object] = {
+        "remediation_id": "rem.1",
+        "action_summary": "Review the rows and correct wrong values in the source system.",
+        "responsible_role": "The person who owns the source system",
+        "urgency": "Before the next report using this data",
+        "historical_correction_guidance": "Correct the affected rows in the source system.",
+        "source_system_prevention_guidance": "Add an input check to prevent recurrence.",
+        "risk_warning": "Correcting a value without checking the source risks a new error.",
+        "verification_step": "Re-run this check after correction.",
+        "evidence_ids": ("ev-1",),
+    }
+    fields.update(overrides)
+    return RemediationOption(**fields)  # type: ignore[arg-type]
+
+
 def test_an_explanation_carries_and_validates_its_advisory_sections() -> None:
     rule = ProposedValidationRule(
         rule_type=ValidationRuleType.UNIQUE, columns=(), description="Rows should be unique."
     )
     impact = BusinessImpactStatement(statement="x", basis=ImpactBasis.ASSUMPTION, assumption="a")
+    option = make_remediation_option()
     explanation = make_explanation(
-        business_impact=(impact,), remediation=("Review the rows.",), validation_rule=rule
+        business_impact=(impact,), remediation=(option,), validation_rule=rule
     )
     assert explanation.business_impact == (impact,)
-    assert explanation.remediation == ("Review the rows.",)
+    assert explanation.remediation == (option,)
     assert explanation.validation_rule is rule
-    with pytest.raises(ValueError, match="remediation"):
-        make_explanation(remediation=("",))
+    with pytest.raises(ValueError, match="1-3 options"):
+        make_explanation(remediation=(option,) * 4)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "remediation_id",
+        "action_summary",
+        "responsible_role",
+        "urgency",
+        "historical_correction_guidance",
+        "source_system_prevention_guidance",
+        "risk_warning",
+        "verification_step",
+    ],
+)
+def test_remediation_option_rejects_an_empty_required_field(field: str) -> None:
+    with pytest.raises(ValueError, match=field):
+        make_remediation_option(**{field: ""})
+
+
+def test_remediation_option_technical_example_defaults_to_none_and_may_be_set() -> None:
+    option = make_remediation_option()
+    assert option.technical_example is None
+    with_example = make_remediation_option(technical_example="=SUM(A2:A10)")
+    assert with_example.technical_example == "=SUM(A2:A10)"
+
+
+def test_remediation_option_technical_example_rejects_a_blank_non_none_value() -> None:
+    with pytest.raises(ValueError, match="technical_example"):
+        make_remediation_option(technical_example="   ")
+
+
+def test_remediation_option_never_claims_trusttable_changed_the_data() -> None:
+    # Documented invariant (domain-model.md #16); nothing here is a lexical
+    # scan (the AI-boundary claim screen already owns that job) — this test
+    # only proves the well-formed default fixture reads as advisory prose.
+    option = make_remediation_option()
+    assert "trusttable" not in option.action_summary.lower()

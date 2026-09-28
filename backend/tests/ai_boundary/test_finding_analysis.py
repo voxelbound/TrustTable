@@ -26,7 +26,7 @@ from trusttable_backend.ai_boundary.finding_analysis import (
     FINDING_ANALYSIS_MAX_OUTPUT_TOKENS,
     FINDING_ANALYSIS_SCHEMA_VERSION,
     MAX_IMPACT_STATEMENTS,
-    MAX_REMEDIATION_STEPS,
+    MAX_REMEDIATION_OPTIONS,
     build_finding_analysis_contract,
     finding_analysis_json_schema,
     mock_finding_analysis_output,
@@ -79,6 +79,41 @@ def make_envelope(
     )
 
 
+_REMEDIATION_OPTION_REQUIRED_KEYS = frozenset(
+    {
+        "action_summary",
+        "responsible_role",
+        "urgency",
+        "historical_correction_guidance",
+        "source_system_prevention_guidance",
+        "risk_warning",
+        "verification_step",
+        "technical_example",
+        "evidence_ids",
+    }
+)
+
+
+def remediation_entry(**overrides: Any) -> dict[str, Any]:
+    """A well-formed `RemediationOption` (`REM-01`) raw entry, with every
+    field overridable by name for targeted probing (e.g. `action_summary`)."""
+    base: dict[str, Any] = {
+        "action_summary": "Review the flagged rows and correct wrong values in the source system.",
+        "responsible_role": "The person who owns the source system",
+        "urgency": "Before the next report using this data",
+        "historical_correction_guidance": "Review the flagged rows and confirm whether the "
+        "negative values are returns or entry errors.",
+        "source_system_prevention_guidance": "Correct wrong values in the source system.",
+        "risk_warning": "Correcting a value without checking the source record risks "
+        "introducing a new error.",
+        "verification_step": "Re-run this check after correction and confirm it no longer appears.",
+        "technical_example": "",
+        "evidence_ids": ["ev.1"],
+    }
+    base.update(overrides)
+    return base
+
+
 def good_output() -> dict[str, Any]:
     """A realistic, grounded, well-formed output for `make_envelope()`."""
     return {
@@ -102,11 +137,7 @@ def good_output() -> dict[str, Any]:
                 "assumption": "the column is summed in reports",
             },
         ],
-        "remediation": [
-            "Review the 2 flagged rows and confirm whether the negative values are returns "
-            "or entry errors.",
-            "Correct wrong values in the source system.",
-        ],
+        "remediation": [remediation_entry()],
         "validation_rule": {
             "rule_type": "numeric_range",
             "columns": ["quantity"],
@@ -285,12 +316,53 @@ def test_impact_statement_count_boundary() -> None:
         assert not accepted and R.SCHEMA_INVALID in reasons
 
 
-def test_remediation_step_count_boundary() -> None:
-    step = "Correct wrong values in the source system."
-    assert check(mutated(lambda o: o.update(remediation=[step] * MAX_REMEDIATION_STEPS)))[0]
-    for bad in ([], [step] * (MAX_REMEDIATION_STEPS + 1), "text", None, [5]):
+def test_remediation_option_count_boundary() -> None:
+    entry = remediation_entry()
+    assert check(mutated(lambda o: o.update(remediation=[entry] * MAX_REMEDIATION_OPTIONS)))[0]
+    for bad in ([], [entry] * (MAX_REMEDIATION_OPTIONS + 1), "text", None, [5]):
         accepted, reasons = check(mutated(lambda o, b=bad: o.update(remediation=b)))
         assert not accepted and R.SCHEMA_INVALID in reasons
+
+
+def test_remediation_option_must_be_an_object() -> None:
+    accepted, reasons = check(mutated(lambda o: o.update(remediation=["a bare string"])))
+    assert not accepted and R.SCHEMA_INVALID in reasons
+
+
+@pytest.mark.parametrize("missing_key", sorted(_REMEDIATION_OPTION_REQUIRED_KEYS))
+def test_remediation_option_missing_key_is_schema_invalid(missing_key: str) -> None:
+    entry = remediation_entry()
+    del entry[missing_key]
+    accepted, reasons = check(mutated(lambda o: o.update(remediation=[entry])))
+    assert not accepted and R.SCHEMA_INVALID in reasons
+
+
+def test_extra_key_inside_a_remediation_option_is_an_unsupported_control_field() -> None:
+    output = mutated(lambda o: o["remediation"][0].update(severity="low"))
+    accepted, reasons = check(output)
+    assert not accepted and R.UNSUPPORTED_CONTROL_FIELD in reasons
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_remediation_option_risk_warning_must_not_be_blank(blank: str) -> None:
+    entry = remediation_entry(risk_warning=blank)
+    accepted, reasons = check(mutated(lambda o: o.update(remediation=[entry])))
+    assert not accepted and R.SCHEMA_INVALID in reasons
+
+
+def test_remediation_option_technical_example_may_be_empty_but_not_missing() -> None:
+    # An empty string ("no example applies") is accepted; the key itself
+    # still must be present (proven by the missing-key parametrize above).
+    entry = remediation_entry(technical_example="")
+    assert check(mutated(lambda o: o.update(remediation=[entry]))) == (True, ())
+    entry = remediation_entry(technical_example="=SUM(A2:A10)")
+    assert check(mutated(lambda o: o.update(remediation=[entry]))) == (True, ())
+
+
+def test_unknown_evidence_id_inside_a_remediation_option_is_rejected() -> None:
+    output = mutated(lambda o: o["remediation"][0].update(evidence_ids=["ev.404"]))
+    accepted, reasons = check(output)
+    assert not accepted and R.UNKNOWN_EVIDENCE_ID in reasons
 
 
 @pytest.mark.parametrize("bad_type", ["numeric_range_extra", "range", "", 4, None])
@@ -376,7 +448,7 @@ def test_referenced_evidence_ids_may_be_empty_when_no_evidence_was_sent() -> Non
                 "description": "Values should not be blank.",
             },
             explanation="A check flagged this condition.",
-            remediation=["Correct wrong values in the source system."],
+            remediation=[remediation_entry(evidence_ids=[])],
         )
     )
     assert check(output, envelope, {}) == (True, ())
@@ -527,7 +599,9 @@ def test_consequence_term_present_in_the_evidence_is_grounded() -> None:
     output["referenced_columns"] = ["revenue"]
     output["validation_rule"]["columns"] = ["revenue"]
     output["explanation"] = "2 of 300 rows in the revenue column are negative."
-    output["remediation"] = ["Correct wrong revenue values in the source system."]
+    output["remediation"] = [
+        remediation_entry(action_summary="Correct wrong revenue values in the source system.")
+    ]
     accepted, reasons = check(output, envelope)
     assert accepted, reasons
 
@@ -588,7 +662,7 @@ def test_row_count_of_the_evidence_grounds_a_number() -> None:
     evidence = make_evidence(payload={}, summary="Values in 'quantity' look unusual")
     envelope = make_envelope((evidence,))
     output = mutated(lambda o: o.update(explanation="2 rows are affected."))
-    output["remediation"] = ["Review the flagged rows."]
+    output["remediation"] = [remediation_entry(action_summary="Review the flagged rows.")]
     assert check(output, envelope, {}) == (True, ())
 
 
@@ -609,7 +683,11 @@ def test_structural_numbers_are_allowed_only_in_the_rule_description() -> None:
         lambda o: o["validation_rule"].update(description="Values should be between 0 and 100.")
     )
     assert check(in_rule) == (True, ())
-    in_remediation = mutated(lambda o: o.update(remediation=["Keep values between 0 and 100."]))
+    in_remediation = mutated(
+        lambda o: o.update(
+            remediation=[remediation_entry(action_summary="Keep values between 0 and 100.")]
+        )
+    )
     accepted, reasons = check(in_remediation)
     assert not accepted and R.UNKNOWN_NUMERIC_CLAIM in reasons
 
@@ -624,7 +702,11 @@ def test_other_ungrounded_number_in_the_rule_description_is_rejected() -> None:
 
 def test_ungrounded_number_in_an_assumption_or_remediation_is_rejected() -> None:
     assumption = mutated(lambda o: o["business_impact"][1].update(assumption="it covers 77 rows"))
-    remediation = mutated(lambda o: o.update(remediation=["Check the 42 oldest rows first."]))
+    remediation = mutated(
+        lambda o: o.update(
+            remediation=[remediation_entry(action_summary="Check the 42 oldest rows first.")]
+        )
+    )
     for output in (assumption, remediation):
         accepted, reasons = check(output)
         assert not accepted and R.UNKNOWN_NUMERIC_CLAIM in reasons
@@ -711,7 +793,7 @@ def test_declared_numeric_claim_shape_is_validated() -> None:
     ],
 )
 def test_remediation_claiming_an_automatic_change_is_rejected(step: str) -> None:
-    output = mutated(lambda o: o.update(remediation=[step]))
+    output = mutated(lambda o: o.update(remediation=[remediation_entry(action_summary=step)]))
     assert check(output) == (False, (R.UNSUPPORTED_ACTION_CLAIM,))
 
 
@@ -740,7 +822,7 @@ def test_rule_description_claiming_activation_is_rejected(description: str) -> N
     ],
 )
 def test_advice_to_a_person_is_not_an_action_claim(step: str) -> None:
-    output = mutated(lambda o: o.update(remediation=[step]))
+    output = mutated(lambda o: o.update(remediation=[remediation_entry(action_summary=step)]))
     assert check(output) == (True, ())
 
 
@@ -778,7 +860,7 @@ _PASSIVE_RULE_CLAIMS = [
 
 @pytest.mark.parametrize("step", _PASSIVE_REMEDIATION_CLAIMS)
 def test_passive_and_subject_less_remediation_claims_are_rejected(step: str) -> None:
-    output = mutated(lambda o: o.update(remediation=[step]))
+    output = mutated(lambda o: o.update(remediation=[remediation_entry(action_summary=step)]))
     assert check(output) == (False, (R.UNSUPPORTED_ACTION_CLAIM,))
 
 
@@ -798,7 +880,7 @@ def test_passive_and_subject_less_rule_claims_are_rejected(description: str) -> 
     ],
 )
 def test_the_passive_check_holds_across_sentences_case_and_obfuscation(text: str) -> None:
-    output = mutated(lambda o: o.update(remediation=[text]))
+    output = mutated(lambda o: o.update(remediation=[remediation_entry(action_summary=text)]))
     assert check(output) == (False, (R.UNSUPPORTED_ACTION_CLAIM,))
 
 
@@ -816,14 +898,18 @@ def test_the_passive_check_holds_across_sentences_case_and_obfuscation(text: str
     ],
 )
 def test_honest_advice_is_not_mistaken_for_an_action_claim(step: str) -> None:
-    output = mutated(lambda o: o.update(remediation=[step]))
+    output = mutated(lambda o: o.update(remediation=[remediation_entry(action_summary=step)]))
     assert check(output) == (True, ())
 
 
 def test_documented_limit_a_claim_with_no_change_verb_or_automation_marker_can_pass() -> None:
     # A lexical check covers a class, not every phrasing (D-040): this says the
     # data is handled without naming a change verb or an automation marker.
-    output = mutated(lambda o: o.update(remediation=["The rows are handled by the platform."]))
+    output = mutated(
+        lambda o: o.update(
+            remediation=[remediation_entry(action_summary="The rows are handled by the platform.")]
+        )
+    )
     assert check(output) == (True, ())
 
 
@@ -848,7 +934,7 @@ CLAIM = "The dataset is perfect and has no issues."
         lambda o: o.update(explanation=CLAIM),
         lambda o: o["business_impact"][0].update(statement=CLAIM),
         lambda o: o["business_impact"][1].update(assumption=CLAIM),
-        lambda o: o.update(remediation=[CLAIM]),
+        lambda o: o.update(remediation=[remediation_entry(action_summary=CLAIM)]),
         lambda o: o["validation_rule"].update(description=CLAIM),
     ],
     ids=["explanation", "impact_statement", "assumption", "remediation", "rule_description"],
@@ -877,7 +963,12 @@ def test_unsupported_whole_dataset_claim_is_rejected_in_every_text_role(mutator:
     ],
 )
 def test_imperative_correct_and_clean_are_verbs_in_advice_text(step: str) -> None:
-    assert check(mutated(lambda o: o.update(remediation=[step]))) == (True, ())
+    assert check(
+        mutated(lambda o: o.update(remediation=[remediation_entry(action_summary=step)]))
+    ) == (
+        True,
+        (),
+    )
 
 
 @pytest.mark.parametrize(
@@ -891,7 +982,12 @@ def test_imperative_correct_and_clean_are_verbs_in_advice_text(step: str) -> Non
     ],
 )
 def test_a_request_to_verify_is_not_an_assertion_in_advice_text(step: str) -> None:
-    assert check(mutated(lambda o: o.update(remediation=[step]))) == (True, ())
+    assert check(
+        mutated(lambda o: o.update(remediation=[remediation_entry(action_summary=step)]))
+    ) == (
+        True,
+        (),
+    )
 
 
 @pytest.mark.parametrize(
@@ -907,7 +1003,9 @@ def test_a_request_to_verify_is_not_an_assertion_in_advice_text(step: str) -> No
     ],
 )
 def test_assertions_and_other_families_are_still_rejected_in_advice_text(step: str) -> None:
-    accepted, reasons = check(mutated(lambda o: o.update(remediation=[step])))
+    accepted, reasons = check(
+        mutated(lambda o: o.update(remediation=[remediation_entry(action_summary=step)]))
+    )
     assert not accepted
     assert R.UNSUPPORTED_CLAIM in reasons
 
@@ -926,7 +1024,12 @@ def test_documented_limit_a_claim_comma_spliced_onto_a_directive_sentence_can_ev
     # advice-text exemption. Deterministic authority, not this screen, is
     # the guarantee.
     step = "Confirm that the rows are fine, the dataset is perfect."
-    assert check(mutated(lambda o: o.update(remediation=[step]))) == (True, ())
+    assert check(
+        mutated(lambda o: o.update(remediation=[remediation_entry(action_summary=step)]))
+    ) == (
+        True,
+        (),
+    )
 
 
 def test_disregard_findings_instruction_is_rejected_even_when_citing_real_evidence() -> None:
@@ -984,6 +1087,7 @@ def test_schema_is_json_serializable_and_closed_at_every_object_level() -> None:
     assert schema["additionalProperties"] is False
     props = schema["properties"]
     assert props["business_impact"]["items"]["additionalProperties"] is False
+    assert props["remediation"]["items"]["additionalProperties"] is False
     assert props["validation_rule"]["additionalProperties"] is False
     assert props["numeric_claims"]["additionalProperties"] is False
 
@@ -1050,8 +1154,13 @@ def test_schema_bounds_every_free_text_field() -> None:
     props = schema["properties"]
     assert props["explanation"]["maxLength"] == 600
     assert props["business_impact"]["maxItems"] == MAX_IMPACT_STATEMENTS
-    assert props["remediation"]["maxItems"] == MAX_REMEDIATION_STEPS
-    assert props["remediation"]["items"]["maxLength"] == 400
+    assert props["remediation"]["maxItems"] == MAX_REMEDIATION_OPTIONS
+    remediation_item = props["remediation"]["items"]
+    assert remediation_item["additionalProperties"] is False
+    assert set(remediation_item["required"]) == _REMEDIATION_OPTION_REQUIRED_KEYS
+    assert remediation_item["properties"]["action_summary"]["maxLength"] == 400
+    assert remediation_item["properties"]["risk_warning"]["minLength"] == 1
+    assert remediation_item["properties"]["technical_example"]["minLength"] == 0
     assert props["validation_rule"]["properties"]["description"]["maxLength"] == 400
 
 
@@ -1089,6 +1198,7 @@ def test_instructions_name_every_key_and_forbid_activation_and_automatic_change(
         "numeric_claims",
         "assumption",
         "context_fields",
+        *_REMEDIATION_OPTION_REQUIRED_KEYS,
     ):
         assert f'"{key}"' in FINDING_ANALYSIS_INSTRUCTIONS
     # The model is never asked to label how well-founded its own statement is.
@@ -1096,6 +1206,7 @@ def test_instructions_name_every_key_and_forbid_activation_and_automatic_change(
     assert "POTENTIAL impact" in FINDING_ANALYSIS_INSTRUCTIONS
     assert "changed automatically" in FINDING_ANALYSIS_INSTRUCTIONS
     assert "never say it was applied or is active" in FINDING_ANALYSIS_INSTRUCTIONS
+    assert "risk_warning" in FINDING_ANALYSIS_INSTRUCTIONS
 
 
 # ---------------------------------------------------------------------------
@@ -1144,5 +1255,9 @@ def test_long_pathological_inputs_complete_quickly() -> None:
     start = time.perf_counter()
     check(output)
     for role_text in (hostile[:400], "a" * 400, ("(" * 200)[:400]):
-        check(mutated(lambda o, t=role_text: o.update(remediation=[t])))
+        check(
+            mutated(
+                lambda o, t=role_text: o.update(remediation=[remediation_entry(action_summary=t)])
+            )
+        )
     assert time.perf_counter() - start < 20

@@ -74,7 +74,7 @@ _ROLES = ["explanation", "impact_statement", "assumption", "remediation", "rule_
 
 
 def _structured_attack(request: ProviderRequest, text: str, role: str) -> dict[str, object]:
-    """A `finding_analysis_v1` output that is honest and grounded everywhere
+    """A `finding_analysis_v2` output that is honest and grounded everywhere
     except `role`, which carries `text`. It always cites the request's REAL
     evidence ids and columns (the contract requires it), so a grounding-only
     gate would accept it."""
@@ -92,7 +92,8 @@ def _structured_attack(request: ProviderRequest, text: str, role: str) -> dict[s
             "assumption": text,
         }
     elif role == "remediation":
-        output["remediation"] = [text]
+        remediation: list[dict[str, Any]] = output["remediation"]  # type: ignore[assignment]
+        remediation[0]["action_summary"] = text
     elif role == "rule_description":
         output["validation_rule"]["description"] = text  # type: ignore[index]
     else:  # pragma: no cover - guards the test data itself

@@ -186,8 +186,12 @@ deterministic evidence:
   *Evidence-backed* badge, because the deterministic evidence establishes
   what was found in the data, not what it costs the business; the section
   says these are potential impacts, not established facts;
-- remediation states it is advisory and that TrustTable never changes the
-  user's data;
+- remediation (`REM-01`) is one or more structured recommendations, each
+  showing who should act, how urgently, how to correct already-affected
+  rows, how to prevent recurrence at the source, an always-shown risk
+  warning, how to verify the fix, and an optional technical example; it
+  states it is advisory and that TrustTable never changes the user's
+  data;
 - the validation rule is badged *Proposed — not active* and states that
   TrustTable does not run or enforce it and nothing is activated
   automatically;

@@ -126,8 +126,23 @@ def structured_output(**overrides: object) -> dict[str, Any]:
             },
         ],
         "remediation": [
-            "Check whether the repeated rows are true duplicates.",
-            "Remove true duplicates in the source system.",
+            {
+                "action_summary": "Check whether the repeated rows are true duplicates, then "
+                "remove them in the source system.",
+                "responsible_role": "The person who owns the source system",
+                "urgency": "Before the next report that counts these rows",
+                "historical_correction_guidance": (
+                    "Check whether the repeated rows are true duplicates."
+                ),
+                "source_system_prevention_guidance": "Remove true duplicates in the source system.",
+                "risk_warning": (
+                    "Removing a row that only looks like a duplicate could delete a "
+                    "legitimate record; confirm each one first."
+                ),
+                "verification_step": "Re-run this check and confirm the duplicate count is zero.",
+                "technical_example": "",
+                "evidence_ids": ["evidence_1"],
+            }
         ],
         "validation_rule": {
             "rule_type": "unique",
@@ -334,10 +349,17 @@ def test_accepted_result_carries_all_four_sections() -> None:
     assert explanation.business_impact[0].evidence_ids == ("ev-1",)
     assert explanation.business_impact[0].assumption == "the rows are summed in totals"
     assert explanation.business_impact[1].assumption == "the rows feed order-count reporting"
-    assert explanation.remediation == (
-        "Check whether the repeated rows are true duplicates.",
-        "Remove true duplicates in the source system.",
+    assert len(explanation.remediation) == 1
+    option = explanation.remediation[0]
+    assert option.remediation_id == "rem.1"
+    assert option.historical_correction_guidance == (
+        "Check whether the repeated rows are true duplicates."
     )
+    assert (
+        option.source_system_prevention_guidance == "Remove true duplicates in the source system."
+    )
+    assert option.risk_warning
+    assert option.evidence_ids == ("ev-1",)
     rule = explanation.validation_rule
     assert rule is not None
     assert rule.rule_type is ValidationRuleType.UNIQUE

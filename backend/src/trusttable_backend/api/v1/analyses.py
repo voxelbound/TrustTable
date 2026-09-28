@@ -121,6 +121,7 @@ from trusttable_backend.schemas.analysis import (
     FindingsListResponse,
     ProfilingTimingResponse,
     ProposedValidationRuleResponse,
+    RemediationOptionResponse,
     RetryAnalysisResponse,
     RowContextEntryResponse,
     RowContextResponse,
@@ -466,7 +467,21 @@ def _finding_explanation_response(
             )
             for item in explanation.business_impact
         ],
-        remediation=list(explanation.remediation),
+        remediation=[
+            RemediationOptionResponse(
+                remediation_id=item.remediation_id,
+                action_summary=item.action_summary,
+                responsible_role=item.responsible_role,
+                urgency=item.urgency,
+                historical_correction_guidance=item.historical_correction_guidance,
+                source_system_prevention_guidance=item.source_system_prevention_guidance,
+                risk_warning=item.risk_warning,
+                verification_step=item.verification_step,
+                technical_example=item.technical_example,
+                evidence_ids=list(item.evidence_ids),
+            )
+            for item in explanation.remediation
+        ],
         validation_rule=(
             ProposedValidationRuleResponse(
                 rule_type=rule.rule_type.value,

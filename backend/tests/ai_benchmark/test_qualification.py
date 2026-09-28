@@ -123,11 +123,32 @@ def grounded_output(payload: dict[str, Any], *, use_context: bool = True) -> dic
             }
         )
     return {
-        "schema_version": "finding_analysis_v1",
+        "schema_version": "finding_analysis_v2",
         "provenance": "ai_interpretation",
         "explanation": f"The evidence records {row_count} affected row(s).",
         "business_impact": impact,
-        "remediation": ["Review the flagged values in the source system and correct them there."],
+        "remediation": [
+            {
+                "action_summary": (
+                    "Review the flagged values in the source system and correct them there."
+                ),
+                "responsible_role": "The person who owns the source system",
+                "urgency": "Before the next report using this data",
+                "historical_correction_guidance": (
+                    "Review the flagged values in the source system and correct them there."
+                ),
+                "source_system_prevention_guidance": (
+                    "Add a check at the source so this condition cannot recur."
+                ),
+                "risk_warning": (
+                    "Correcting a value without checking the source record risks introducing "
+                    "a new error."
+                ),
+                "verification_step": "Re-run this check after correcting the source data.",
+                "technical_example": "",
+                "evidence_ids": ids[:1],
+            }
+        ],
         "validation_rule": {
             "rule_type": "not_null",
             "columns": columns[:5],

@@ -15,7 +15,11 @@ are validated separately instead:
    context field that was actually sent as confirmed context is shown as
    informed by that context; every other statement is shown as conditional),
    so model prose can never award itself the standing of an established fact;
-3. **remediation** — 1 to 3 advisory steps a person could take;
+3. **remediation** — 1 to 3 structured `RemediationOption`s (`REM-01`,
+   `docs/domain-model.md` §16): who should act, how urgently, how to
+   correct already-affected rows, how to prevent recurrence at the
+   source, an always-populated risk warning, how to verify the fix, an
+   optional technical example, and the evidence ids it is grounded in;
 4. **validation rule** — one *proposed* rule from the closed set in
    `docs/product-requirements.md` §13, never an active or applied rule.
 
@@ -81,8 +85,8 @@ from .output_contract import OutputContract
 from .prompt import serialize_evidence_for_provider
 from .validation import RejectionReason, ValidationOutcome
 
-FINDING_ANALYSIS_SCHEMA_VERSION: Final[str] = "finding_analysis_v1"
-FINDING_ANALYSIS_CONTRACT_NAME: Final[str] = "finding_analysis_v1"
+FINDING_ANALYSIS_SCHEMA_VERSION: Final[str] = "finding_analysis_v2"
+FINDING_ANALYSIS_CONTRACT_NAME: Final[str] = "finding_analysis_v2"
 
 MAX_EXPLANATION_LENGTH: Final[int] = 600
 MAX_STATEMENT_LENGTH: Final[int] = 400
@@ -90,7 +94,13 @@ MAX_ASSUMPTION_LENGTH: Final[int] = 300
 MAX_STEP_LENGTH: Final[int] = 400
 MAX_RULE_DESCRIPTION_LENGTH: Final[int] = 400
 MAX_IMPACT_STATEMENTS: Final[int] = 3
-MAX_REMEDIATION_STEPS: Final[int] = 3
+MAX_REMEDIATION_OPTIONS: Final[int] = 3
+MAX_ROLE_LENGTH: Final[int] = 80
+MAX_URGENCY_LENGTH: Final[int] = 60
+MAX_GUIDANCE_LENGTH: Final[int] = 400
+MAX_RISK_WARNING_LENGTH: Final[int] = 300
+MAX_VERIFICATION_STEP_LENGTH: Final[int] = 300
+MAX_TECHNICAL_EXAMPLE_LENGTH: Final[int] = 300
 MAX_RULE_COLUMNS: Final[int] = 5
 MAX_REFERENCE_LIST: Final[int] = 10
 
@@ -120,6 +130,19 @@ _ALLOWED_KEYS: Final[frozenset[str]] = _REQUIRED_KEYS | {"numeric_claims"}
 _IMPACT_KEYS: Final[frozenset[str]] = frozenset(
     {"statement", "evidence_ids", "context_fields", "assumption"}
 )
+_REMEDIATION_OPTION_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "action_summary",
+        "responsible_role",
+        "urgency",
+        "historical_correction_guidance",
+        "source_system_prevention_guidance",
+        "risk_warning",
+        "verification_step",
+        "technical_example",
+        "evidence_ids",
+    }
+)
 _RULE_KEYS: Final[frozenset[str]] = frozenset({"rule_type", "columns", "description"})
 _RULE_TYPES: Final[frozenset[str]] = frozenset(member.value for member in ValidationRuleType)
 
@@ -131,7 +154,10 @@ FINDING_ANALYSIS_INSTRUCTIONS: Final[str] = (
     '"explanation" (one or two plain sentences on what the finding means), '
     '"business_impact" (1 to 3 objects, each with the keys "statement", '
     '"evidence_ids", "context_fields" and "assumption"), '
-    '"remediation" (1 to 3 short advisory steps a person could take), '
+    '"remediation" (1 to 3 objects, each with the keys "action_summary", '
+    '"responsible_role", "urgency", "historical_correction_guidance", '
+    '"source_system_prevention_guidance", "risk_warning", "verification_step", '
+    '"technical_example" and "evidence_ids"), '
     '"validation_rule" (one object with "rule_type", "columns" and "description": '
     "a single proposed data-quality rule), "
     '"referenced_evidence_ids" (the evidence ids you relied on), '
@@ -143,13 +169,22 @@ FINDING_ANALYSIS_INSTRUCTIONS: Final[str] = (
     'relates to in "evidence_ids", and, only if it draws on the supplied '
     'confirmed_context, those field names in "context_fields" (otherwise an empty '
     "list). You do not label how well-founded a statement is; that is decided "
-    "elsewhere. Never state a monetary amount, a named customer, a regulation or "
-    "a business process unless it appears in the supplied evidence or confirmed "
-    "context. Use only numbers that appear in "
-    "the supplied evidence or confirmed context. Remediation steps are advice for "
-    "a person: never say data was or will be changed automatically. The "
-    "validation rule is only a proposal: never say it was applied or is active. "
-    "Do not include any key not listed here."
+    "elsewhere. Each remediation object is advice for a person, never a claim that "
+    'anything already happened: "action_summary" is the core step; '
+    '"responsible_role" says who should act; "urgency" says how soon; '
+    '"historical_correction_guidance" says how to correct rows already affected; '
+    '"source_system_prevention_guidance" says how to prevent recurrence at the '
+    'source; "risk_warning" must always state a real risk of the suggested action '
+    "(never empty, even for a low-risk action — state why it is low-risk); "
+    '"verification_step" says how to confirm the correction worked; '
+    '"technical_example" is an optional concrete example, or an empty string when '
+    'not applicable; "evidence_ids" lists the evidence ids this option relies on. '
+    "Never say data was or will be changed automatically, or that anything was "
+    "already fixed. Never state a monetary amount, a named customer, a regulation "
+    "or a business process unless it appears in the supplied evidence or confirmed "
+    "context. Use only numbers that appear in the supplied evidence or confirmed "
+    "context. The validation rule is only a proposal: never say it was applied or "
+    "is active. Do not include any key not listed here."
 )
 
 
@@ -216,8 +251,27 @@ def finding_analysis_json_schema(
             "remediation": {
                 "type": "array",
                 "minItems": 1,
-                "maxItems": MAX_REMEDIATION_STEPS,
-                "items": _string_schema(MAX_STEP_LENGTH),
+                "maxItems": MAX_REMEDIATION_OPTIONS,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": sorted(_REMEDIATION_OPTION_KEYS),
+                    "properties": {
+                        "action_summary": _string_schema(MAX_STEP_LENGTH),
+                        "responsible_role": _string_schema(MAX_ROLE_LENGTH),
+                        "urgency": _string_schema(MAX_URGENCY_LENGTH),
+                        "historical_correction_guidance": _string_schema(MAX_GUIDANCE_LENGTH),
+                        "source_system_prevention_guidance": _string_schema(MAX_GUIDANCE_LENGTH),
+                        "risk_warning": _string_schema(MAX_RISK_WARNING_LENGTH),
+                        "verification_step": _string_schema(MAX_VERIFICATION_STEP_LENGTH),
+                        "technical_example": _string_schema(
+                            MAX_TECHNICAL_EXAMPLE_LENGTH, min_length=0
+                        ),
+                        "evidence_ids": _enum_list_schema(
+                            evidence_ids, max_items=MAX_REFERENCE_LIST
+                        ),
+                    },
+                },
             },
             "validation_rule": {
                 "type": "object",
@@ -269,7 +323,28 @@ def mock_finding_analysis_output(envelope: PromptEnvelope) -> dict[str, object]:
             "was found."
         ),
         "business_impact": [impact],
-        "remediation": ["Review the affected values in the source data and correct them there."],
+        "remediation": [
+            {
+                "action_summary": (
+                    "Review the affected values in the source data and correct them there."
+                ),
+                "responsible_role": "The person who owns this dataset",
+                "urgency": "Before the next report using this data",
+                "historical_correction_guidance": (
+                    "Correct the affected rows in the source system, not in this export."
+                ),
+                "source_system_prevention_guidance": (
+                    "Add an input check at the point of entry so this condition cannot recur."
+                ),
+                "risk_warning": (
+                    "Reviewing and correcting source data by hand risks missing related rows; "
+                    "double-check nearby records before treating the review as complete."
+                ),
+                "verification_step": "Re-run this check after correcting the source data.",
+                "technical_example": "",
+                "evidence_ids": evidence_ids[:1],
+            }
+        ],
         "validation_rule": {
             "rule_type": ValidationRuleType.NOT_NULL.value,
             "columns": column_keys[:MAX_RULE_COLUMNS],
@@ -705,6 +780,73 @@ def _check_impact_statement(
             findings.add(RejectionReason.UNKNOWN_NUMERIC_CLAIM)
 
 
+def _check_remediation_option(
+    raw: object,
+    *,
+    findings: _Findings,
+    known_evidence_ids: set[str],
+    grounding: _Grounding,
+    directive_texts: list[str],
+) -> None:
+    if not isinstance(raw, Mapping):
+        findings.invalid()
+        return
+    keys = set(raw.keys())
+    if keys - _REMEDIATION_OPTION_KEYS:
+        findings.add(RejectionReason.UNSUPPORTED_CONTROL_FIELD)
+    if _REMEDIATION_OPTION_KEYS - keys:
+        findings.invalid()
+        return
+
+    action_summary = _bounded_text(raw["action_summary"], MAX_STEP_LENGTH, findings)
+    responsible_role = _bounded_text(raw["responsible_role"], MAX_ROLE_LENGTH, findings)
+    urgency = _bounded_text(raw["urgency"], MAX_URGENCY_LENGTH, findings)
+    historical = _bounded_text(raw["historical_correction_guidance"], MAX_GUIDANCE_LENGTH, findings)
+    prevention = _bounded_text(
+        raw["source_system_prevention_guidance"], MAX_GUIDANCE_LENGTH, findings
+    )
+    # `risk_warning` uses the default `allow_empty=False`: a blank warning is
+    # rejected here, enforcing domain-model.md #16's "always populated" design
+    # choice (a safe superset of its conditional "destructive actions include
+    # risk warnings" invariant — see RemediationOption's own docstring).
+    risk_warning = _bounded_text(raw["risk_warning"], MAX_RISK_WARNING_LENGTH, findings)
+    verification = _bounded_text(raw["verification_step"], MAX_VERIFICATION_STEP_LENGTH, findings)
+    # `technical_example` is the one optional field: an empty string means
+    # "no example", allowed via `allow_empty=True`.
+    technical_example = _bounded_text(
+        raw["technical_example"], MAX_TECHNICAL_EXAMPLE_LENGTH, findings, allow_empty=True
+    )
+    evidence_ids = _string_list(raw["evidence_ids"], findings, max_items=MAX_REFERENCE_LIST)
+
+    if None in (
+        action_summary,
+        responsible_role,
+        urgency,
+        historical,
+        prevention,
+        risk_warning,
+        verification,
+        technical_example,
+        evidence_ids,
+    ):
+        return
+    assert evidence_ids is not None  # narrows for mypy after the check above
+
+    if any(eid not in known_evidence_ids for eid in evidence_ids):
+        findings.add(RejectionReason.UNKNOWN_EVIDENCE_ID)
+
+    advice_texts = [action_summary, historical, prevention, risk_warning, verification]
+    if technical_example:
+        advice_texts.append(technical_example)
+    for text in advice_texts:
+        assert text is not None
+        directive_texts.append(text)
+        if _claims_action_was_taken(text):
+            findings.add(RejectionReason.UNSUPPORTED_ACTION_CLAIM)
+        if _ungrounded_numbers(text, grounding):
+            findings.add(RejectionReason.UNKNOWN_NUMERIC_CLAIM)
+
+
 def validate_finding_analysis_output(
     raw_output: Mapping[str, object],
     envelope: PromptEnvelope,
@@ -773,19 +915,21 @@ def validate_finding_analysis_output(
                 )
 
     if "remediation" in raw_output:
-        steps = raw_output["remediation"]
-        if not isinstance(steps, list | tuple) or not 1 <= len(steps) <= MAX_REMEDIATION_STEPS:
+        options = raw_output["remediation"]
+        if (
+            not isinstance(options, list | tuple)
+            or not 1 <= len(options) <= MAX_REMEDIATION_OPTIONS
+        ):
             findings.invalid()
         else:
-            for step in steps:
-                text = _bounded_text(step, MAX_STEP_LENGTH, findings)
-                if text is None:
-                    continue
-                directive_texts.append(text)
-                if _claims_action_was_taken(text):
-                    findings.add(RejectionReason.UNSUPPORTED_ACTION_CLAIM)
-                if _ungrounded_numbers(text, grounding):
-                    findings.add(RejectionReason.UNKNOWN_NUMERIC_CLAIM)
+            for entry in options:
+                _check_remediation_option(
+                    entry,
+                    findings=findings,
+                    known_evidence_ids=known_evidence_ids,
+                    grounding=grounding,
+                    directive_texts=directive_texts,
+                )
 
     if "validation_rule" in raw_output:
         rule = raw_output["validation_rule"]
@@ -848,8 +992,8 @@ def validate_finding_analysis_output(
                     findings.add(RejectionReason.NUMERIC_CLAIM_MISMATCH)
 
     # Defense in depth: EVAL-AI-01's claim screen over every text field —
-    # in full over assertions, with the two advice-text adjustments over
-    # remediation steps and the rule description.
+    # in full over assertions, with the advice-text adjustments over every
+    # remediation-option free-text field and the rule description.
     if any(screen_narrative(text) for text in assertion_texts) or any(
         _directive_text_makes_a_claim(text) for text in directive_texts
     ):
@@ -877,13 +1021,19 @@ __all__ = [
     "FINDING_ANALYSIS_SCHEMA_VERSION",
     "MAX_ASSUMPTION_LENGTH",
     "MAX_EXPLANATION_LENGTH",
+    "MAX_GUIDANCE_LENGTH",
     "MAX_IMPACT_STATEMENTS",
     "MAX_REFERENCE_LIST",
-    "MAX_REMEDIATION_STEPS",
+    "MAX_REMEDIATION_OPTIONS",
+    "MAX_RISK_WARNING_LENGTH",
+    "MAX_ROLE_LENGTH",
     "MAX_RULE_COLUMNS",
     "MAX_RULE_DESCRIPTION_LENGTH",
     "MAX_STATEMENT_LENGTH",
     "MAX_STEP_LENGTH",
+    "MAX_TECHNICAL_EXAMPLE_LENGTH",
+    "MAX_URGENCY_LENGTH",
+    "MAX_VERIFICATION_STEP_LENGTH",
     "RULE_DESCRIPTION_STRUCTURAL_NUMBERS",
     "build_finding_analysis_contract",
     "finding_analysis_json_schema",
