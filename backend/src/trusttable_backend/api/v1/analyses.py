@@ -90,7 +90,12 @@ from trusttable_backend.domain.evidence import Evidence
 from trusttable_backend.domain.explanation import FindingExplanation, ValidationRuleType
 from trusttable_backend.domain.parsing import Dataset
 from trusttable_backend.domain.row_context import RowContextWindow
-from trusttable_backend.domain.rules import NullHandling, RuleExecutionResult, ValidationRule
+from trusttable_backend.domain.rules import (
+    ComparisonOperator,
+    NullHandling,
+    RuleExecutionResult,
+    ValidationRule,
+)
 from trusttable_backend.domain.value_objects import ColumnReference, Severity
 from trusttable_backend.errors import AppError
 from trusttable_backend.explanation.ai_explanation import (
@@ -393,6 +398,14 @@ def _validation_rule(rule: ValidationRule) -> ValidationRuleResponse:
         pattern=rule.pattern,
         threshold_percentage=rule.threshold_percentage,
         tolerance=rule.tolerance,
+        comparison_operator=rule.comparison_operator.value
+        if rule.comparison_operator is not None
+        else None,
+        comparison_value=rule.comparison_value,
+        condition_operator=rule.condition_operator.value
+        if rule.condition_operator is not None
+        else None,
+        condition_value=rule.condition_value,
         source_finding_ids=list(rule.source_finding_ids),
         provenance=rule.provenance.value,
         last_result=_rule_execution_result(rule.last_result)
@@ -1254,20 +1267,46 @@ def post_analysis_retry(analysis_id: str, request: Request) -> RetryAnalysisResp
 
 def _parse_create_rule_request(
     analysis_id: str, body: CreateValidationRuleRequest
-) -> tuple[ValidationRuleType, Severity, NullHandling, date | None, date | None]:
+) -> tuple[
+    ValidationRuleType,
+    Severity,
+    NullHandling,
+    date | None,
+    date | None,
+    ComparisonOperator | None,
+    ComparisonOperator | None,
+]:
     """Convert `body`'s closed-set string fields and optional ISO-8601
     date strings, or raise `RULE_INVALID` (422) for any unrecognized
-    value — `RULE-01` slice 1 never reaches `create_rule` with a value
-    it cannot interpret."""
+    value — `create_rule` never reaches an interpretation it cannot
+    make."""
     try:
         rule_type = ValidationRuleType(body.rule_type)
         severity = Severity(body.severity)
         null_handling = NullHandling(body.null_handling)
         minimum_date = date.fromisoformat(body.minimum_date) if body.minimum_date else None
         maximum_date = date.fromisoformat(body.maximum_date) if body.maximum_date else None
+        comparison_operator = (
+            ComparisonOperator(body.comparison_operator)
+            if body.comparison_operator is not None
+            else None
+        )
+        condition_operator = (
+            ComparisonOperator(body.condition_operator)
+            if body.condition_operator is not None
+            else None
+        )
     except ValueError as exc:
         raise _rule_invalid(analysis_id, str(exc)) from exc
-    return rule_type, severity, null_handling, minimum_date, maximum_date
+    return (
+        rule_type,
+        severity,
+        null_handling,
+        minimum_date,
+        maximum_date,
+        comparison_operator,
+        condition_operator,
+    )
 
 
 @router.post(
@@ -1277,8 +1316,8 @@ def post_analysis_rule(
     analysis_id: str, body: CreateValidationRuleRequest, request: Request
 ) -> ValidationRuleResponse:
     """Define a new validation rule and execute it immediately against
-    the analysis's real, current rows (`RULE-01` slice 1; `docs/domain-
-    model.md` §18, `docs/api-specification.md`).
+    the analysis's real, current rows (`RULE-01`, all 11 rule types;
+    `docs/domain-model.md` §18, `docs/api-specification.md`).
 
     Raises `ANALYSIS_NOT_FOUND` (404); `INVALID_ANALYSIS_STATE` (409) for
     a known analysis not yet `COMPLETED`; and `RULE_INVALID` (422,
@@ -1290,9 +1329,15 @@ def post_analysis_rule(
     """
     store = get_analysis_store(request)
     analysis = _get_or_404(store, analysis_id)
-    rule_type, severity, null_handling, minimum_date, maximum_date = _parse_create_rule_request(
-        analysis_id, body
-    )
+    (
+        rule_type,
+        severity,
+        null_handling,
+        minimum_date,
+        maximum_date,
+        comparison_operator,
+        condition_operator,
+    ) = _parse_create_rule_request(analysis_id, body)
     try:
         rule = create_rule(
             store,
@@ -1313,6 +1358,10 @@ def post_analysis_rule(
             pattern=body.pattern,
             threshold_percentage=body.threshold_percentage,
             tolerance=body.tolerance,
+            comparison_operator=comparison_operator,
+            comparison_value=body.comparison_value,
+            condition_operator=condition_operator,
+            condition_value=body.condition_value,
         )
     except AnalysisNotFoundError as exc:
         raise _not_found(analysis_id) from exc

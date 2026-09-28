@@ -1,4 +1,5 @@
-"""The `ValidationRule` execution engine (`RULE-01` slice 1).
+"""The `ValidationRule` execution engine (`RULE-01`; slice 2, `WP-079`,
+adds `EXPRESSION_COMPARISON`/`CONDITIONAL_RULE`).
 
 `execute_rule` is pure and framework-independent: given a `ValidationRule`
 and the real parsed rows it applies to, it scans every row exactly once
@@ -25,6 +26,13 @@ a failure and no match is a pass.
 A non-null cell that cannot be parsed as the type the rule requires
 (e.g. `"abc"` for `numeric_range`) is a failure, not a skip — only an
 actually missing (`None`/empty-string) cell follows `null_handling`.
+
+`CONDITIONAL_RULE` evaluates its WHEN clause (`columns[0]`,
+`condition_operator`/`condition_value`) first. A row whose WHEN clause is
+false **passes vacuously** — the THEN clause (`columns[1]`,
+`comparison_operator`/`comparison_value`) is never evaluated, and the row
+is never counted as a failure or a skip on that account. Only a row whose
+WHEN clause is true is then checked against THEN.
 """
 
 from __future__ import annotations
@@ -37,12 +45,30 @@ from datetime import date, datetime
 from ..domain.explanation import ValidationRuleType
 from ..domain.rules import (
     MAX_EXAMPLE_FAILURES,
+    ComparisonOperator,
     NullHandling,
     RuleExecutionResult,
     RuleFailureExample,
     ValidationRule,
 )
 from ..domain.value_objects import RowReference
+
+
+def _compare(left: float, operator: ComparisonOperator, right: float) -> bool:
+    """Apply one closed `ComparisonOperator` to two numeric values. No
+    string/expression parsing — `operator` is already a validated enum
+    member (`ValidationRule.__post_init__`)."""
+    if operator is ComparisonOperator.EQUALS:
+        return left == right
+    if operator is ComparisonOperator.NOT_EQUALS:
+        return left != right
+    if operator is ComparisonOperator.LESS_THAN:
+        return left < right
+    if operator is ComparisonOperator.LESS_THAN_OR_EQUAL:
+        return left <= right
+    if operator is ComparisonOperator.GREATER_THAN:
+        return left > right
+    return left >= right  # GREATER_THAN_OR_EQUAL
 
 
 class _Tally:
@@ -243,6 +269,96 @@ def _run_approximate_equality(
     return tally
 
 
+def _run_expression_comparison(
+    rule: ValidationRule, rows: tuple[tuple[str | None, ...], ...]
+) -> _Tally:
+    tally = _Tally()
+    left_ordinal = rule.columns[0].ordinal
+    assert rule.comparison_operator is not None
+    if len(rule.columns) == 2:
+        right_ordinal = rule.columns[1].ordinal
+        assert rule.comparison_value is None
+        for row_number, row in enumerate(rows):
+            left_raw, right_raw = row[left_ordinal], row[right_ordinal]
+            if _is_missing(left_raw) or _is_missing(right_raw):
+                _handle_missing(tally, row_number, rule.null_handling)
+                continue
+            assert left_raw is not None and right_raw is not None
+            try:
+                left, right = float(left_raw), float(right_raw)
+            except ValueError:
+                tally.record_fail(row_number, "value is not numeric")
+                continue
+            if _compare(left, rule.comparison_operator, right):
+                tally.record_pass()
+            else:
+                tally.record_fail(
+                    row_number, f"{left} {rule.comparison_operator.value} {right} is false"
+                )
+    else:
+        assert rule.comparison_value is not None
+        for row_number, row in enumerate(rows):
+            raw = row[left_ordinal]
+            if _is_missing(raw):
+                _handle_missing(tally, row_number, rule.null_handling)
+                continue
+            assert raw is not None
+            try:
+                left = float(raw)
+            except ValueError:
+                tally.record_fail(row_number, "value is not numeric")
+                continue
+            if _compare(left, rule.comparison_operator, rule.comparison_value):
+                tally.record_pass()
+            else:
+                tally.record_fail(
+                    row_number,
+                    f"{left} {rule.comparison_operator.value} {rule.comparison_value} is false",
+                )
+    return tally
+
+
+def _run_conditional_rule(rule: ValidationRule, rows: tuple[tuple[str | None, ...], ...]) -> _Tally:
+    """WHEN `columns[0]` `condition_operator` `condition_value` THEN
+    `columns[1]` `comparison_operator` `comparison_value`. A row whose
+    WHEN clause is false passes vacuously — the THEN clause is never
+    evaluated for it."""
+    tally = _Tally()
+    when_ordinal = rule.columns[0].ordinal
+    then_ordinal = rule.columns[1].ordinal
+    assert rule.condition_operator is not None and rule.condition_value is not None
+    assert rule.comparison_operator is not None and rule.comparison_value is not None
+    for row_number, row in enumerate(rows):
+        when_raw = row[when_ordinal]
+        if _is_missing(when_raw):
+            _handle_missing(tally, row_number, rule.null_handling)
+            continue
+        assert when_raw is not None
+        try:
+            when_value = float(when_raw)
+        except ValueError:
+            tally.record_fail(row_number, "WHEN value is not numeric")
+            continue
+        if not _compare(when_value, rule.condition_operator, rule.condition_value):
+            tally.record_pass()  # WHEN false: vacuously true, THEN never evaluated
+            continue
+        then_raw = row[then_ordinal]
+        if _is_missing(then_raw):
+            _handle_missing(tally, row_number, rule.null_handling)
+            continue
+        assert then_raw is not None
+        try:
+            then_value = float(then_raw)
+        except ValueError:
+            tally.record_fail(row_number, "THEN value is not numeric")
+            continue
+        if _compare(then_value, rule.comparison_operator, rule.comparison_value):
+            tally.record_pass()
+        else:
+            tally.record_fail(row_number, "WHEN clause true but THEN clause is false")
+    return tally
+
+
 _RUNNERS = {
     ValidationRuleType.NOT_NULL: _run_not_null,
     ValidationRuleType.ACCEPTED_VALUES: _run_accepted_values,
@@ -250,6 +366,8 @@ _RUNNERS = {
     ValidationRuleType.DATE_RANGE: _run_date_range,
     ValidationRuleType.REGEX: _run_regex,
     ValidationRuleType.MAX_MISSING_PERCENTAGE: _run_max_missing_percentage,
+    ValidationRuleType.EXPRESSION_COMPARISON: _run_expression_comparison,
+    ValidationRuleType.CONDITIONAL_RULE: _run_conditional_rule,
 }
 
 
