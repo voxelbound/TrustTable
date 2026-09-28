@@ -1,6 +1,7 @@
 import type {
   BusinessImpactStatementResponse,
   ProposedValidationRuleResponse,
+  RemediationOptionResponse,
 } from '../../api'
 
 /** The three advisory Finding Detail sections that follow the
@@ -21,7 +22,11 @@ import type {
  *   badge: the deterministic evidence establishes what was found in the
  *   data, not what it costs your business, and a model's prose cannot award
  *   itself that standing;
- * - remediation is advisory: TrustTable never changes uploaded data;
+ * - remediation is advisory: TrustTable never changes uploaded data.
+ *   Each recommendation (`REM-01`, `docs/domain-model.md` §16) is now a
+ *   structured option: who should act, how urgently, how to correct
+ *   already-affected rows, how to prevent recurrence at the source, an
+ *   always-populated risk warning, and how to verify the fix;
  * - the validation rule is a proposal, never an active or authoritative
  *   rule.
  *
@@ -128,12 +133,13 @@ export function BusinessImpactSection({
 }
 
 export interface RemediationSectionProps extends SourceProps {
-  steps: readonly string[]
+  options: readonly RemediationOptionResponse[]
 }
 
-/** "Remediation": advisory steps for a person. */
+/** "Remediation": one or more structured recommendations (`REM-01`,
+ * `docs/domain-model.md` §16), each advisory to a person. */
 export function RemediationSection({
-  steps,
+  options,
   aiAssisted,
 }: RemediationSectionProps) {
   return (
@@ -146,14 +152,53 @@ export function RemediationSection({
         change in your own source system.
         {aiAssisted ? ' These suggestions were AI-assisted.' : ''}
       </p>
-      {steps.length === 0 ? (
+      {options.length === 0 ? (
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          No remediation steps were produced for this finding.
+          No remediation options were produced for this finding.
         </p>
       ) : (
-        <ol className="mt-2 flex list-decimal flex-col gap-2 pl-5 text-sm text-slate-800 dark:text-slate-200">
-          {steps.map((step, index) => (
-            <li key={index}>{step}</li>
+        <ol className="mt-2 flex flex-col gap-3 text-sm text-slate-800 dark:text-slate-200">
+          {options.map((option) => (
+            <li
+              key={option.remediation_id}
+              className="rounded border border-slate-200 p-3 dark:border-slate-800"
+            >
+              <p className="font-medium">{option.action_summary}</p>
+              <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-xs text-slate-600 sm:grid-cols-2 dark:text-slate-400">
+                <div>
+                  <dt className="font-medium">Who</dt>
+                  <dd>{option.responsible_role}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">When</dt>
+                  <dd>{option.urgency}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Correct already-affected rows</dt>
+                  <dd>{option.historical_correction_guidance}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">Prevent recurrence</dt>
+                  <dd>{option.source_system_prevention_guidance}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium">How to verify</dt>
+                  <dd>{option.verification_step}</dd>
+                </div>
+                {option.technical_example && (
+                  <div>
+                    <dt className="font-medium">Example</dt>
+                    <dd>{option.technical_example}</dd>
+                  </div>
+                )}
+              </dl>
+              <p className="mt-2 text-xs text-amber-900 dark:text-amber-200">
+                <span className={`${BADGE} bg-amber-100 dark:bg-amber-900/40`}>
+                  Risk
+                </span>{' '}
+                {option.risk_warning}
+              </p>
+            </li>
           ))}
         </ol>
       )}

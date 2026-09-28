@@ -450,8 +450,15 @@ Returns:
   establishes what was found in the data, not what it costs a business — so
   a client must never present any statement as evidence-backed or as a
   fact
-- `remediation` — 1–3 advisory steps for a person. TrustTable never
-  changes uploaded data, and no step claims it did
+- `remediation` — 1–3 structured recommendations (`REM-01`, `docs/domain-
+  model.md` §16), each with `remediation_id`, `action_summary`,
+  `responsible_role`, `urgency`, `historical_correction_guidance`
+  (correcting rows already affected), `source_system_prevention_guidance`
+  (preventing recurrence at the source), `risk_warning` (always
+  populated — never `null`/empty), `verification_step`,
+  `technical_example` (`null` when not applicable) and `evidence_ids`.
+  Advisory only: TrustTable never changes uploaded data, and no field
+  claims it did
 - `validation_rule` — a proposed rule: `rule_type` (one of the §11 /
   `docs/product-requirements.md` §13 types), `columns`, `description`,
   and `status`, which is always `"proposed"`. It is not run, enforced or
