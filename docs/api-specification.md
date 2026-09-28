@@ -530,6 +530,25 @@ Returns:
 - bounded failure examples
 - execution duration
 
+**Implemented (`RULE-01` slice 1):** `GET`/`POST`/`GET .../{rule_id}`/
+`POST .../{rule_id}/test`/`DELETE .../{rule_id}` are real, for 9 of the
+11 `docs/product-requirements.md` §13 rule types (`expression_comparison`/
+`conditional_rule` remain a disclosed slice 2 — `422
+INVALID_RULE_PARAMETERS` for either today). `POST` executes synchronously
+against the analysis's real current rows and returns the created rule
+with its result in the same response — there is no separate "proposed"
+state in this slice (every rule is user-authored, `provenance:
+"user_authored"`; `RULE-02`'s later finding-to-rule generation is what
+will populate a `source_finding_ids`-linked, possibly-not-yet-confirmed
+rule). `PUT` (parameter editing in place) is **not yet implemented**:
+change a rule by deleting and recreating it. Request/response shapes
+mirror `docs/domain-model.md` §18/§19 exactly (see
+`domain.rules.ValidationRule`/`RuleExecutionResult`); an unknown
+`column_names` entry is `422 UNKNOWN_RULE_COLUMN`, a malformed parameter
+shape for `rule_type` is `422 INVALID_RULE_PARAMETERS`, an unknown
+`rule_id` is `404 RULE_NOT_FOUND`, and a known analysis not yet
+`COMPLETED` is `409 INVALID_ANALYSIS_STATE`.
+
 ## 12. Reports and exports
 
 ### POST `/analyses/{analysis_id}/reports`

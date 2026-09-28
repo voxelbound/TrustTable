@@ -119,12 +119,52 @@ def test_is_schema_ready_false_for_unreachable_database() -> None:
 
 def test_migration_0002_upgrades_downgrades_and_reupgrades_cleanly(tmp_path: Path) -> None:
     """`0002_add_retry_source_analysis_id.py` is additive and reversible:
-    `upgrade head` adds the column/index, `downgrade -1` removes exactly
+    `upgrade 0002` adds the column/index, `downgrade -1` removes exactly
     them (restoring `0001`'s exact schema, unlike `0001` itself, whose own
     `downgrade` deliberately raises `NotImplementedError`), and a second
-    `upgrade head` restores the column again — all against a fresh
+    `upgrade 0002` restores the column again — all against a fresh
     database, matching this package's own additive-migration acceptance
-    criterion.
+    criterion. Targets the exact revision `0002` (not `head`, `RULE-01`
+    slice 1, `WP-078`) so this test keeps proving 0002's own
+    reversibility in isolation regardless of how many later migrations
+    exist.
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    from trusttable_backend.persistence.database import _BACKEND_ROOT
+
+    settings = _settings(tmp_path)
+    engine = build_engine(settings)
+    config = Config(str(_BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(_BACKEND_ROOT / "alembic"))
+    config.set_main_option("sqlalchemy.url", settings.database_url)
+
+    command.upgrade(config, "0002")
+    inspector = inspect(engine)
+    columns_after_upgrade = {col["name"] for col in inspector.get_columns("analyses")}
+    assert "retry_source_analysis_id" in columns_after_upgrade
+
+    command.downgrade(config, "-1")
+    inspector = inspect(engine)
+    columns_after_downgrade = {col["name"] for col in inspector.get_columns("analyses")}
+    assert "retry_source_analysis_id" not in columns_after_downgrade
+
+    command.upgrade(config, "0002")
+    inspector = inspect(engine)
+    columns_after_reupgrade = {col["name"] for col in inspector.get_columns("analyses")}
+    assert "retry_source_analysis_id" in columns_after_reupgrade
+
+
+# ---------------------------------------------------------------------------
+# RULE-01 slice 1 (WP-078): migration 0003 reversibility
+# ---------------------------------------------------------------------------
+
+
+def test_migration_0003_upgrades_downgrades_and_reupgrades_cleanly(tmp_path: Path) -> None:
+    """`0003_add_rules_json.py` is additive and reversible: `upgrade head`
+    adds the `rules_json` column, `downgrade -1` removes exactly it, and a
+    second `upgrade head` restores it — all against a fresh database.
     """
     from alembic import command
     from alembic.config import Config
@@ -140,14 +180,14 @@ def test_migration_0002_upgrades_downgrades_and_reupgrades_cleanly(tmp_path: Pat
     command.upgrade(config, "head")
     inspector = inspect(engine)
     columns_after_upgrade = {col["name"] for col in inspector.get_columns("analyses")}
-    assert "retry_source_analysis_id" in columns_after_upgrade
+    assert "rules_json" in columns_after_upgrade
 
     command.downgrade(config, "-1")
     inspector = inspect(engine)
     columns_after_downgrade = {col["name"] for col in inspector.get_columns("analyses")}
-    assert "retry_source_analysis_id" not in columns_after_downgrade
+    assert "rules_json" not in columns_after_downgrade
 
     command.upgrade(config, "head")
     inspector = inspect(engine)
     columns_after_reupgrade = {col["name"] for col in inspector.get_columns("analyses")}
-    assert "retry_source_analysis_id" in columns_after_reupgrade
+    assert "rules_json" in columns_after_reupgrade
