@@ -504,6 +504,77 @@ export type ContextResponse = {
 };
 
 /**
+ * CreateValidationRuleRequest
+ *
+ * Request body for `POST /analyses/{analysis_id}/rules` (`RULE-01`
+ * slice 1). `column_names` are matched against the dataset's real
+ * `original_name` values; an unknown name is rejected with
+ * `UNKNOWN_RULE_COLUMN` (422) before any execution. Every parameter
+ * field not required by `rule_type` (`docs/domain-model.md` §18's
+ * table, mirrored in `domain.rules.ValidationRule`'s own docstring)
+ * must be left `null` — a mismatch is rejected with
+ * `INVALID_RULE_PARAMETERS` (422).
+ */
+export type CreateValidationRuleRequest = {
+    /**
+     * Accepted Values
+     */
+    accepted_values?: Array<string> | null;
+    /**
+     * Column Names
+     */
+    column_names: Array<string>;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Maximum
+     */
+    maximum?: number | null;
+    /**
+     * Maximum Date
+     */
+    maximum_date?: string | null;
+    /**
+     * Minimum
+     */
+    minimum?: number | null;
+    /**
+     * Minimum Date
+     */
+    minimum_date?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Null Handling
+     */
+    null_handling?: string;
+    /**
+     * Pattern
+     */
+    pattern?: string | null;
+    /**
+     * Rule Type
+     */
+    rule_type: string;
+    /**
+     * Severity
+     */
+    severity: string;
+    /**
+     * Threshold Percentage
+     */
+    threshold_percentage?: number | null;
+    /**
+     * Tolerance
+     */
+    tolerance?: number | null;
+};
+
+/**
  * DatasetSummaryResponse
  *
  * A bounded summary of `domain.parsing.Dataset` — omits
@@ -1185,6 +1256,63 @@ export type RowContextResponse = {
 };
 
 /**
+ * RuleExecutionResultResponse
+ *
+ * Mirrors `domain.rules.RuleExecutionResult` (`RULE-01` slice 1,
+ * `docs/domain-model.md` §19). `MAX_MISSING_PERCENTAGE`/
+ * `MAX_DUPLICATE_PERCENTAGE` report the raw incident count per row —
+ * compare `fail_count / (pass_count + fail_count)` against the rule's
+ * own `threshold_percentage` for the intended pass/fail interpretation.
+ */
+export type RuleExecutionResultResponse = {
+    /**
+     * Duration Ms
+     */
+    duration_ms: number;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Example Failures
+     */
+    example_failures: Array<RuleFailureExampleResponse>;
+    /**
+     * Executed At
+     */
+    executed_at: string;
+    /**
+     * Fail Count
+     */
+    fail_count: number;
+    /**
+     * Pass Count
+     */
+    pass_count: number;
+    /**
+     * Skipped Count
+     */
+    skipped_count: number;
+};
+
+/**
+ * RuleFailureExampleResponse
+ *
+ * Mirrors `domain.rules.RuleFailureExample` — one bounded example of
+ * a row that failed a rule (`RULE-01` slice 1).
+ */
+export type RuleFailureExampleResponse = {
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Row Number
+     */
+    row_number: number;
+};
+
+/**
  * SampleMetadataResponse
  *
  * Mirrors `domain.parsing.SampleMetadata`.
@@ -1300,6 +1428,114 @@ export type ValidationError = {
      * Error Type
      */
     type: string;
+};
+
+/**
+ * ValidationRuleResponse
+ *
+ * Mirrors `domain.rules.ValidationRule` (`RULE-01` slice 1,
+ * `docs/domain-model.md` §18). Every parameter field not used by
+ * `rule_type` is `null` — the same shape `ValidationRule.__post_init__`
+ * itself enforces.
+ */
+export type ValidationRuleResponse = {
+    /**
+     * Accepted Values
+     */
+    accepted_values: Array<string> | null;
+    /**
+     * Columns
+     */
+    columns: Array<ColumnReferenceResponse>;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    last_result: RuleExecutionResultResponse | null;
+    /**
+     * Maximum
+     */
+    maximum: number | null;
+    /**
+     * Maximum Date
+     */
+    maximum_date: string | null;
+    /**
+     * Minimum
+     */
+    minimum: number | null;
+    /**
+     * Minimum Date
+     */
+    minimum_date: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Null Handling
+     */
+    null_handling: string;
+    /**
+     * Pattern
+     */
+    pattern: string | null;
+    /**
+     * Provenance
+     */
+    provenance: string;
+    /**
+     * Rule Id
+     */
+    rule_id: string;
+    /**
+     * Rule Type
+     */
+    rule_type: string;
+    /**
+     * Schema Version
+     */
+    schema_version: string;
+    /**
+     * Scope
+     */
+    scope: string;
+    /**
+     * Severity
+     */
+    severity: string;
+    /**
+     * Source Finding Ids
+     */
+    source_finding_ids: Array<string>;
+    /**
+     * Threshold Percentage
+     */
+    threshold_percentage: number | null;
+    /**
+     * Tolerance
+     */
+    tolerance: number | null;
+};
+
+/**
+ * ValidationRulesListResponse
+ *
+ * Body for `GET /analyses/{analysis_id}/rules` (`RULE-01` slice 1).
+ */
+export type ValidationRulesListResponse = {
+    /**
+     * Items
+     */
+    items: Array<ValidationRuleResponse>;
+    /**
+     * Total Items
+     */
+    total_items: number;
 };
 
 /**
@@ -1830,6 +2066,168 @@ export type PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponses = {
 };
 
 export type PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponse = PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponses[keyof PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponses];
+
+export type GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/rules';
+};
+
+export type GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetError = GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetErrors[keyof GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetErrors];
+
+export type GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ValidationRulesListResponse;
+};
+
+export type GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetResponse = GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetResponses[keyof GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetResponses];
+
+export type PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostData = {
+    body: CreateValidationRuleRequest;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/rules';
+};
+
+export type PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostError = PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostErrors[keyof PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostErrors];
+
+export type PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: ValidationRuleResponse;
+};
+
+export type PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostResponse = PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostResponses[keyof PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostResponses];
+
+export type DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Rule Id
+         */
+        rule_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/rules/{rule_id}';
+};
+
+export type DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteError = DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteErrors[keyof DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteErrors];
+
+export type DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteResponse = DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteResponses[keyof DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteResponses];
+
+export type GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Rule Id
+         */
+        rule_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/rules/{rule_id}';
+};
+
+export type GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetError = GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetErrors[keyof GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetErrors];
+
+export type GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ValidationRuleResponse;
+};
+
+export type GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetResponse = GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetResponses[keyof GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetResponses];
+
+export type PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Rule Id
+         */
+        rule_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/rules/{rule_id}/test';
+};
+
+export type PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostError = PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostErrors[keyof PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostErrors];
+
+export type PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ValidationRuleResponse;
+};
+
+export type PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostResponse = PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostResponses[keyof PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostResponses];
 
 export type GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetData = {
     body?: never;

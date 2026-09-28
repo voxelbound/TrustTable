@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -44,13 +45,19 @@ from trusttable_backend.analysis.service import (
     ContextFieldNotEditableError,
     ContextVersionConflictError,
     FindingNotFoundError,
+    InvalidRuleParametersError,
     QuestionNotFoundError,
     RowNotInFindingError,
+    RuleNotFoundError,
+    UnknownRuleColumnError,
     answer_guided_question,
     cancel_analysis,
     confirm_context_fields,
     create_analysis,
     create_analysis_from_upload,
+    create_rule,
+    delete_rule,
+    execute_rule_now,
     finalize_context,
     get_finding,
     get_finding_evidence,
@@ -74,6 +81,7 @@ from trusttable_backend.detectors.engine import run_detectors
 from trusttable_backend.domain.clarification import ClarificationAnswer, ClarificationQuestion
 from trusttable_backend.domain.context import ConfirmationState, ContextField
 from trusttable_backend.domain.evidence import Evidence, EvidenceType
+from trusttable_backend.domain.explanation import ValidationRuleType
 from trusttable_backend.domain.parsing import (
     Dataset,
     DatasetFormat,
@@ -81,6 +89,7 @@ from trusttable_backend.domain.parsing import (
     SampleMetadata,
     SamplingScope,
 )
+from trusttable_backend.domain.rules import NullHandling
 from trusttable_backend.domain.value_objects import (
     ColumnReference,
     Provenance,
@@ -1754,3 +1763,219 @@ def test_real_uvicorn_subprocess_boots_and_serves_health_live() -> None:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
+
+
+# ---------------------------------------------------------------------------
+# RULE-01 slice 1: create_rule / execute_rule_now / delete_rule
+# ---------------------------------------------------------------------------
+
+
+def _rule_test_analysis(**overrides: object) -> Analysis:
+    """A `COMPLETED` analysis over real, parseable content: one column
+    (`qty`), three rows, with `"1"` repeated (a real duplicate) so both
+    `unique` and ordinary value checks have something genuine to prove."""
+    content = b"qty\n1\n1\n2\n"
+    columns = (ColumnReference(original_name="qty", internal_key="qty", ordinal=0),)
+    rows: tuple[tuple[str | None, ...], ...] = (("1",), ("1",), ("2",))
+    sampling = SampleMetadata(scope=SamplingScope.FULL, population_size=3, sample_size=3)
+    profile = compute_dataset_profile(columns, rows, sampling, as_of=FIXED_NOW.date())
+    fields: dict[str, object] = {"content": content, "dataset_profile": profile}
+    fields.update(overrides)
+    return _make_completed_analysis(**fields)
+
+
+def test_create_rule_executes_immediately_against_real_rows() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+
+    rule = create_rule(
+        store,
+        "analysis-1",
+        name="qty must be within range",
+        description="qty should be 0-10",
+        severity=Severity.MEDIUM,
+        rule_type=ValidationRuleType.NUMERIC_RANGE,
+        column_names=("qty",),
+        minimum=0.0,
+        maximum=10.0,
+    )
+
+    assert rule.last_result is not None
+    assert rule.last_result.pass_count == 3
+    assert rule.last_result.fail_count == 0
+    # Persisted onto the analysis.
+    stored = get_status(store, "analysis-1")
+    assert stored.rules == (rule,)
+
+
+def test_create_rule_reports_exact_duplicate_failures() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+
+    rule = create_rule(
+        store,
+        "analysis-1",
+        name="qty must be unique",
+        description="qty should not repeat",
+        severity=Severity.MEDIUM,
+        rule_type=ValidationRuleType.UNIQUE,
+        column_names=("qty",),
+    )
+
+    assert rule.last_result is not None
+    assert rule.last_result.pass_count == 1
+    assert rule.last_result.fail_count == 2
+    assert {example.row.row_number for example in rule.last_result.example_failures} == {0, 1}
+
+
+def test_create_rule_rejects_an_unknown_column() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+
+    with pytest.raises(UnknownRuleColumnError):
+        create_rule(
+            store,
+            "analysis-1",
+            name="ghost",
+            description="ghost column",
+            severity=Severity.LOW,
+            rule_type=ValidationRuleType.NOT_NULL,
+            column_names=("ghost",),
+        )
+    # Nothing was persisted.
+    assert get_status(store, "analysis-1").rules == ()
+
+
+def test_create_rule_rejects_malformed_parameters_before_executing() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+
+    with pytest.raises(InvalidRuleParametersError):
+        create_rule(
+            store,
+            "analysis-1",
+            name="bad range",
+            description="neither bound set",
+            severity=Severity.LOW,
+            rule_type=ValidationRuleType.NUMERIC_RANGE,
+            column_names=("qty",),
+        )
+    assert get_status(store, "analysis-1").rules == ()
+
+
+def test_create_rule_requires_a_completed_analysis() -> None:
+    store = AnalysisStore()
+    store.add(_make_analysis(state=AnalysisState.QUEUED))
+
+    with pytest.raises(AnalysisNotReadyError):
+        create_rule(
+            store,
+            "analysis-1",
+            name="x",
+            description="x",
+            severity=Severity.LOW,
+            rule_type=ValidationRuleType.NOT_NULL,
+            column_names=("col",),
+        )
+
+
+def test_execute_rule_now_recomputes_and_persists() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+    rule = create_rule(
+        store,
+        "analysis-1",
+        name="qty must not be blank",
+        description="qty is required",
+        severity=Severity.MEDIUM,
+        rule_type=ValidationRuleType.NOT_NULL,
+        column_names=("qty",),
+    )
+    first_result = rule.last_result
+    assert first_result is not None
+
+    refreshed = execute_rule_now(store, "analysis-1", rule.rule_id)
+
+    assert refreshed.rule_id == rule.rule_id
+    assert refreshed.last_result is not None
+    assert refreshed.last_result.pass_count == first_result.pass_count
+    stored = get_status(store, "analysis-1")
+    assert stored.rules == (refreshed,)
+
+
+def test_execute_rule_now_raises_for_an_unknown_rule_id() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+
+    with pytest.raises(RuleNotFoundError):
+        execute_rule_now(store, "analysis-1", "no-such-rule")
+
+
+def test_delete_rule_removes_it() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+    rule = create_rule(
+        store,
+        "analysis-1",
+        name="qty must not be blank",
+        description="qty is required",
+        severity=Severity.MEDIUM,
+        rule_type=ValidationRuleType.NOT_NULL,
+        column_names=("qty",),
+    )
+
+    delete_rule(store, "analysis-1", rule.rule_id)
+
+    assert get_status(store, "analysis-1").rules == ()
+
+
+def test_delete_rule_raises_for_an_unknown_rule_id() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+
+    with pytest.raises(RuleNotFoundError):
+        delete_rule(store, "analysis-1", "no-such-rule")
+
+
+def test_null_handling_fail_is_honored_end_to_end() -> None:
+    store = AnalysisStore()
+    analysis = _rule_test_analysis(content=b"qty\n1\n\n2\n")
+    # Rebuild the profile to match the new content's row count/values.
+    columns = (ColumnReference(original_name="qty", internal_key="qty", ordinal=0),)
+    rows: tuple[tuple[str | None, ...], ...] = (("1",), (None,), ("2",))
+    sampling = SampleMetadata(scope=SamplingScope.FULL, population_size=3, sample_size=3)
+    profile = compute_dataset_profile(columns, rows, sampling, as_of=FIXED_NOW.date())
+    store.add(replace(analysis, dataset_profile=profile))
+
+    rule = create_rule(
+        store,
+        "analysis-1",
+        name="qty must be present",
+        description="qty must never be missing",
+        severity=Severity.HIGH,
+        rule_type=ValidationRuleType.ACCEPTED_VALUES,
+        column_names=("qty",),
+        accepted_values=("1", "2"),
+        null_handling=NullHandling.FAIL,
+    )
+
+    assert rule.last_result is not None
+    assert rule.last_result.pass_count == 2
+    assert rule.last_result.fail_count == 1
+    assert rule.last_result.skipped_count == 0
+
+
+def test_analysis_rules_must_be_empty_unless_completed() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+    rule = create_rule(
+        store,
+        "analysis-1",
+        name="x",
+        description="x",
+        severity=Severity.LOW,
+        rule_type=ValidationRuleType.NOT_NULL,
+        column_names=("qty",),
+    )
+    with pytest.raises(ValueError, match="rules must be empty"):
+        _make_analysis(state=AnalysisState.QUEUED, rules=(rule,))

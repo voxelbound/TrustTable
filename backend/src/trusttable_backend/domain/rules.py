@@ -1,0 +1,312 @@
+"""`ValidationRule`/`RuleExecutionResult` (`RULE-01` slice 1, `docs/domain-
+model.md` §18-19) — a user-defined, persisted, executable data-quality
+check over one analysis's real rows.
+
+`RULE-01`'s backlog text ("Supported rule types defined in product
+requirements") names 11 types (`docs/product-requirements.md` §13,
+`ValidationRuleType`, `domain.explanation`). This slice implements 9 of
+them — every type with a well-defined, bounded parameter shape. The two
+expression-based types (`EXPRESSION_COMPARISON`, `CONDITIONAL_RULE`) need
+a genuinely separate safe-expression-evaluation design and are deferred
+to a disclosed slice 2 (mirroring `JOB-01`'s own two-slice precedent);
+`ValidationRule` deliberately does not accept them yet (`__post_init__`
+rejects them), so no half-built, unexecutable rule can be created.
+
+Distinct from `explanation.ProposedValidationRule` (`AI-08`): that type
+is a *display-only proposal* inside one finding's four-section analysis,
+never executed, never persisted on its own. `ValidationRule` here is a
+first-class, persisted `Analysis` child that a person defines directly
+and that actually runs against real rows — `RULE-02` (a later item) is
+what will eventually convert a proposal into one of these.
+
+`scope` is always `SamplingScope.FULL` this slice: no rule-execution
+sampling exists yet, matching `Evidence`'s own current always-`FULL`
+usage. `source_finding_ids` is always empty this slice — `RULE-02`'s
+job. `provenance` has one member (`USER_AUTHORED`) this slice.
+
+Framework-independent: no FastAPI/SQLAlchemy/pydantic/ai_boundary/
+ai_provider import. Stdlib only besides the domain value objects.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date, datetime
+from enum import StrEnum
+
+from .explanation import ValidationRuleType
+from .parsing import SamplingScope
+from .value_objects import ColumnReference, RowReference, Severity
+
+#: `RULE-01` slice 1 covers every type except the two expression-based
+#: ones, which need a genuinely separate safe-expression-evaluation
+#: design (disclosed slice 2).
+SUPPORTED_RULE_TYPES: frozenset[ValidationRuleType] = frozenset(
+    {
+        ValidationRuleType.NOT_NULL,
+        ValidationRuleType.UNIQUE,
+        ValidationRuleType.ACCEPTED_VALUES,
+        ValidationRuleType.NUMERIC_RANGE,
+        ValidationRuleType.DATE_RANGE,
+        ValidationRuleType.REGEX,
+        ValidationRuleType.MAX_MISSING_PERCENTAGE,
+        ValidationRuleType.MAX_DUPLICATE_PERCENTAGE,
+        ValidationRuleType.APPROXIMATE_EQUALITY,
+    }
+)
+
+#: Rule types whose `columns` must have exactly one entry.
+_SINGLE_COLUMN_TYPES: frozenset[ValidationRuleType] = frozenset(
+    {
+        ValidationRuleType.NOT_NULL,
+        ValidationRuleType.ACCEPTED_VALUES,
+        ValidationRuleType.NUMERIC_RANGE,
+        ValidationRuleType.DATE_RANGE,
+        ValidationRuleType.REGEX,
+        ValidationRuleType.MAX_MISSING_PERCENTAGE,
+    }
+)
+#: Rule types whose `columns` must have one or more entries (a composite
+#: key) — as opposed to `APPROXIMATE_EQUALITY`'s own "2 or more, first is
+#: the total" shape, checked separately.
+_MULTI_COLUMN_TYPES: frozenset[ValidationRuleType] = frozenset(
+    {ValidationRuleType.UNIQUE, ValidationRuleType.MAX_DUPLICATE_PERCENTAGE}
+)
+
+MAX_EXAMPLE_FAILURES: int = 10
+MAX_REGEX_PATTERN_LENGTH: int = 200
+
+
+class NullHandling(StrEnum):
+    """How a rule treats a missing (`None`/empty) cell in a column its
+    check applies to. Does not apply to `NOT_NULL` itself, whose entire
+    purpose is checking for exactly this condition."""
+
+    SKIP = "skip"
+    FAIL = "fail"
+
+
+class RuleProvenance(StrEnum):
+    """How a `ValidationRule` came to exist. One member this slice —
+    every rule is authored directly by a person. `RULE-02` (a later
+    item) will add `DETECTOR_GENERATED`/`AI_ASSISTED` members when it
+    ships; this closed set is additive, not renamed, when that happens."""
+
+    USER_AUTHORED = "user_authored"
+
+
+@dataclass(frozen=True, slots=True)
+class RuleFailureExample:
+    """One bounded example of a row that failed a rule (`docs/domain-
+    model.md` §19 "bounded example failures"). `reason` is a short,
+    human-readable, non-sensitive description — never the raw failing
+    value verbatim beyond what the rule's own parameters already
+    disclose (e.g. "value is null", "value outside 0-100")."""
+
+    row: RowReference
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.reason:
+            raise ValueError("RuleFailureExample.reason must not be empty")
+
+
+@dataclass(frozen=True, slots=True)
+class RuleExecutionResult:
+    """One execution's outcome (`docs/domain-model.md` §19), always the
+    *latest* result for its rule — this slice keeps no history."""
+
+    rule_id: str
+    analysis_id: str
+    executed_at: datetime
+    pass_count: int
+    fail_count: int
+    skipped_count: int
+    example_failures: tuple[RuleFailureExample, ...]
+    duration_ms: float
+    error: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.rule_id:
+            raise ValueError("RuleExecutionResult.rule_id must not be empty")
+        if not self.analysis_id:
+            raise ValueError("RuleExecutionResult.analysis_id must not be empty")
+        for name, value in (
+            ("pass_count", self.pass_count),
+            ("fail_count", self.fail_count),
+            ("skipped_count", self.skipped_count),
+        ):
+            if value < 0:
+                raise ValueError(f"RuleExecutionResult.{name} must not be negative")
+        if len(self.example_failures) > MAX_EXAMPLE_FAILURES:
+            raise ValueError(
+                f"RuleExecutionResult.example_failures must not exceed {MAX_EXAMPLE_FAILURES}"
+            )
+        if len(self.example_failures) > self.fail_count:
+            raise ValueError("RuleExecutionResult.example_failures must not exceed fail_count")
+        if self.duration_ms < 0:
+            raise ValueError("RuleExecutionResult.duration_ms must not be negative")
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationRule:
+    """A user-defined, persisted, executable data-quality check
+    (`docs/domain-model.md` §18) over one `Analysis`'s real rows.
+
+    `columns`/the type-specific parameter fields below realize §18's
+    single "expression or parameters" field, split into a typed
+    structure per rule type so `__post_init__` can enforce exactly the
+    right shape instead of trusting an opaque expression string:
+
+    | rule_type | columns | extra parameters |
+    |---|---|---|
+    | not_null | 1 | none |
+    | unique | 1+ (composite key) | none |
+    | accepted_values | 1 | `accepted_values` (non-empty) |
+    | numeric_range | 1 | `minimum`/`maximum` (>=1 set) |
+    | date_range | 1 | `minimum_date`/`maximum_date` (>=1 set) |
+    | regex | 1 | `pattern` (non-empty, bounded, valid) |
+    | max_missing_percentage | 1 | `threshold_percentage` (0-100) |
+    | max_duplicate_percentage | 1+ | `threshold_percentage` (0-100) |
+    | approximate_equality | 2+ (`columns[0]`=total, rest=parts) | `tolerance` (>=0) |
+
+    Every parameter field not named for a given `rule_type` must be
+    `None` — proven by `__post_init__`, not merely documented.
+    """
+
+    rule_id: str
+    schema_version: str
+    name: str
+    description: str
+    severity: Severity
+    rule_type: ValidationRuleType
+    columns: tuple[ColumnReference, ...]
+    null_handling: NullHandling = NullHandling.SKIP
+    enabled: bool = True
+    scope: SamplingScope = SamplingScope.FULL
+    accepted_values: tuple[str, ...] | None = None
+    minimum: float | None = None
+    maximum: float | None = None
+    minimum_date: date | None = None
+    maximum_date: date | None = None
+    pattern: str | None = None
+    threshold_percentage: float | None = None
+    tolerance: float | None = None
+    source_finding_ids: tuple[str, ...] = ()
+    provenance: RuleProvenance = RuleProvenance.USER_AUTHORED
+    last_result: RuleExecutionResult | None = None
+
+    def __post_init__(self) -> None:
+        if not self.rule_id:
+            raise ValueError("ValidationRule.rule_id must not be empty")
+        if not self.schema_version:
+            raise ValueError("ValidationRule.schema_version must not be empty")
+        if not self.name:
+            raise ValueError("ValidationRule.name must not be empty")
+        if not self.description:
+            raise ValueError("ValidationRule.description must not be empty")
+        if self.rule_type not in SUPPORTED_RULE_TYPES:
+            raise ValueError(
+                f"ValidationRule.rule_type {self.rule_type.value!r} is not supported by "
+                "RULE-01 slice 1 (expression_comparison/conditional_rule are slice 2)"
+            )
+        if self.scope is not SamplingScope.FULL:
+            raise ValueError("ValidationRule.scope must be FULL (no rule-execution sampling yet)")
+
+        self._check_columns()
+        self._check_parameters()
+
+    def _check_columns(self) -> None:
+        rule_type = self.rule_type
+        count = len(self.columns)
+        if rule_type in _SINGLE_COLUMN_TYPES and count != 1:
+            raise ValueError(f"ValidationRule.columns must have exactly 1 entry for {rule_type}")
+        if rule_type in _MULTI_COLUMN_TYPES and count < 1:
+            raise ValueError(f"ValidationRule.columns must have at least 1 entry for {rule_type}")
+        if rule_type is ValidationRuleType.APPROXIMATE_EQUALITY and count < 2:
+            raise ValueError(
+                "ValidationRule.columns must have at least 2 entries for approximate_equality "
+                "(columns[0] is the total, the rest are its components)"
+            )
+
+    def _check_parameters(self) -> None:
+        rule_type = self.rule_type
+        by_type: dict[ValidationRuleType, tuple[str, ...]] = {
+            ValidationRuleType.ACCEPTED_VALUES: ("accepted_values",),
+            ValidationRuleType.NUMERIC_RANGE: ("minimum", "maximum"),
+            ValidationRuleType.DATE_RANGE: ("minimum_date", "maximum_date"),
+            ValidationRuleType.REGEX: ("pattern",),
+            ValidationRuleType.MAX_MISSING_PERCENTAGE: ("threshold_percentage",),
+            ValidationRuleType.MAX_DUPLICATE_PERCENTAGE: ("threshold_percentage",),
+            ValidationRuleType.APPROXIMATE_EQUALITY: ("tolerance",),
+        }
+        owned = by_type.get(rule_type, ())
+        all_parameter_fields = (
+            "accepted_values",
+            "minimum",
+            "maximum",
+            "minimum_date",
+            "maximum_date",
+            "pattern",
+            "threshold_percentage",
+            "tolerance",
+        )
+        for field_name in all_parameter_fields:
+            value = getattr(self, field_name)
+            if field_name not in owned and value is not None:
+                raise ValueError(
+                    f"ValidationRule.{field_name} must be None for rule_type {rule_type}"
+                )
+
+        if rule_type is ValidationRuleType.ACCEPTED_VALUES and not self.accepted_values:
+            raise ValueError("ValidationRule.accepted_values must be non-empty")
+        if rule_type is ValidationRuleType.NUMERIC_RANGE:
+            if self.minimum is None and self.maximum is None:
+                raise ValueError("ValidationRule: numeric_range requires minimum and/or maximum")
+            if (
+                self.minimum is not None
+                and self.maximum is not None
+                and self.minimum > self.maximum
+            ):
+                raise ValueError("ValidationRule.minimum must not exceed maximum")
+        if rule_type is ValidationRuleType.DATE_RANGE:
+            if self.minimum_date is None and self.maximum_date is None:
+                raise ValueError(
+                    "ValidationRule: date_range requires minimum_date and/or maximum_date"
+                )
+            if (
+                self.minimum_date is not None
+                and self.maximum_date is not None
+                and self.minimum_date > self.maximum_date
+            ):
+                raise ValueError("ValidationRule.minimum_date must not exceed maximum_date")
+        if rule_type is ValidationRuleType.REGEX:
+            if not self.pattern:
+                raise ValueError("ValidationRule.pattern must not be empty")
+            if len(self.pattern) > MAX_REGEX_PATTERN_LENGTH:
+                raise ValueError(
+                    f"ValidationRule.pattern must not exceed {MAX_REGEX_PATTERN_LENGTH} characters"
+                )
+        if rule_type in (
+            ValidationRuleType.MAX_MISSING_PERCENTAGE,
+            ValidationRuleType.MAX_DUPLICATE_PERCENTAGE,
+        ):
+            threshold = self.threshold_percentage
+            if threshold is None or not 0.0 <= threshold <= 100.0:
+                raise ValueError("ValidationRule.threshold_percentage must be set and within 0-100")
+        if rule_type is ValidationRuleType.APPROXIMATE_EQUALITY and (
+            self.tolerance is None or self.tolerance < 0.0
+        ):
+            raise ValueError("ValidationRule.tolerance must be set and non-negative")
+
+
+__all__ = [
+    "MAX_EXAMPLE_FAILURES",
+    "MAX_REGEX_PATTERN_LENGTH",
+    "SUPPORTED_RULE_TYPES",
+    "NullHandling",
+    "RuleExecutionResult",
+    "RuleFailureExample",
+    "RuleProvenance",
+    "ValidationRule",
+]
