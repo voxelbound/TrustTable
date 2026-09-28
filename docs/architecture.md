@@ -909,10 +909,17 @@ moved to filesystem storage under `Dataset.storage_location`). Alembic
 migrations run automatically at application startup
 (`main.create_app()`), and any analysis a restart finds in a non-terminal
 state is deterministically marked `FAILED`
-(`persistence.reconcile_interrupted_analyses`). AI interpretations,
-review decisions, rules, and exports are **not yet persisted** — none of
-those domain objects exist as implemented code yet; their own later
-backlog items (`REV-01`, `RULE-01`/`RULE-02`, `EXP-01`) own that work.
+(`persistence.reconcile_interrupted_analyses`). **Rules implemented
+(`RULE-01` slice 1):** `Analysis.rules` (`domain.rules.ValidationRule`,
+each carrying its own latest `RuleExecutionResult`) persists in the same
+row as an additive, nullable `rules_json` JSON column
+(`0003_add_rules_json.py`); a pre-existing row decodes `NULL` as an
+empty tuple. AI interpretations, review decisions, and exports are
+**not yet persisted** — none of those domain objects exist as
+implemented code yet; their own later backlog items (`REV-01`,
+`EXP-01`) own that work, and `RULE-01`'s own two expression-based rule
+types (`expression_comparison`/`conditional_rule`) remain a disclosed
+slice 2.
 
 ## 9. Background work
 

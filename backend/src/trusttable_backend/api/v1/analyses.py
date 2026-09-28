@@ -34,6 +34,8 @@ creating a new, independent analysis over the same dataset content — see
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Query, Request, UploadFile
 
 from trusttable_backend.ai_provider.display import describe_provenance, sanitize_model_identifier
@@ -49,13 +51,19 @@ from trusttable_backend.analysis import (
     ContextFieldNotEditableError,
     ContextVersionConflictError,
     FindingNotFoundError,
+    InvalidRuleParametersError,
     QuestionNotFoundError,
     RowNotInFindingError,
+    RuleNotFoundError,
+    UnknownRuleColumnError,
     answer_guided_question,
     apply_ai_context_augmentation,
     confirm_context_fields,
     create_analysis,
     create_analysis_from_upload,
+    create_rule,
+    delete_rule,
+    execute_rule_now,
     finalize_context,
     get_finding,
     get_finding_evidence,
@@ -79,10 +87,11 @@ from trusttable_backend.detectors.contract import FindingCandidate, SecurityExpo
 from trusttable_backend.domain.clarification import ClarificationAnswer, ClarificationQuestion
 from trusttable_backend.domain.context import ContextField, ContextFieldValue, DatasetContext
 from trusttable_backend.domain.evidence import Evidence
-from trusttable_backend.domain.explanation import FindingExplanation
+from trusttable_backend.domain.explanation import FindingExplanation, ValidationRuleType
 from trusttable_backend.domain.parsing import Dataset
 from trusttable_backend.domain.row_context import RowContextWindow
-from trusttable_backend.domain.value_objects import ColumnReference
+from trusttable_backend.domain.rules import NullHandling, RuleExecutionResult, ValidationRule
+from trusttable_backend.domain.value_objects import ColumnReference, Severity
 from trusttable_backend.errors import AppError
 from trusttable_backend.explanation.ai_explanation import (
     build_finding_explanation_envelope,
@@ -110,6 +119,7 @@ from trusttable_backend.schemas.analysis import (
     ConfirmContextFieldsRequest,
     ContextFieldValueResponse,
     ContextResponse,
+    CreateValidationRuleRequest,
     DatasetSummaryResponse,
     DemoAnalysisResponse,
     FinalizeContextRequest,
@@ -125,10 +135,14 @@ from trusttable_backend.schemas.analysis import (
     RetryAnalysisResponse,
     RowContextEntryResponse,
     RowContextResponse,
+    RuleExecutionResultResponse,
+    RuleFailureExampleResponse,
     SampleMetadataResponse,
     SecurityExposureResponse,
     TrustAssessmentResponse,
     UploadAnalysisResponse,
+    ValidationRuleResponse,
+    ValidationRulesListResponse,
     WarningResponse,
 )
 from trusttable_backend.uploads import sanitize_filename
@@ -316,6 +330,74 @@ def _analysis_not_retryable(analysis_id: str, state: AnalysisState) -> AppError:
         "This analysis is not in a retryable state.",
         status_code=409,
         details={"analysis_id": analysis_id, "state": state.value},
+    )
+
+
+def _rule_invalid(analysis_id: str, reason: str) -> AppError:
+    """`docs/api-specification.md` §14's already-planned `RULE_INVALID`
+    (`RULE-01` slice 1) — covers both an unknown referenced column and a
+    parameter shape that does not match the requested `rule_type`; both
+    are "the supplied rule definition is invalid", not a runtime
+    execution failure (`RULE_EXECUTION_FAILED`, a distinct planned code
+    this slice never raises — `execute_rule` fails closed onto
+    `RuleExecutionResult.error` instead of propagating)."""
+    return AppError(
+        "RULE_INVALID",
+        "The supplied rule definition is invalid.",
+        status_code=422,
+        details={"analysis_id": analysis_id, "reason": reason},
+    )
+
+
+def _rule_not_found(analysis_id: str, rule_id: str) -> AppError:
+    return AppError(
+        "RULE_NOT_FOUND",
+        "The requested validation rule was not found.",
+        status_code=404,
+        details={"analysis_id": analysis_id, "rule_id": rule_id},
+    )
+
+
+def _rule_execution_result(result: RuleExecutionResult) -> RuleExecutionResultResponse:
+    return RuleExecutionResultResponse(
+        executed_at=result.executed_at,
+        pass_count=result.pass_count,
+        fail_count=result.fail_count,
+        skipped_count=result.skipped_count,
+        example_failures=[
+            RuleFailureExampleResponse(row_number=example.row.row_number, reason=example.reason)
+            for example in result.example_failures
+        ],
+        duration_ms=result.duration_ms,
+        error=result.error,
+    )
+
+
+def _validation_rule(rule: ValidationRule) -> ValidationRuleResponse:
+    return ValidationRuleResponse(
+        rule_id=rule.rule_id,
+        schema_version=rule.schema_version,
+        name=rule.name,
+        description=rule.description,
+        severity=rule.severity.value,
+        rule_type=rule.rule_type.value,
+        columns=[_column_reference(column) for column in rule.columns],
+        null_handling=rule.null_handling.value,
+        enabled=rule.enabled,
+        scope=rule.scope.value,
+        accepted_values=list(rule.accepted_values) if rule.accepted_values is not None else None,
+        minimum=rule.minimum,
+        maximum=rule.maximum,
+        minimum_date=rule.minimum_date.isoformat() if rule.minimum_date is not None else None,
+        maximum_date=rule.maximum_date.isoformat() if rule.maximum_date is not None else None,
+        pattern=rule.pattern,
+        threshold_percentage=rule.threshold_percentage,
+        tolerance=rule.tolerance,
+        source_finding_ids=list(rule.source_finding_ids),
+        provenance=rule.provenance.value,
+        last_result=_rule_execution_result(rule.last_result)
+        if rule.last_result is not None
+        else None,
     )
 
 
@@ -1168,3 +1250,148 @@ def post_analysis_retry(analysis_id: str, request: Request) -> RetryAnalysisResp
         status_url=status_url,
         retry_source_analysis_id=analysis_id,
     )
+
+
+def _parse_create_rule_request(
+    analysis_id: str, body: CreateValidationRuleRequest
+) -> tuple[ValidationRuleType, Severity, NullHandling, date | None, date | None]:
+    """Convert `body`'s closed-set string fields and optional ISO-8601
+    date strings, or raise `RULE_INVALID` (422) for any unrecognized
+    value — `RULE-01` slice 1 never reaches `create_rule` with a value
+    it cannot interpret."""
+    try:
+        rule_type = ValidationRuleType(body.rule_type)
+        severity = Severity(body.severity)
+        null_handling = NullHandling(body.null_handling)
+        minimum_date = date.fromisoformat(body.minimum_date) if body.minimum_date else None
+        maximum_date = date.fromisoformat(body.maximum_date) if body.maximum_date else None
+    except ValueError as exc:
+        raise _rule_invalid(analysis_id, str(exc)) from exc
+    return rule_type, severity, null_handling, minimum_date, maximum_date
+
+
+@router.post(
+    "/analyses/{analysis_id}/rules", response_model=ValidationRuleResponse, status_code=201
+)
+def post_analysis_rule(
+    analysis_id: str, body: CreateValidationRuleRequest, request: Request
+) -> ValidationRuleResponse:
+    """Define a new validation rule and execute it immediately against
+    the analysis's real, current rows (`RULE-01` slice 1; `docs/domain-
+    model.md` §18, `docs/api-specification.md`).
+
+    Raises `ANALYSIS_NOT_FOUND` (404); `INVALID_ANALYSIS_STATE` (409) for
+    a known analysis not yet `COMPLETED`; and `RULE_INVALID` (422,
+    `docs/api-specification.md` §14) for a `column_names` entry that does
+    not match a real dataset column, an unrecognized `rule_type`/
+    `severity`/`null_handling` value, a malformed `minimum_date`/
+    `maximum_date`, or a parameter shape that does not match `rule_type`
+    (`docs/domain-model.md` §18's table).
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    rule_type, severity, null_handling, minimum_date, maximum_date = _parse_create_rule_request(
+        analysis_id, body
+    )
+    try:
+        rule = create_rule(
+            store,
+            analysis_id,
+            name=body.name,
+            description=body.description,
+            severity=severity,
+            rule_type=rule_type,
+            column_names=tuple(body.column_names),
+            null_handling=null_handling,
+            accepted_values=tuple(body.accepted_values)
+            if body.accepted_values is not None
+            else None,
+            minimum=body.minimum,
+            maximum=body.maximum,
+            minimum_date=minimum_date,
+            maximum_date=maximum_date,
+            pattern=body.pattern,
+            threshold_percentage=body.threshold_percentage,
+            tolerance=body.tolerance,
+        )
+    except AnalysisNotFoundError as exc:
+        raise _not_found(analysis_id) from exc
+    except AnalysisNotReadyError as exc:
+        raise _analysis_not_ready(analysis_id, analysis.state) from exc
+    except UnknownRuleColumnError as exc:
+        raise _rule_invalid(analysis_id, f"unknown column: {exc.column_name}") from exc
+    except InvalidRuleParametersError as exc:
+        raise _rule_invalid(analysis_id, exc.reason) from exc
+    return _validation_rule(rule)
+
+
+@router.get("/analyses/{analysis_id}/rules", response_model=ValidationRulesListResponse)
+def get_analysis_rules(analysis_id: str, request: Request) -> ValidationRulesListResponse:
+    """List every validation rule defined on this analysis (`RULE-01`
+    slice 1), each with its latest execution result.
+
+    Raises `ANALYSIS_NOT_FOUND` (404) for an unknown `analysis_id`.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    items = [_validation_rule(rule) for rule in analysis.rules]
+    return ValidationRulesListResponse(items=items, total_items=len(items))
+
+
+def _get_rule_or_404(analysis: Analysis, analysis_id: str, rule_id: str) -> ValidationRule:
+    for rule in analysis.rules:
+        if rule.rule_id == rule_id:
+            return rule
+    raise _rule_not_found(analysis_id, rule_id)
+
+
+@router.get("/analyses/{analysis_id}/rules/{rule_id}", response_model=ValidationRuleResponse)
+def get_analysis_rule(analysis_id: str, rule_id: str, request: Request) -> ValidationRuleResponse:
+    """Return one validation rule by `rule_id` (`RULE-01` slice 1).
+
+    Raises `ANALYSIS_NOT_FOUND` (404) and `RULE_NOT_FOUND` (404) for an
+    unknown `rule_id`.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    rule = _get_rule_or_404(analysis, analysis_id, rule_id)
+    return _validation_rule(rule)
+
+
+@router.post("/analyses/{analysis_id}/rules/{rule_id}/test", response_model=ValidationRuleResponse)
+def post_analysis_rule_test(
+    analysis_id: str, rule_id: str, request: Request
+) -> ValidationRuleResponse:
+    """Re-run an existing rule against the analysis's current parsed rows
+    and persist the refreshed result (`docs/api-specification.md` §11's
+    already-planned `POST .../rules/{rule_id}/test`; `RULE-01` slice 1).
+
+    Raises `ANALYSIS_NOT_FOUND` (404), `INVALID_ANALYSIS_STATE` (409),
+    and `RULE_NOT_FOUND` (404) for an unknown `rule_id`.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    try:
+        rule = execute_rule_now(store, analysis_id, rule_id)
+    except AnalysisNotReadyError as exc:
+        raise _analysis_not_ready(analysis_id, analysis.state) from exc
+    except RuleNotFoundError as exc:
+        raise _rule_not_found(analysis_id, exc.rule_id) from exc
+    return _validation_rule(rule)
+
+
+@router.delete("/analyses/{analysis_id}/rules/{rule_id}", status_code=204)
+def delete_analysis_rule(analysis_id: str, rule_id: str, request: Request) -> None:
+    """Remove a validation rule from the analysis (`RULE-01` slice 1).
+
+    Raises `ANALYSIS_NOT_FOUND` (404), `INVALID_ANALYSIS_STATE` (409),
+    and `RULE_NOT_FOUND` (404) for an unknown `rule_id`.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    try:
+        delete_rule(store, analysis_id, rule_id)
+    except AnalysisNotReadyError as exc:
+        raise _analysis_not_ready(analysis_id, analysis.state) from exc
+    except RuleNotFoundError as exc:
+        raise _rule_not_found(analysis_id, exc.rule_id) from exc
