@@ -917,7 +917,21 @@ row as an additive, nullable `rules_json` JSON column
 empty tuple. `RULE-01` is now complete: slice 2 (`WP-079`) added
 `expression_comparison`/`conditional_rule` as numeric-only, structured-
 parameter comparisons (no expression grammar, no `eval`/`exec`), reusing
-the same generic `rules_json` codec — no new migration. AI
+the same generic `rules_json` codec — no new migration. **`RULE-02` slice
+1 (`WP-080`):** `rules.generation.generate_rule_proposal` deterministically
+derives a candidate `ValidationRule` for 9 of 13 detector ids, reading
+parameters verbatim from the finding's own already-computed `Evidence`
+(never a new calculation, never AI). A new read-only
+`GET .../findings/{finding_id}/rule-proposal` route builds and executes
+the candidate against the real analysis rows before returning it, but
+never persists it; `POST .../rules` gained an optional
+`source_finding_id` so accepting the offer persists it through the same
+`rules_json` codec with `provenance=detector_generated`. The remaining 4
+detector categories (`consistency.inconsistent_capitalization`,
+`statistical.suspiciously_constant_column`,
+`cross_field.line_total_mismatch`, `security.possible_llm_prompt_injection`)
+have no safe deterministic mapping and are excluded, disclosed, this
+slice — `RuleProvenance.AI_ASSISTED` remains a future slice. AI
 interpretations, review decisions, and exports are **not yet
 persisted** — none of those domain objects exist as implemented code
 yet; their own later backlog items (`REV-01`, `EXP-01`) own that work.

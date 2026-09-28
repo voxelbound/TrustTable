@@ -530,24 +530,48 @@ Returns:
 - bounded failure examples
 - execution duration
 
-**Implemented (`RULE-01` slice 1):** `GET`/`POST`/`GET .../{rule_id}`/
-`POST .../{rule_id}/test`/`DELETE .../{rule_id}` are real, for 9 of the
-11 `docs/product-requirements.md` §13 rule types (`expression_comparison`/
-`conditional_rule` remain a disclosed slice 2 — `422
-INVALID_RULE_PARAMETERS` for either today). `POST` executes synchronously
-against the analysis's real current rows and returns the created rule
-with its result in the same response — there is no separate "proposed"
-state in this slice (every rule is user-authored, `provenance:
-"user_authored"`; `RULE-02`'s later finding-to-rule generation is what
-will populate a `source_finding_ids`-linked, possibly-not-yet-confirmed
-rule). `PUT` (parameter editing in place) is **not yet implemented**:
-change a rule by deleting and recreating it. Request/response shapes
-mirror `docs/domain-model.md` §18/§19 exactly (see
+### GET `/analyses/{analysis_id}/findings/{finding_id}/rule-proposal`
+
+Builds and executes (never persists) a deterministic candidate rule for
+one finding.
+
+**Implemented (`RULE-01`, complete):** `GET`/`POST`/`GET .../{rule_id}`/
+`POST .../{rule_id}/test`/`DELETE .../{rule_id}` are real, for all 11
+`docs/product-requirements.md` §13 rule types (`expression_comparison`/
+`conditional_rule` added in slice 2, `WP-079`). `POST` executes
+synchronously against the analysis's real current rows and returns the
+created rule with its result in the same response — there is no separate
+"proposed" state persisted by `POST` itself (every rule is executed and
+stored immediately). `PUT` (parameter editing in place) is **not yet
+implemented**: change a rule by deleting and recreating it. Request/
+response shapes mirror `docs/domain-model.md` §18/§19 exactly (see
 `domain.rules.ValidationRule`/`RuleExecutionResult`); an unknown
 `column_names` entry is `422 UNKNOWN_RULE_COLUMN`, a malformed parameter
 shape for `rule_type` is `422 INVALID_RULE_PARAMETERS`, an unknown
 `rule_id` is `404 RULE_NOT_FOUND`, and a known analysis not yet
 `COMPLETED` is `409 INVALID_ANALYSIS_STATE`.
+
+**Implemented (`RULE-02` slice 1, `WP-080`):**
+`GET .../findings/{finding_id}/rule-proposal` deterministically derives a
+candidate rule for 9 of 13 detector ids (parameters read verbatim from
+the finding's own `Evidence`, never a new calculation, never AI), builds
+and executes it against the analysis's real current rows, and returns it
+**unpersisted** — `{"available": bool, "reason": str | null, "rule":
+ValidationRuleResponse | null, "result": RuleExecutionResultResponse |
+null}`. `available: false` (never an error) with a stated `reason` means
+no safe deterministic mapping exists for that detector — the 4 remaining
+categories (`consistency.inconsistent_capitalization`,
+`statistical.suspiciously_constant_column`,
+`cross_field.line_total_mismatch`,
+`security.possible_llm_prompt_injection`) and any detector id without a
+dedicated `explanation.guidance` template. `POST .../rules` gained an
+optional `source_finding_id`: when given, the finding must exist
+(`404 FINDING_NOT_FOUND` otherwise) and the persisted rule records
+`provenance: "detector_generated"` with `source_finding_ids` set —
+accepting a proposal offer. Omitted (the default): unchanged
+`provenance: "user_authored"`. Raises the same `ANALYSIS_NOT_FOUND`/
+`INVALID_ANALYSIS_STATE`/`FINDING_NOT_FOUND` semantics as the sibling
+finding routes.
 
 ## 12. Reports and exports
 

@@ -65,6 +65,7 @@ from trusttable_backend.analysis import (
     delete_rule,
     execute_rule_now,
     finalize_context,
+    generate_rule_proposal,
     get_finding,
     get_finding_evidence,
     get_finding_row_context,
@@ -142,6 +143,7 @@ from trusttable_backend.schemas.analysis import (
     RowContextResponse,
     RuleExecutionResultResponse,
     RuleFailureExampleResponse,
+    RuleProposalResponse,
     SampleMetadataResponse,
     SecurityExposureResponse,
     TrustAssessmentResponse,
@@ -1217,6 +1219,45 @@ def get_analysis_finding_row_context(
     return _row_context_response(window)
 
 
+@router.get(
+    "/analyses/{analysis_id}/findings/{finding_id}/rule-proposal",
+    response_model=RuleProposalResponse,
+)
+def get_analysis_finding_rule_proposal(
+    analysis_id: str, finding_id: str, request: Request
+) -> RuleProposalResponse:
+    """Build and execute (never persist) a deterministic candidate
+    validation rule for one finding (`RULE-02` slice 1, `WP-080`).
+
+    `available=False` (never an error response) means no safe
+    deterministic mapping exists for this finding's detector — `reason`
+    states why; `rule`/`result` are then both `null`. `available=True`
+    means `rule` already executed against the analysis's real, current
+    rows and `result` is its exact outcome, unpersisted. Accept the offer
+    with `POST .../rules` (`source_finding_id` set to this `finding_id`).
+
+    Raises `ANALYSIS_NOT_FOUND` (404); `INVALID_ANALYSIS_STATE` (409) for
+    a known analysis not yet `COMPLETED`; `FINDING_NOT_FOUND` (404) for
+    an unknown `finding_id`.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    try:
+        offer = generate_rule_proposal(store, analysis_id, finding_id)
+    except AnalysisNotFoundError as exc:
+        raise _not_found(analysis_id) from exc
+    except AnalysisNotReadyError as exc:
+        raise _analysis_not_ready(analysis_id, analysis.state) from exc
+    except FindingNotFoundError as exc:
+        raise _finding_not_found(analysis_id, finding_id) from exc
+    return RuleProposalResponse(
+        available=offer.available,
+        reason=offer.reason,
+        rule=_validation_rule(offer.rule) if offer.rule is not None else None,
+        result=_rule_execution_result(offer.result) if offer.result is not None else None,
+    )
+
+
 @router.post("/analyses/{analysis_id}/cancel", response_model=AnalysisResource)
 def post_analysis_cancel(analysis_id: str, request: Request) -> AnalysisResource:
     """Request cancellation of a queued or actively-running analysis
@@ -1319,8 +1360,15 @@ def post_analysis_rule(
     the analysis's real, current rows (`RULE-01`, all 11 rule types;
     `docs/domain-model.md` §18, `docs/api-specification.md`).
 
+    `source_finding_id` (`RULE-02` slice 1, `WP-080`), when given, must
+    name an existing finding on this analysis (`FINDING_NOT_FOUND`, 404,
+    otherwise); the persisted rule then records
+    `provenance="detector_generated"` — the normal way a caller accepts a
+    `GET .../rule-proposal` offer.
+
     Raises `ANALYSIS_NOT_FOUND` (404); `INVALID_ANALYSIS_STATE` (409) for
-    a known analysis not yet `COMPLETED`; and `RULE_INVALID` (422,
+    a known analysis not yet `COMPLETED`; `FINDING_NOT_FOUND` (404) for
+    an unknown `source_finding_id`; and `RULE_INVALID` (422,
     `docs/api-specification.md` §14) for a `column_names` entry that does
     not match a real dataset column, an unrecognized `rule_type`/
     `severity`/`null_handling` value, a malformed `minimum_date`/
@@ -1362,11 +1410,14 @@ def post_analysis_rule(
             comparison_value=body.comparison_value,
             condition_operator=condition_operator,
             condition_value=body.condition_value,
+            source_finding_id=body.source_finding_id,
         )
     except AnalysisNotFoundError as exc:
         raise _not_found(analysis_id) from exc
     except AnalysisNotReadyError as exc:
         raise _analysis_not_ready(analysis_id, analysis.state) from exc
+    except FindingNotFoundError as exc:
+        raise _finding_not_found(analysis_id, str(body.source_finding_id)) from exc
     except UnknownRuleColumnError as exc:
         raise _rule_invalid(analysis_id, f"unknown column: {exc.column_name}") from exc
     except InvalidRuleParametersError as exc:

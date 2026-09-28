@@ -20,13 +20,15 @@ Distinct from `explanation.ProposedValidationRule` (`AI-08`): that type
 is a *display-only proposal* inside one finding's four-section analysis,
 never executed, never persisted on its own. `ValidationRule` here is a
 first-class, persisted `Analysis` child that a person defines directly
-and that actually runs against real rows — `RULE-02` (a later item) is
-what will eventually convert a proposal into one of these.
+and that actually runs against real rows. `rules/generation.py`
+(`RULE-02` slice 1, `WP-080`) is what converts a finding into one of
+these for 9 of 13 detector categories, deterministically, using only
+facts the matching detector already computed.
 
-`scope` is always `SamplingScope.FULL` this slice: no rule-execution
-sampling exists yet, matching `Evidence`'s own current always-`FULL`
-usage. `source_finding_ids` is always empty this slice — `RULE-02`'s
-job. `provenance` has one member (`USER_AUTHORED`) this slice.
+`scope` is always `SamplingScope.FULL`: no rule-execution sampling
+exists yet, matching `Evidence`'s own current always-`FULL` usage.
+`source_finding_ids` is populated for a `DETECTOR_GENERATED` rule
+(`RULE-02` slice 1) and empty for a `USER_AUTHORED` one.
 
 Framework-independent: no FastAPI/SQLAlchemy/pydantic/ai_boundary/
 ai_provider import. Stdlib only besides the domain value objects.
@@ -107,12 +109,20 @@ class ComparisonOperator(StrEnum):
 
 
 class RuleProvenance(StrEnum):
-    """How a `ValidationRule` came to exist. One member this slice —
-    every rule is authored directly by a person. `RULE-02` (a later
-    item) will add `DETECTOR_GENERATED`/`AI_ASSISTED` members when it
-    ships; this closed set is additive, not renamed, when that happens."""
+    """How a `ValidationRule` came to exist.
+
+    `DETECTOR_GENERATED` (`RULE-02` slice 1, `WP-080`) is a rule whose
+    `rule_type`/`columns`/parameters were derived deterministically from
+    one finding's own already-computed `Evidence` (`rules/generation.py`)
+    — never a fresh calculation, never AI — then validated and executed
+    before ever being offered, and accepted by a person through the same
+    `POST .../rules` path `USER_AUTHORED` rules use, now finding-aware.
+    `AI_ASSISTED` remains a disclosed future member (a later `RULE-02`
+    slice) for the detector categories with no safe deterministic
+    mapping; this closed set is additive, not renamed, when that ships."""
 
     USER_AUTHORED = "user_authored"
+    DETECTOR_GENERATED = "detector_generated"
 
 
 @dataclass(frozen=True, slots=True)
