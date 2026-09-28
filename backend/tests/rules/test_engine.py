@@ -1,8 +1,10 @@
-"""Tests for `rules.engine.execute_rule` (`RULE-01` slice 1).
+"""Tests for `rules.engine.execute_rule` (`RULE-01`).
 
 Every rule type gets a positive case (all rows pass), a negative case
 (exact fail_count and example row numbers proven), a null-handling case,
-and a boundary case where one exists.
+and a boundary case where one exists. Slice 2 (`WP-079`) adds
+`expression_comparison`/`conditional_rule`, including the
+vacuous-WHEN-false proof for `conditional_rule`.
 """
 
 from __future__ import annotations
@@ -10,7 +12,12 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 from trusttable_backend.domain.explanation import ValidationRuleType
-from trusttable_backend.domain.rules import NullHandling, RuleExecutionResult, ValidationRule
+from trusttable_backend.domain.rules import (
+    ComparisonOperator,
+    NullHandling,
+    RuleExecutionResult,
+    ValidationRule,
+)
 from trusttable_backend.domain.value_objects import ColumnReference, Severity
 from trusttable_backend.rules.engine import execute_rule
 
@@ -227,6 +234,120 @@ def test_approximate_equality_null_handling_default_skip() -> None:
     assert result.skipped_count == 1
 
 
+# --- expression_comparison ----------------------------------------------
+
+
+def test_expression_comparison_against_a_literal_positive_and_negative() -> None:
+    rule = make_rule(
+        rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+        comparison_operator=ComparisonOperator.GREATER_THAN,
+        comparison_value=0.0,
+    )
+    result = run(rule, (("5",), ("-1",), ("0",)))
+    assert result.pass_count == 1 and result.fail_count == 2
+
+
+def test_expression_comparison_against_a_column_positive_and_negative() -> None:
+    rule = make_rule(
+        rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+        columns=(col("price", 0), col("cost", 1)),
+        comparison_operator=ComparisonOperator.GREATER_THAN,
+    )
+    result = run(rule, (("10", "4"), ("3", "4")))
+    assert result.pass_count == 1 and result.fail_count == 1
+
+
+def test_expression_comparison_non_numeric_value_fails_not_skips() -> None:
+    rule = make_rule(
+        rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+        comparison_operator=ComparisonOperator.GREATER_THAN,
+        comparison_value=0.0,
+    )
+    result = run(rule, (("abc",),))
+    assert result.fail_count == 1 and result.skipped_count == 0
+    assert "not numeric" in result.example_failures[0].reason
+
+
+def test_expression_comparison_null_is_skipped_by_default() -> None:
+    rule = make_rule(
+        rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+        columns=(col("price", 0), col("cost", 1)),
+        comparison_operator=ComparisonOperator.GREATER_THAN,
+    )
+    result = run(rule, ((None, "4"),))
+    assert result.skipped_count == 1
+
+
+def test_expression_comparison_equals_boundary() -> None:
+    rule = make_rule(
+        rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+        comparison_operator=ComparisonOperator.EQUALS,
+        comparison_value=5.0,
+    )
+    result = run(rule, (("5",), ("5.0",), ("6",)))
+    assert result.pass_count == 2 and result.fail_count == 1
+
+
+# --- conditional_rule -----------------------------------------------------
+
+
+def _conditional_rule(**overrides: object) -> ValidationRule:
+    fields: dict[str, object] = {
+        "rule_type": ValidationRuleType.CONDITIONAL_RULE,
+        "columns": (col("status", 0), col("ship_date_offset", 1)),
+        "condition_operator": ComparisonOperator.EQUALS,
+        "condition_value": 1.0,
+        "comparison_operator": ComparisonOperator.GREATER_THAN,
+        "comparison_value": 0.0,
+    }
+    fields.update(overrides)
+    return make_rule(**fields)
+
+
+def test_conditional_rule_when_false_passes_vacuously_and_never_evaluates_then() -> None:
+    rule = _conditional_rule()
+    # status != 1 (WHEN false): the THEN column holds an obviously-failing
+    # value ("-5"), but must never be evaluated or counted.
+    result = run(rule, (("0", "-5"),))
+    assert result.pass_count == 1 and result.fail_count == 0 and result.skipped_count == 0
+
+
+def test_conditional_rule_when_true_then_true_passes() -> None:
+    rule = _conditional_rule()
+    result = run(rule, (("1", "3"),))
+    assert result.pass_count == 1 and result.fail_count == 0
+
+
+def test_conditional_rule_when_true_then_false_fails() -> None:
+    rule = _conditional_rule()
+    result = run(rule, (("1", "-3"),))
+    assert result.pass_count == 0 and result.fail_count == 1
+    assert "THEN clause is false" in result.example_failures[0].reason
+
+
+def test_conditional_rule_null_when_column_is_skipped_by_default() -> None:
+    rule = _conditional_rule()
+    result = run(rule, ((None, "3"),))
+    assert result.skipped_count == 1
+
+
+def test_conditional_rule_null_then_column_is_skipped_only_when_when_is_true() -> None:
+    rule = _conditional_rule()
+    # WHEN true (status == 1), THEN column missing: follows null_handling.
+    result = run(rule, (("1", None),))
+    assert result.skipped_count == 1
+    # WHEN false (status != 1): THEN column missing is irrelevant, still a pass.
+    result = run(rule, (("0", None),))
+    assert result.pass_count == 1 and result.skipped_count == 0
+
+
+def test_conditional_rule_when_column_non_numeric_fails() -> None:
+    rule = _conditional_rule()
+    result = run(rule, (("abc", "3"),))
+    assert result.fail_count == 1
+    assert "WHEN value is not numeric" in result.example_failures[0].reason
+
+
 # --- structural guarantees ----------------------------------------------
 
 
@@ -274,6 +395,16 @@ def test_every_supported_rule_type_has_a_runner() -> None:
         elif rule_type is ValidationRuleType.MAX_MISSING_PERCENTAGE:
             columns = (col(),)
             extra["threshold_percentage"] = 10.0
+        elif rule_type is ValidationRuleType.EXPRESSION_COMPARISON:
+            columns = (col(),)
+            extra["comparison_operator"] = ComparisonOperator.GREATER_THAN
+            extra["comparison_value"] = 0.0
+        elif rule_type is ValidationRuleType.CONDITIONAL_RULE:
+            columns = (col("a", 0), col("b", 1))
+            extra["condition_operator"] = ComparisonOperator.EQUALS
+            extra["condition_value"] = 1.0
+            extra["comparison_operator"] = ComparisonOperator.GREATER_THAN
+            extra["comparison_value"] = 0.0
         else:
             columns = (col(),)
         rule = make_rule(rule_type=rule_type, columns=columns, **extra)

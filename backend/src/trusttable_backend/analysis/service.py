@@ -99,7 +99,7 @@ from ..domain.evidence import Evidence
 from ..domain.explanation import ValidationRuleType
 from ..domain.parsing import Dataset, DatasetFormat, DatasetSourceType
 from ..domain.row_context import RowContextEntry, RowContextWindow
-from ..domain.rules import NullHandling, ValidationRule
+from ..domain.rules import ComparisonOperator, NullHandling, ValidationRule
 from ..domain.value_objects import ColumnReference, Provenance, RowReference, Severity
 from ..parsers.csv_parser import parse_csv
 from ..profiling.metrics import compute_dataset_profile
@@ -1050,9 +1050,14 @@ def create_rule(
     pattern: str | None = None,
     threshold_percentage: float | None = None,
     tolerance: float | None = None,
+    comparison_operator: ComparisonOperator | None = None,
+    comparison_value: float | None = None,
+    condition_operator: ComparisonOperator | None = None,
+    condition_value: float | None = None,
 ) -> ValidationRule:
-    """Define a new `ValidationRule` (`RULE-01` slice 1) against a
-    `COMPLETED` analysis's real columns, execute it immediately against
+    """Define a new `ValidationRule` (`RULE-01`; all 11 rule types as of
+    slice 2, `WP-079`) against a `COMPLETED` analysis's real columns,
+    execute it immediately against
     the analysis's actual parsed rows (`parse_csv(analysis.content)` —
     the same reconstruction-on-demand pattern `get_finding_row_context`/
     `retry_analysis` already use, never a sample), store the result on
@@ -1095,6 +1100,10 @@ def create_rule(
             pattern=pattern,
             threshold_percentage=threshold_percentage,
             tolerance=tolerance,
+            comparison_operator=comparison_operator,
+            comparison_value=comparison_value,
+            condition_operator=condition_operator,
+            condition_value=condition_value,
         )
     except ValueError as exc:
         raise InvalidRuleParametersError(analysis_id, str(exc)) from exc
