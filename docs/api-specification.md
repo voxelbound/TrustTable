@@ -672,6 +672,24 @@ Downloads validated rules.
 
 Downloads validated rules.
 
+**Implemented (`EXP-01` slice 1):** both routes are real and return the
+same document, rendered as JSON (`application/json`, file
+`rules-{analysis_id}.json`) or YAML (`application/yaml`, file
+`rules-{analysis_id}.yaml`), as an attachment. The document has
+`export_type` (`validation_rules`), `export_schema_version` (`"1"`),
+`analysis_id`, `rule_count`, `excluded_rule_count` and `rules`. Only
+*validated* rules are exported: enabled, with a latest execution result
+that has no error. Every other rule is withheld and only counted in
+`excluded_rule_count`. Each rule carries its identity, `severity`,
+`rule_type`, `columns` (`name`, `key`), `null_handling`, the parameters
+its type uses, `provenance`, `source_finding_ids`, and aggregate
+`validation` counts (`pass_count`, `fail_count`, `skipped_count`). No
+example failures, row numbers, timestamps or other dataset row content
+are exported, and output is byte-identical for the same analysis. A
+known analysis that is not `COMPLETED` is `409 INVALID_ANALYSIS_STATE`;
+an unknown one is `404 ANALYSIS_NOT_FOUND`. The Markdown report routes
+above are **not yet implemented**.
+
 ## 13. Security exposure fields
 
 Prompt-injection findings expose:
