@@ -829,3 +829,86 @@ def test_accept_ai_assisted_rule_proposal_persists_with_ai_assisted_provenance(
     assert body["provenance"] == "ai_assisted"
     assert body["source_finding_ids"] == [finding_id]
     assert body["accepted_values"] == proposal["accepted_values"]
+
+
+def test_create_rule_ai_assistable_finding_with_invented_accepted_value_is_rejected(
+    client: TestClient,
+) -> None:
+    """The decisive provenance-integrity proof: `provenance=ai_assisted`
+    is a claim that AI genuinely chose this exact value, so it must
+    never be attachable to a value the finding's own evidence never
+    observed merely by naming an eligible `source_finding_id` — caught
+    by semantic review before merge."""
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _inconsistent_capitalization_finding_id(client, analysis_id)
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": "spoofed",
+            "description": "spoofed",
+            "severity": "low",
+            "rule_type": "accepted_values",
+            "column_names": ["category"],
+            "accepted_values": ["an invented value never observed in this finding's evidence"],
+            "source_finding_id": finding_id,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "RULE_INVALID"
+    assert client.get(f"/api/v1/analyses/{analysis_id}/rules").json()["total_items"] == 0
+
+
+def test_create_rule_ai_assistable_finding_wrong_rule_type_is_rejected(
+    client: TestClient,
+) -> None:
+    """A caller cannot bypass the AI-assisted candidate check by posting
+    a different rule_type entirely (e.g. `not_null`) against an
+    AI-assistable finding's `source_finding_id`."""
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _inconsistent_capitalization_finding_id(client, analysis_id)
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": "spoofed",
+            "description": "spoofed",
+            "severity": "low",
+            "rule_type": "not_null",
+            "column_names": ["category"],
+            "source_finding_id": finding_id,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "RULE_INVALID"
+    assert client.get(f"/api/v1/analyses/{analysis_id}/rules").json()["total_items"] == 0
+
+
+def test_create_rule_ai_assistable_finding_multiple_accepted_values_is_rejected(
+    client: TestClient,
+) -> None:
+    """Even when every individual value is one of the finding's own
+    observed candidates, more than one value is not a genuine
+    single-choice AI-assisted answer."""
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _inconsistent_capitalization_finding_id(client, analysis_id)
+    finding_response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}")
+    assert finding_response.status_code == 200
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": "spoofed",
+            "description": "spoofed",
+            "severity": "low",
+            "rule_type": "accepted_values",
+            "column_names": ["category"],
+            "accepted_values": ["Textiles", "textiles", "OFFICE SUPPLIES", "Office Supplies"],
+            "source_finding_id": finding_id,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "RULE_INVALID"

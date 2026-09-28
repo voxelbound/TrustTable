@@ -1075,11 +1075,25 @@ def create_rule(
     extension, slice 2, `WP-081`) is optional: when given, the finding
     must exist on this analysis, and the persisted rule records
     `source_finding_ids=(source_finding_id,)` — the normal way a caller
-    accepts a `generate_rule_proposal`/AI-assisted offer. Provenance is
-    `RuleProvenance.AI_ASSISTED` when that finding's own detector is one
-    of `rules.generation.AI_ASSISTABLE_DETECTOR_IDS` (currently only
-    `consistency.inconsistent_capitalization`), and
-    `RuleProvenance.DETECTOR_GENERATED` for every other detector —
+    accepts a `generate_rule_proposal`/AI-assisted offer.
+
+    Provenance is `RuleProvenance.AI_ASSISTED` only when that finding's
+    own detector is one of `rules.generation.AI_ASSISTABLE_DETECTOR_IDS`
+    (currently only `consistency.inconsistent_capitalization`) **and**
+    the supplied `rule_type`/`accepted_values` genuinely match what an
+    AI-assisted proposal for that exact finding could have produced —
+    `rule_type=ACCEPTED_VALUES` with exactly one value, itself one of
+    that finding's own re-derived `rules.generation.
+    extract_ai_assist_candidates` (defense in depth, independent of
+    whatever the route layer's own AI-output validator already checked:
+    `provenance=ai_assisted` is a claim that AI genuinely chose this
+    exact value, so it must never be attachable to an arbitrary
+    caller-supplied value merely by naming an eligible finding — a
+    mismatch raises `InvalidRuleParametersError` rather than silently
+    persisting a false claim under any provenance). Every other
+    `source_finding_id` — a detector-generatable finding, or an
+    AI-assistable finding whose posted shape does not match a genuine
+    AI-assisted candidate — records `RuleProvenance.DETECTOR_GENERATED`,
     unchanged from slice 1's own behavior. When `source_finding_id` is
     omitted (the default), behavior is unchanged:
     `provenance=RuleProvenance.USER_AUTHORED`, `source_finding_ids=()`.
@@ -1089,8 +1103,10 @@ def create_rule(
     `source_finding_id`, `UnknownRuleColumnError` for any `column_names`
     entry that does not match a real dataset column, and
     `InvalidRuleParametersError` when the resulting shape violates
-    `ValidationRule`'s own invariants for `rule_type` (wraps the
-    underlying `ValueError`).
+    `ValidationRule`'s own invariants for `rule_type`, or (AI-assistable
+    findings only) does not genuinely match a real AI-assisted
+    candidate for that finding (wraps the underlying `ValueError` in
+    the former case; a plain message in the latter).
     """
     analysis = _require_completed(store, analysis_id)
     source_finding = None
@@ -1112,6 +1128,27 @@ def create_rule(
     if source_finding is None:
         provenance = RuleProvenance.USER_AUTHORED
     elif source_finding.detector_id in rule_generation.AI_ASSISTABLE_DETECTOR_IDS:
+        # `provenance=ai_assisted` is a claim that AI genuinely chose this
+        # exact value — verified against this finding's own re-derived
+        # candidates, never trusted from the caller's word alone.
+        source_evidence = get_finding_evidence(store, analysis_id, source_finding_id)  # type: ignore[arg-type]
+        candidates = rule_generation.extract_ai_assist_candidates(source_finding, source_evidence)
+        is_genuine_ai_assisted_shape = (
+            candidates is not None
+            and rule_type is ValidationRuleType.ACCEPTED_VALUES
+            and accepted_values is not None
+            and len(accepted_values) == 1
+            and accepted_values[0] in candidates
+        )
+        if not is_genuine_ai_assisted_shape:
+            raise InvalidRuleParametersError(
+                analysis_id,
+                "source_finding_id names an AI-assistable finding, but the supplied "
+                "rule_type/accepted_values do not match a genuine AI-assisted candidate "
+                "for that finding (accepted_values must be exactly one of the finding's "
+                "own observed values) — provenance=ai_assisted may not be claimed "
+                "otherwise",
+            )
         provenance = RuleProvenance.AI_ASSISTED
     else:
         provenance = RuleProvenance.DETECTOR_GENERATED
