@@ -336,8 +336,8 @@ export const getAnalysisRulesApiV1AnalysesAnalysisIdRulesGet = <ThrowOnError ext
  * Post Analysis Rule
  *
  * Define a new validation rule and execute it immediately against
- * the analysis's real, current rows (`RULE-01` slice 1; `docs/domain-
- * model.md` §18, `docs/api-specification.md`).
+ * the analysis's real, current rows (`RULE-01`, all 11 rule types;
+ * `docs/domain-model.md` §18, `docs/api-specification.md`).
  *
  * Raises `ANALYSIS_NOT_FOUND` (404); `INVALID_ANALYSIS_STATE` (409) for
  * a known analysis not yet `COMPLETED`; and `RULE_INVALID` (422,

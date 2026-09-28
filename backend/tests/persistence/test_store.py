@@ -27,6 +27,7 @@ from trusttable_backend.config import Settings
 from trusttable_backend.detectors.contract import SecurityExposureState
 from trusttable_backend.domain.context import ContextField
 from trusttable_backend.domain.explanation import ValidationRuleType
+from trusttable_backend.domain.rules import ComparisonOperator
 from trusttable_backend.domain.value_objects import Severity
 from trusttable_backend.persistence import SqlAnalysisStore, build_engine, run_migrations
 from trusttable_backend.persistence.models import AnalysisRecord
@@ -239,6 +240,37 @@ def test_rule_round_trips_with_its_result(store: SqlAnalysisStore) -> None:
     assert round_tripped is not None
     assert round_tripped.rules == (rule,)
     assert round_tripped.rules[0].last_result is not None
+
+
+def test_expression_comparison_rule_round_trips_via_the_generic_codec(
+    store: SqlAnalysisStore,
+) -> None:
+    """`RULE-01` slice 2 (`WP-079`) adds fields to `ValidationRule` but no
+    new persistence schema — the existing generic `rules_json` codec
+    must already handle them without a migration."""
+    working_store = InMemoryStore()
+    created = create_analysis(working_store)
+    completed = run_analysis(working_store, created.analysis_id)
+    store.add(completed)
+
+    rule = create_rule(
+        store,
+        completed.analysis_id,
+        name="quantity must be positive",
+        description="quantity should be greater than zero",
+        severity=Severity.MEDIUM,
+        rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+        column_names=("quantity",),
+        comparison_operator=ComparisonOperator.GREATER_THAN,
+        comparison_value=0.0,
+    )
+
+    round_tripped = store.get(completed.analysis_id)
+
+    assert round_tripped is not None
+    assert round_tripped.rules == (rule,)
+    assert round_tripped.rules[0].comparison_operator is ComparisonOperator.GREATER_THAN
+    assert round_tripped.rules[0].comparison_value == 0.0
 
 
 def test_analysis_without_rules_round_trips_as_empty_tuple(store: SqlAnalysisStore) -> None:

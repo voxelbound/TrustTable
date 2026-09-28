@@ -89,7 +89,7 @@ from trusttable_backend.domain.parsing import (
     SampleMetadata,
     SamplingScope,
 )
-from trusttable_backend.domain.rules import NullHandling
+from trusttable_backend.domain.rules import ComparisonOperator, NullHandling
 from trusttable_backend.domain.value_objects import (
     ColumnReference,
     Provenance,
@@ -1963,6 +1963,63 @@ def test_null_handling_fail_is_honored_end_to_end() -> None:
     assert rule.last_result.pass_count == 2
     assert rule.last_result.fail_count == 1
     assert rule.last_result.skipped_count == 0
+
+
+def test_create_rule_expression_comparison_against_a_literal() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+
+    rule = create_rule(
+        store,
+        "analysis-1",
+        name="qty must be positive",
+        description="qty should be greater than zero",
+        severity=Severity.MEDIUM,
+        rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+        column_names=("qty",),
+        comparison_operator=ComparisonOperator.GREATER_THAN,
+        comparison_value=0.0,
+    )
+
+    assert rule.last_result is not None
+    assert rule.last_result.pass_count == 3
+    assert rule.last_result.fail_count == 0
+    assert get_status(store, "analysis-1").rules == (rule,)
+
+
+def test_create_rule_conditional_rule_vacuous_when_false() -> None:
+    store = AnalysisStore()
+    # Two columns: "qty" (WHEN) and reuse "qty" isn't useful for THEN, so
+    # build a two-column analysis for this specific proof.
+    columns = (
+        ColumnReference(original_name="qty", internal_key="qty", ordinal=0),
+        ColumnReference(original_name="flag", internal_key="flag", ordinal=1),
+    )
+    rows: tuple[tuple[str | None, ...], ...] = (("1", "-5"), ("0", "-5"))
+    sampling = SampleMetadata(scope=SamplingScope.FULL, population_size=2, sample_size=2)
+    profile = compute_dataset_profile(columns, rows, sampling, as_of=FIXED_NOW.date())
+    analysis = _rule_test_analysis(content=b"qty,flag\n1,-5\n0,-5\n", dataset_profile=profile)
+    store.add(analysis)
+
+    rule = create_rule(
+        store,
+        "analysis-1",
+        name="when qty==1 then flag positive",
+        description="conditional proof: WHEN false must pass vacuously",
+        severity=Severity.MEDIUM,
+        rule_type=ValidationRuleType.CONDITIONAL_RULE,
+        column_names=("qty", "flag"),
+        condition_operator=ComparisonOperator.EQUALS,
+        condition_value=1.0,
+        comparison_operator=ComparisonOperator.GREATER_THAN,
+        comparison_value=0.0,
+    )
+
+    assert rule.last_result is not None
+    # Row 0: qty==1 (WHEN true), flag=-5 (THEN false) -> fail.
+    # Row 1: qty==0 (WHEN false) -> passes vacuously, flag never evaluated.
+    assert rule.last_result.pass_count == 1
+    assert rule.last_result.fail_count == 1
 
 
 def test_analysis_rules_must_be_empty_unless_completed() -> None:

@@ -506,14 +506,16 @@ export type ContextResponse = {
 /**
  * CreateValidationRuleRequest
  *
- * Request body for `POST /analyses/{analysis_id}/rules` (`RULE-01`
- * slice 1). `column_names` are matched against the dataset's real
- * `original_name` values; an unknown name is rejected with
- * `UNKNOWN_RULE_COLUMN` (422) before any execution. Every parameter
- * field not required by `rule_type` (`docs/domain-model.md` §18's
- * table, mirrored in `domain.rules.ValidationRule`'s own docstring)
- * must be left `null` — a mismatch is rejected with
- * `INVALID_RULE_PARAMETERS` (422).
+ * Request body for `POST /analyses/{analysis_id}/rules` (`RULE-01`,
+ * all 11 rule types as of slice 2, `WP-079`). `column_names` are
+ * matched against the dataset's real `original_name` values; an
+ * unknown name is rejected with `UNKNOWN_RULE_COLUMN` (422) before any
+ * execution. Every parameter field not required by `rule_type`
+ * (`docs/domain-model.md` §18's table, mirrored in
+ * `domain.rules.ValidationRule`'s own docstring) must be left `null` —
+ * a mismatch is rejected with `INVALID_RULE_PARAMETERS` (422).
+ * `comparison_operator`/`condition_operator` are one of
+ * `domain.rules.ComparisonOperator`'s closed string values.
  */
 export type CreateValidationRuleRequest = {
     /**
@@ -524,6 +526,22 @@ export type CreateValidationRuleRequest = {
      * Column Names
      */
     column_names: Array<string>;
+    /**
+     * Comparison Operator
+     */
+    comparison_operator?: string | null;
+    /**
+     * Comparison Value
+     */
+    comparison_value?: number | null;
+    /**
+     * Condition Operator
+     */
+    condition_operator?: string | null;
+    /**
+     * Condition Value
+     */
+    condition_value?: number | null;
     /**
      * Description
      */
@@ -1433,10 +1451,10 @@ export type ValidationError = {
 /**
  * ValidationRuleResponse
  *
- * Mirrors `domain.rules.ValidationRule` (`RULE-01` slice 1,
- * `docs/domain-model.md` §18). Every parameter field not used by
- * `rule_type` is `null` — the same shape `ValidationRule.__post_init__`
- * itself enforces.
+ * Mirrors `domain.rules.ValidationRule` (`RULE-01`, all 11 rule
+ * types as of slice 2, `WP-079`; `docs/domain-model.md` §18). Every
+ * parameter field not used by `rule_type` is `null` — the same shape
+ * `ValidationRule.__post_init__` itself enforces.
  */
 export type ValidationRuleResponse = {
     /**
@@ -1447,6 +1465,22 @@ export type ValidationRuleResponse = {
      * Columns
      */
     columns: Array<ColumnReferenceResponse>;
+    /**
+     * Comparison Operator
+     */
+    comparison_operator: string | null;
+    /**
+     * Comparison Value
+     */
+    comparison_value: number | null;
+    /**
+     * Condition Operator
+     */
+    condition_operator: string | null;
+    /**
+     * Condition Value
+     */
+    condition_value: number | null;
     /**
      * Description
      */
@@ -1525,7 +1559,7 @@ export type ValidationRuleResponse = {
 /**
  * ValidationRulesListResponse
  *
- * Body for `GET /analyses/{analysis_id}/rules` (`RULE-01` slice 1).
+ * Body for `GET /analyses/{analysis_id}/rules` (`RULE-01`).
  */
 export type ValidationRulesListResponse = {
     /**

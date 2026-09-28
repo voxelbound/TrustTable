@@ -1,8 +1,8 @@
 """Decisive HTTP end-to-end proof for the validation-rule engine
-(`RULE-01` slice 1, `WP-078`) against the real FastAPI application: a
-rule created through `POST .../rules` executes synchronously against
-the real demo analysis's real parsed rows, persists, can be re-executed
-on demand, listed, fetched, and deleted.
+(`RULE-01`; slices 1+2, `WP-078`/`WP-079`) against the real FastAPI
+application: a rule created through `POST .../rules` executes
+synchronously against the real demo analysis's real parsed rows,
+persists, can be re-executed on demand, listed, fetched, and deleted.
 """
 
 from __future__ import annotations
@@ -269,6 +269,147 @@ def test_delete_rule_unknown_rule_id_returns_404(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "RULE_NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# expression_comparison / conditional_rule (RULE-01 slice 2, WP-079)
+# ---------------------------------------------------------------------------
+
+
+def test_create_expression_comparison_against_a_literal_executes_synchronously(
+    client: TestClient,
+) -> None:
+    analysis_id = _create_completed_analysis(client)
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": "quantity must be positive",
+            "description": "Every quantity should be greater than zero.",
+            "severity": "medium",
+            "rule_type": "expression_comparison",
+            "column_names": ["quantity"],
+            "comparison_operator": "greater_than",
+            "comparison_value": 0.0,
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["rule_type"] == "expression_comparison"
+    assert body["comparison_operator"] == "greater_than"
+    assert body["last_result"]["error"] is None
+    assert body["last_result"]["pass_count"] + body["last_result"]["fail_count"] > 0
+
+
+def test_create_expression_comparison_against_a_column_executes_synchronously(
+    client: TestClient,
+) -> None:
+    analysis_id = _create_completed_analysis(client)
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": "quantity vs unit_price",
+            "description": "Compares two real numeric columns.",
+            "severity": "low",
+            "rule_type": "expression_comparison",
+            "column_names": ["quantity", "unit_price"],
+            "comparison_operator": "not_equals",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["comparison_value"] is None
+    assert body["last_result"]["error"] is None
+
+
+def test_create_conditional_rule_executes_synchronously(client: TestClient) -> None:
+    analysis_id = _create_completed_analysis(client)
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": "when quantity positive then unit_price positive",
+            "description": "A conditional check across two real numeric columns.",
+            "severity": "medium",
+            "rule_type": "conditional_rule",
+            "column_names": ["quantity", "unit_price"],
+            "condition_operator": "greater_than",
+            "condition_value": -1.0,
+            "comparison_operator": "greater_than",
+            "comparison_value": -1.0,
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["rule_type"] == "conditional_rule"
+    assert body["condition_operator"] == "greater_than"
+    assert body["last_result"]["error"] is None
+    assert body["last_result"]["pass_count"] + body["last_result"]["fail_count"] > 0
+
+
+def test_create_expression_comparison_missing_comparison_value_returns_422(
+    client: TestClient,
+) -> None:
+    analysis_id = _create_completed_analysis(client)
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": "missing literal",
+            "description": "comparison_value omitted for a 1-column rule",
+            "severity": "low",
+            "rule_type": "expression_comparison",
+            "column_names": ["quantity"],
+            "comparison_operator": "greater_than",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "RULE_INVALID"
+
+
+def test_create_conditional_rule_missing_then_clause_returns_422(client: TestClient) -> None:
+    analysis_id = _create_completed_analysis(client)
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": "missing THEN clause",
+            "description": "comparison_operator/value omitted",
+            "severity": "low",
+            "rule_type": "conditional_rule",
+            "column_names": ["quantity", "unit_price"],
+            "condition_operator": "greater_than",
+            "condition_value": 0.0,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "RULE_INVALID"
+
+
+def test_create_rule_unrecognized_comparison_operator_returns_422(client: TestClient) -> None:
+    analysis_id = _create_completed_analysis(client)
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": "bad operator",
+            "description": "not a real comparison operator",
+            "severity": "low",
+            "rule_type": "expression_comparison",
+            "column_names": ["quantity"],
+            "comparison_operator": "roughly_equals",
+            "comparison_value": 0.0,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "RULE_INVALID"
 
 
 # ---------------------------------------------------------------------------
