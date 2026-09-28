@@ -338,31 +338,55 @@ Response item includes:
 - category
 - review state
 
+**Filters and pagination remain planned, not yet implemented** — a later
+`UI-03`-adjacent addition; every finding is currently returned unfiltered
+in detector order. `review_state`/`note`/`dismissal_reason`/`reviewed_at`
+(`REV-01`, `WP-083`) are implemented, defaulting to
+`"unreviewed"`/`null`/`null`/`null` for a finding with no recorded
+review.
+
 ### GET `/analyses/{analysis_id}/findings/{finding_id}`
 
 Returns:
 
 - deterministic observation
 - evidence
-- possible business impact
-- remediation
-- proposed rules
-- review
+- possible business impact (`GET .../explanation`, a separate route)
+- remediation (`GET .../explanation`, a separate route)
+- proposed rules (`GET .../rule-proposal`, a separate route)
+- review state (`REV-01`, `WP-083` — implemented on this response
+  directly, not a separate route)
 - technical metadata
 - security exposure information when applicable
 
-### PATCH `/analyses/{analysis_id}/findings/{finding_id}/review`
+### PUT `/analyses/{analysis_id}/findings/{finding_id}/review`
+
+**Implemented (`REV-01`, `WP-083`).** Sets (replacing any prior value)
+one finding's review record and persists it immediately — a review has
+no separate offer/execute step, unlike a rule proposal, so `PUT` (an
+idempotent full replace) rather than the originally-sketched `PATCH`
+with an `expected version`: TrustTable is a local-first, single-manager
+tool (`docs/product-requirements.md` §1's "Primary user: Business
+manager"), so there is no concurrent-editor conflict a version check
+would guard against, unlike `context`'s own multi-step confirm/infer
+collaborative race.
 
 Request:
 
-- review state
-- note
-- optional dismissal reason
-- expected version
+- `state` — one of `unreviewed`/`confirmed`/`dismissed`/
+  `needs_investigation`
+- `note` (optional)
+- `dismissal_reason` — required and non-empty when `state` is
+  `dismissed`, forbidden otherwise
 
-Response:
+Response: `finding_id`, `review_state`, `note`, `dismissal_reason`,
+`reviewed_at` (server-assigned).
 
-- updated review
+Raises `404 ANALYSIS_NOT_FOUND`, `409 INVALID_ANALYSIS_STATE` (not yet
+`completed`), `404 FINDING_NOT_FOUND`, or `422 REVIEW_INVALID` (an
+unrecognized `state`, or a `dismissal_reason` that violates the
+required/forbidden rule above) — the same structured-error pattern as
+`RULE_INVALID`.
 
 ### GET `/analyses/{analysis_id}/findings/{finding_id}/evidence`
 

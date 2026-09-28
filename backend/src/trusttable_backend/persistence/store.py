@@ -64,6 +64,7 @@ def _analysis_to_row_values(analysis: Analysis) -> dict[str, object]:
         "context_json": serializers.encode(analysis.context),
         "guided_questions_json": serializers.encode(analysis.guided_questions),
         "rules_json": serializers.encode(analysis.rules),
+        "finding_reviews_json": serializers.encode(analysis.finding_reviews),
         "context_version": analysis.context_version,
         "context_finalized": analysis.context_finalized,
         "retry_source_analysis_id": analysis.retry_source_analysis_id,
@@ -95,6 +96,9 @@ def _row_to_analysis(row: AnalysisRecord) -> Analysis:
         context=serializers.decode(row.context_json) if row.context_json is not None else None,
         guided_questions=serializers.decode(row.guided_questions_json),
         rules=serializers.decode(row.rules_json) if row.rules_json is not None else (),
+        finding_reviews=serializers.decode(row.finding_reviews_json)
+        if row.finding_reviews_json is not None
+        else {},
         context_version=row.context_version,
         context_finalized=row.context_finalized,
         retry_source_analysis_id=row.retry_source_analysis_id,

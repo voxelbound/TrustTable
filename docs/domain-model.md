@@ -361,6 +361,8 @@ Represents one potential data-quality or AI-processing risk.
 - remediation IDs
 - proposed rule IDs
 - review state
+- user note
+- dismissal reason
 - created timestamp
 
 ### Invariants
@@ -380,6 +382,15 @@ interim type (narrative, provenance, and grounding references only —
 no provider/model/timing/rejection-audit fields, and no link back to
 this `interpretation ID` field) built before `D-037` existed; the real
 `UI-02` implementation package reconciles it toward this shape.
+
+**`review state`/`user note`/`dismissal reason` note (`REV-01`,
+`WP-083`):** persisted separately from the finding itself, in
+`domain.review.FindingReview`, keyed by `finding_id`, rather than as
+mutable fields directly on the immutable, detector-computed finding
+object (`Invariants` above: "deterministic observation remains
+immutable" — a review decision is not part of that deterministic
+observation). A finding with no recorded review is implicitly
+`unreviewed` with no note/reason.
 
 ## 13. Evidence
 
