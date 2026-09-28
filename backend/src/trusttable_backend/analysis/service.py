@@ -1071,13 +1071,18 @@ def create_rule(
     `retry_analysis` already use, never a sample), store the result on
     the rule, persist, and return the executed rule.
 
-    `source_finding_id` (`RULE-02` slice 1, `WP-080`) is optional: when
-    given, the finding must exist on this analysis, and the persisted
-    rule records `provenance=RuleProvenance.DETECTOR_GENERATED` with
+    `source_finding_id` (`RULE-02` slice 1, `WP-080`; AI-assisted
+    extension, slice 2, `WP-081`) is optional: when given, the finding
+    must exist on this analysis, and the persisted rule records
     `source_finding_ids=(source_finding_id,)` — the normal way a caller
-    accepts a `generate_rule_proposal` offer. When omitted (the default),
-    behavior is unchanged: `provenance=RuleProvenance.USER_AUTHORED`,
-    `source_finding_ids=()`.
+    accepts a `generate_rule_proposal`/AI-assisted offer. Provenance is
+    `RuleProvenance.AI_ASSISTED` when that finding's own detector is one
+    of `rules.generation.AI_ASSISTABLE_DETECTOR_IDS` (currently only
+    `consistency.inconsistent_capitalization`), and
+    `RuleProvenance.DETECTOR_GENERATED` for every other detector —
+    unchanged from slice 1's own behavior. When `source_finding_id` is
+    omitted (the default), behavior is unchanged:
+    `provenance=RuleProvenance.USER_AUTHORED`, `source_finding_ids=()`.
 
     Raises `AnalysisNotFoundError`/`AnalysisNotReadyError` (via
     `_require_completed`), `FindingNotFoundError` for an unknown
@@ -1088,8 +1093,11 @@ def create_rule(
     underlying `ValueError`).
     """
     analysis = _require_completed(store, analysis_id)
+    source_finding = None
     if source_finding_id is not None:
-        get_finding(store, analysis_id, source_finding_id)  # raises FindingNotFoundError if absent
+        # Raises FindingNotFoundError if absent; also resolved to decide
+        # DETECTOR_GENERATED vs AI_ASSISTED provenance below.
+        source_finding = get_finding(store, analysis_id, source_finding_id)
     parsed = parse_csv(analysis.content)
     columns_by_name: dict[str, ColumnReference] = {
         column.original_name: column for column in parsed.parsed_dataset.columns
@@ -1101,11 +1109,12 @@ def create_rule(
             raise UnknownRuleColumnError(analysis_id, column_name)
         resolved_columns.append(column)
 
-    provenance = (
-        RuleProvenance.DETECTOR_GENERATED
-        if source_finding_id is not None
-        else RuleProvenance.USER_AUTHORED
-    )
+    if source_finding is None:
+        provenance = RuleProvenance.USER_AUTHORED
+    elif source_finding.detector_id in rule_generation.AI_ASSISTABLE_DETECTOR_IDS:
+        provenance = RuleProvenance.AI_ASSISTED
+    else:
+        provenance = RuleProvenance.DETECTOR_GENERATED
     source_finding_ids = (source_finding_id,) if source_finding_id is not None else ()
 
     try:
@@ -1203,6 +1212,117 @@ def generate_rule_proposal(
             tolerance=params.tolerance,
             source_finding_ids=(finding_id,),
             provenance=RuleProvenance.DETECTOR_GENERATED,
+        )
+    except ValueError as exc:
+        raise InvalidRuleParametersError(analysis_id, str(exc)) from exc
+
+    executed = _execute_rule(rule, parsed.rows, analysis_id=analysis_id, now=datetime.now(UTC))
+    offered_rule = replace(rule, last_result=executed)
+    return GeneratedRuleOffer(available=True, reason=None, rule=offered_rule, result=executed)
+
+
+class AiAssistanceNotAvailableError(Exception):
+    """Raised by `build_ai_rule_generation_context` (`RULE-02` slice 2,
+    `WP-081`) when `finding_id`'s detector is not one
+    `rules.generation.AI_ASSISTABLE_DETECTOR_IDS` supports, or its
+    referenced evidence does not carry the expected payload shape —
+    the same "no safe proposal" honesty `generate_rule_proposal` already
+    applies to the deterministic path, just for the AI-assisted one."""
+
+    def __init__(self, analysis_id: str, finding_id: str) -> None:
+        super().__init__(
+            f"No AI-assisted rule candidates available for finding {finding_id} "
+            f"(analysis {analysis_id})"
+        )
+        self.analysis_id = analysis_id
+        self.finding_id = finding_id
+
+
+@dataclass(frozen=True, slots=True)
+class AiRuleGenerationContext:
+    """Everything the route layer needs to attempt an AI-assisted rule
+    proposal for one finding (`RULE-02` slice 2, `WP-081`) — built here
+    so this module stays the single place that resolves a finding's
+    real, current evidence, but never itself calls a provider (this
+    module's own established provider-free guarantee — see this
+    module's own docstring, `docs/decision-log.md` D-037/D-038).
+    `candidates` is `finding`'s own already-observed evidence values, in
+    the exact order/spelling an AI-assisted proposal may choose among."""
+
+    finding: FindingCandidate
+    evidence: tuple[Evidence, ...]
+    candidates: tuple[str, ...]
+
+
+def build_ai_rule_generation_context(
+    store: AnalysisStoreProtocol, analysis_id: str, finding_id: str
+) -> AiRuleGenerationContext:
+    """Resolve `finding_id`'s own evidence and AI-assist candidate values
+    (`rules.generation.extract_ai_assist_candidates`) for the route
+    layer to build an AI provider request from.
+
+    Raises `AnalysisNotFoundError`/`AnalysisNotReadyError`/
+    `FindingNotFoundError` with the same semantics as `get_finding`, and
+    `AiAssistanceNotAvailableError` when this finding's detector is not
+    AI-assistable or its evidence lacks the expected shape.
+    """
+    _require_completed(store, analysis_id)
+    finding = get_finding(store, analysis_id, finding_id)
+    evidence = get_finding_evidence(store, analysis_id, finding_id)
+    candidates = rule_generation.extract_ai_assist_candidates(finding, evidence)
+    if candidates is None:
+        raise AiAssistanceNotAvailableError(analysis_id, finding_id)
+    return AiRuleGenerationContext(finding=finding, evidence=evidence, candidates=candidates)
+
+
+def finalize_ai_assisted_rule(
+    store: AnalysisStoreProtocol, analysis_id: str, finding_id: str, canonical_value: str
+) -> GeneratedRuleOffer:
+    """Build and execute (never persist) an AI-assisted candidate
+    `ValidationRule` for one finding (`RULE-02` slice 2, `WP-081`), given
+    `canonical_value` — a value an AI provider already chose, through
+    the route layer, from exactly this finding's own AI-assist
+    candidates. Re-derives and re-checks those candidates itself
+    (defense in depth, independent of the route layer's own validated
+    AI-output check) rather than trusting the caller's word that
+    `canonical_value` is safe.
+
+    Raises `AnalysisNotFoundError`/`AnalysisNotReadyError`/
+    `FindingNotFoundError` with the same semantics as `get_finding`,
+    `AiAssistanceNotAvailableError` when this finding's detector is not
+    AI-assistable or its evidence lacks the expected shape, and
+    `InvalidRuleParametersError` when `canonical_value` is not one of
+    this finding's own re-derived candidates or the resulting shape
+    violates `ValidationRule`'s own invariants.
+    """
+    analysis = _require_completed(store, analysis_id)
+    finding = get_finding(store, analysis_id, finding_id)
+    evidence = get_finding_evidence(store, analysis_id, finding_id)
+    candidates = rule_generation.extract_ai_assist_candidates(finding, evidence)
+    if candidates is None:
+        raise AiAssistanceNotAvailableError(analysis_id, finding_id)
+    if canonical_value not in candidates:
+        raise InvalidRuleParametersError(
+            analysis_id,
+            f"canonical_value {canonical_value!r} is not one of this finding's own observed values",
+        )
+    parsed = parse_csv(analysis.content)
+
+    try:
+        rule = ValidationRule(
+            rule_id=str(uuid.uuid4()),
+            schema_version=RULE_SCHEMA_VERSION,
+            name=f"AI-assisted rule for finding ({finding.detector_id})",
+            description=(
+                f"Values in the affected column should use the canonical spelling "
+                f"and capitalization {canonical_value!r}."
+            ),
+            severity=finding.severity,
+            rule_type=ValidationRuleType.ACCEPTED_VALUES,
+            columns=finding.affected_columns,
+            accepted_values=(canonical_value,),
+            source_finding_ids=(finding_id,),
+            provenance=RuleProvenance.AI_ASSISTED,
         )
     except ValueError as exc:
         raise InvalidRuleParametersError(analysis_id, str(exc)) from exc

@@ -8,9 +8,18 @@ persists, can be re-executed on demand, listed, fetched, and deleted.
 from __future__ import annotations
 
 import time
+from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
+import trusttable_backend.api.v1.analyses as analyses_module
+from trusttable_backend.ai_provider.contract import (
+    ProviderConnectionError,
+    ProviderRequest,
+    ProviderResponse,
+)
+from trusttable_backend.config import get_settings
 from trusttable_backend.rules.generation import GENERATABLE_DETECTOR_IDS
 
 _TIMEOUT = 15.0
@@ -582,3 +591,241 @@ def test_create_rule_unknown_source_finding_id_returns_404(client: TestClient) -
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "FINDING_NOT_FOUND"
     assert client.get(f"/api/v1/analyses/{analysis_id}/rules").json()["total_items"] == 0
+
+
+# ---------------------------------------------------------------------------
+# RULE-02 slice 2: AI-assisted rule generation for inconsistent
+# capitalization (WP-081)
+# ---------------------------------------------------------------------------
+
+
+class _InventingRuleProvider:
+    """`AIProvider`-protocol test double whose output names a value the
+    finding's own evidence never observed — forces
+    `validate_rule_generation_output`'s `VALUE_NOT_CANDIDATE` rejection
+    path at the HTTP layer."""
+
+    @property
+    def provider_name(self) -> str:
+        return "inventing"
+
+    def health_check(self) -> Any:
+        raise NotImplementedError
+
+    def complete(self, request: ProviderRequest) -> ProviderResponse:
+        return ProviderResponse(
+            raw_output={
+                "schema_version": "rule_generation_v1",
+                "provenance": "ai_interpretation",
+                "canonical_value": "an invented value never seen in this finding's evidence",
+            },
+            provider_name=self.provider_name,
+            model_identifier="inventing-v1",
+            duration_ms=1.0,
+        )
+
+
+class _ErroringRuleProvider:
+    """`AIProvider`-protocol test double whose `complete()` always raises
+    a `ProviderError` — forces the isolated-provider-error path."""
+
+    @property
+    def provider_name(self) -> str:
+        return "erroring"
+
+    def health_check(self) -> Any:
+        raise NotImplementedError
+
+    def complete(self, request: ProviderRequest) -> ProviderResponse:
+        raise ProviderConnectionError("simulated connection failure")
+
+
+def _first_finding_id_for_detector(
+    client: TestClient, analysis_id: str, detector_id: str
+) -> str | None:
+    for finding in _findings(client, analysis_id):
+        if finding["detector_id"] == detector_id:
+            return str(finding["finding_id"])
+    return None
+
+
+def _inconsistent_capitalization_finding_id(client: TestClient, analysis_id: str) -> str:
+    finding_id = _first_finding_id_for_detector(
+        client, analysis_id, "consistency.inconsistent_capitalization"
+    )
+    if finding_id is None:
+        raise AssertionError(
+            "expected at least one demo-dataset consistency.inconsistent_capitalization finding"
+        )
+    return finding_id
+
+
+def test_rule_proposal_ai_assisted_default_config_is_unchanged_from_slice_1(
+    client: TestClient,
+) -> None:
+    """Default config (`llm_provider="disabled"`, unchanged) — no
+    AI-assisted attempt is made; the response is exactly slice 1's own
+    honest `available=False` answer, `ai_call_status == "not_configured"`,
+    `evidence_sent_to_model is False`."""
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _inconsistent_capitalization_finding_id(client, analysis_id)
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/rule-proposal")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["rule"] is None
+    assert body["result"] is None
+    assert body["reason"] is not None
+    assert "consistency.inconsistent_capitalization" in body["reason"]
+    assert body["ai_call_status"] == "not_configured"
+    assert body["evidence_sent_to_model"] is False
+
+
+def test_rule_proposal_ai_assisted_accepted_with_mock_provider(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`LLM_PROVIDER=mock` (real `MockProvider`, real factory) — the
+    model can only choose one of this finding's own already-observed
+    candidate values (the contract's own schema enumerates them), so
+    the mock's contract-grounded default answer is always accepted."""
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _inconsistent_capitalization_finding_id(client, analysis_id)
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/rule-proposal")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is True
+    assert body["reason"] is None
+    assert body["ai_call_status"] == "attempted_accepted"
+    assert body["evidence_sent_to_model"] is True
+    rule = body["rule"]
+    assert rule is not None
+    assert rule["provenance"] == "ai_assisted"
+    assert rule["rule_type"] == "accepted_values"
+    assert rule["source_finding_ids"] == [finding_id]
+    assert rule["accepted_values"] is not None
+    assert len(rule["accepted_values"]) == 1
+    assert body["result"] is not None
+    assert body["result"]["error"] is None
+    # Never persisted by the proposal endpoint itself.
+    assert client.get(f"/api/v1/analyses/{analysis_id}/rules").json()["total_items"] == 0
+
+
+def test_rule_proposal_ai_assisted_rejected_falls_back_to_slice_1_answer(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A provider that invents a value outside this finding's own
+    evidence is rejected; the response falls back to slice 1's identical
+    `available=False` answer, with `ai_call_status ==
+    "attempted_rejected"` disclosing that an attempt was made and
+    failed — distinct from `not_configured`."""
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _inconsistent_capitalization_finding_id(client, analysis_id)
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        analyses_module, "create_provider", lambda *a, **kw: _InventingRuleProvider()
+    )
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/rule-proposal")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["rule"] is None
+    assert body["result"] is None
+    assert body["reason"] is not None
+    assert body["ai_call_status"] == "attempted_rejected"
+    assert body["evidence_sent_to_model"] is True
+    assert client.get(f"/api/v1/analyses/{analysis_id}/rules").json()["total_items"] == 0
+
+
+def test_rule_proposal_ai_assisted_provider_error_falls_back_to_slice_1_answer(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A provider whose `complete()` raises a `ProviderError` falls back
+    to slice 1's identical `available=False` answer, with
+    `ai_call_status == "attempted_provider_error"`. No raw exception
+    text reaches the response body."""
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _inconsistent_capitalization_finding_id(client, analysis_id)
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        analyses_module, "create_provider", lambda *a, **kw: _ErroringRuleProvider()
+    )
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/rule-proposal")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["ai_call_status"] == "attempted_provider_error"
+
+
+def test_rule_proposal_ai_assisted_never_attempted_for_other_excluded_detectors(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Even with a real provider configured, the AI-assisted path must
+    never silently apply to the 3 detector categories `RULE-02` slice 2
+    does not support — they keep reporting `ai_call_status ==
+    "not_configured"`, exactly like slice 1 alone."""
+    analysis_id = _create_completed_analysis(client)
+    other_excluded_ids = frozenset(GENERATABLE_DETECTOR_IDS) | frozenset(
+        {"consistency.inconsistent_capitalization"}
+    )
+    other_excluded = [
+        finding
+        for finding in _findings(client, analysis_id)
+        if finding["detector_id"] not in other_excluded_ids
+    ]
+    if not other_excluded:
+        return  # nothing to prove against this dataset run; not a failure
+    finding_id = str(other_excluded[0]["finding_id"])
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/rule-proposal")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["ai_call_status"] == "not_configured"
+    assert body["evidence_sent_to_model"] is False
+
+
+def test_accept_ai_assisted_rule_proposal_persists_with_ai_assisted_provenance(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _inconsistent_capitalization_finding_id(client, analysis_id)
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    get_settings.cache_clear()
+    proposal = client.get(
+        f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/rule-proposal"
+    ).json()["rule"]
+    assert proposal is not None
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": proposal["name"],
+            "description": proposal["description"],
+            "severity": proposal["severity"],
+            "rule_type": proposal["rule_type"],
+            "column_names": [column["original_name"] for column in proposal["columns"]],
+            "accepted_values": proposal["accepted_values"],
+            "source_finding_id": finding_id,
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["provenance"] == "ai_assisted"
+    assert body["source_finding_ids"] == [finding_id]
+    assert body["accepted_values"] == proposal["accepted_values"]

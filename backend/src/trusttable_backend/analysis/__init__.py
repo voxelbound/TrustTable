@@ -8,6 +8,8 @@ placement ("Application services").
 from __future__ import annotations
 
 from .service import (
+    AiAssistanceNotAvailableError,
+    AiRuleGenerationContext,
     Analysis,
     AnalysisFailure,
     AnalysisNotFoundError,
@@ -27,6 +29,7 @@ from .service import (
     UnknownRuleColumnError,
     answer_guided_question,
     apply_ai_context_augmentation,
+    build_ai_rule_generation_context,
     cancel_analysis,
     confirm_context_fields,
     create_analysis,
@@ -34,6 +37,7 @@ from .service import (
     create_rule,
     delete_rule,
     execute_rule_now,
+    finalize_ai_assisted_rule,
     finalize_context,
     generate_rule_proposal,
     get_finding,
@@ -49,6 +53,8 @@ from .service import (
 )
 
 __all__ = [
+    "AiAssistanceNotAvailableError",
+    "AiRuleGenerationContext",
     "Analysis",
     "AnalysisFailure",
     "AnalysisNotFoundError",
@@ -68,6 +74,7 @@ __all__ = [
     "UnknownRuleColumnError",
     "answer_guided_question",
     "apply_ai_context_augmentation",
+    "build_ai_rule_generation_context",
     "cancel_analysis",
     "confirm_context_fields",
     "create_analysis",
@@ -75,6 +82,7 @@ __all__ = [
     "create_rule",
     "delete_rule",
     "execute_rule_now",
+    "finalize_ai_assisted_rule",
     "finalize_context",
     "generate_rule_proposal",
     "get_finding",

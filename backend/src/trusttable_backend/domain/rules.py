@@ -117,12 +117,18 @@ class RuleProvenance(StrEnum):
     — never a fresh calculation, never AI — then validated and executed
     before ever being offered, and accepted by a person through the same
     `POST .../rules` path `USER_AUTHORED` rules use, now finding-aware.
-    `AI_ASSISTED` remains a disclosed future member (a later `RULE-02`
-    slice) for the detector categories with no safe deterministic
-    mapping; this closed set is additive, not renamed, when that ships."""
+    `AI_ASSISTED` (`RULE-02` slice 2, `WP-081`) is additive, not a
+    rename: a rule whose single remaining parameter — which of a
+    finding's own already-observed evidence values is canonical — was
+    chosen by a real AI provider from a closed, per-request enumerated
+    set built entirely from that finding's own `Evidence`
+    (`rules/ai_generation.py`), never invented and never free text, then
+    validated and executed exactly like a `DETECTOR_GENERATED` proposal
+    before ever being offered."""
 
     USER_AUTHORED = "user_authored"
     DETECTOR_GENERATED = "detector_generated"
+    AI_ASSISTED = "ai_assisted"
 
 
 @dataclass(frozen=True, slots=True)

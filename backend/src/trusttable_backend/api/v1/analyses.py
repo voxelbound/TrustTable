@@ -41,6 +41,7 @@ from fastapi import APIRouter, Query, Request, UploadFile
 from trusttable_backend.ai_provider.display import describe_provenance, sanitize_model_identifier
 from trusttable_backend.ai_provider.factory import create_provider
 from trusttable_backend.analysis import (
+    AiAssistanceNotAvailableError,
     Analysis,
     AnalysisFailure,
     AnalysisNotFoundError,
@@ -58,12 +59,14 @@ from trusttable_backend.analysis import (
     UnknownRuleColumnError,
     answer_guided_question,
     apply_ai_context_augmentation,
+    build_ai_rule_generation_context,
     confirm_context_fields,
     create_analysis,
     create_analysis_from_upload,
     create_rule,
     delete_rule,
     execute_rule_now,
+    finalize_ai_assisted_rule,
     finalize_context,
     generate_rule_proposal,
     get_finding,
@@ -108,6 +111,10 @@ from trusttable_backend.explanation.deterministic import build_deterministic_exp
 from trusttable_backend.jobs import JobPool
 from trusttable_backend.profiling.schemas import ColumnProfile, DatasetProfile, ProfilingWarning
 from trusttable_backend.risk.scoring import TrustAssessment
+from trusttable_backend.rules.ai_generation import (
+    build_rule_generation_envelope,
+    run_rule_generation,
+)
 from trusttable_backend.schemas.analysis import (
     AiProvenanceResponse,
     AnalysisFailureResponse,
@@ -1226,15 +1233,42 @@ def get_analysis_finding_row_context(
 def get_analysis_finding_rule_proposal(
     analysis_id: str, finding_id: str, request: Request
 ) -> RuleProposalResponse:
-    """Build and execute (never persist) a deterministic candidate
-    validation rule for one finding (`RULE-02` slice 1, `WP-080`).
+    """Build and execute (never persist) a candidate validation rule for
+    one finding (`RULE-02` slice 1, `WP-080`; AI-assisted extension,
+    slice 2, `WP-081`).
 
-    `available=False` (never an error response) means no safe
-    deterministic mapping exists for this finding's detector — `reason`
-    states why; `rule`/`result` are then both `null`. `available=True`
-    means `rule` already executed against the analysis's real, current
-    rows and `result` is its exact outcome, unpersisted. Accept the offer
-    with `POST .../rules` (`source_finding_id` set to this `finding_id`).
+    Always attempts slice 1's deterministic mapping first
+    (`generate_rule_proposal`, no AI, no new calculation). When that
+    reports unavailable, this finding's detector is
+    `consistency.inconsistent_capitalization`, and
+    `Settings.llm_provider != "disabled"` (the default remains
+    `"disabled"`, so this is a zero-behavior-change addition for any
+    deployment that has not explicitly configured a provider),
+    additionally attempts a validated AI-assisted proposal through the
+    real provider factory: the model may only choose one of this
+    finding's own already-observed candidate values
+    (`ai_boundary.rule_generation`), never invent one. An accepted
+    choice executes an `ACCEPTED_VALUES` candidate rule
+    (`provenance="ai_assisted"`) against the analysis's real, current
+    rows before returning it — never persisting it, exactly like slice
+    1's own offer-never-persist contract. Disabled, rejected, or a
+    provider error falls back to slice 1's identical `available=False`
+    response — the same graceful-degradation contract
+    `get_analysis_finding_explanation` already established.
+
+    `available=False` (never an error response) means no safe proposal
+    exists for this finding's detector — `reason` states why (slice 1's
+    own reason, unchanged even when an AI-assisted attempt was also made
+    and rejected/failed); `rule`/`result` are then both `null`.
+    `available=True` means `rule` already executed against the
+    analysis's real, current rows and `result` is its exact outcome,
+    unpersisted. Accept the offer with `POST .../rules`
+    (`source_finding_id` set to this `finding_id`).
+
+    Also returns `ai_call_status`/`evidence_sent_to_model` (`WP-081`,
+    mirroring `FindingExplanationResponse`'s own established disclosure
+    fields) — see `RuleProposalResponse`'s own docstring for the exact
+    four-value contract.
 
     Raises `ANALYSIS_NOT_FOUND` (404); `INVALID_ANALYSIS_STATE` (409) for
     a known analysis not yet `COMPLETED`; `FINDING_NOT_FOUND` (404) for
@@ -1250,11 +1284,61 @@ def get_analysis_finding_rule_proposal(
         raise _analysis_not_ready(analysis_id, analysis.state) from exc
     except FindingNotFoundError as exc:
         raise _finding_not_found(analysis_id, finding_id) from exc
+
+    ai_call_status = "not_configured"
+    evidence_sent_to_model = False
+
+    if not offer.available:
+        settings = get_settings()
+        if settings.llm_provider != "disabled":
+            try:
+                context = build_ai_rule_generation_context(store, analysis_id, finding_id)
+            except AiAssistanceNotAvailableError:
+                context = None
+            if context is not None:
+                # The AI-assisted path is an optional enrichment over slice
+                # 1's own honest "no safe proposal" answer: whatever goes
+                # wrong on it, slice 1's existing available=False response
+                # is still returned with a truthful status, never a 500.
+                ai_call_status = "attempted_provider_error"
+                try:
+                    provider = create_provider(
+                        settings.llm_provider,
+                        base_url=settings.llm_base_url,
+                        model_identifier=settings.llm_model,
+                        timeout_seconds=float(settings.llm_timeout_seconds),
+                    )
+                    envelope = build_rule_generation_envelope(context.finding, context.evidence)
+                except Exception:
+                    pass
+                else:
+                    evidence_sent_to_model = True
+                    try:
+                        result = run_rule_generation(provider, envelope, context.candidates)
+                    except Exception:
+                        pass
+                    else:
+                        if result.accepted and result.canonical_value is not None:
+                            try:
+                                offer = finalize_ai_assisted_rule(
+                                    store, analysis_id, finding_id, result.canonical_value
+                                )
+                            except InvalidRuleParametersError:
+                                ai_call_status = "attempted_rejected"
+                            else:
+                                ai_call_status = "attempted_accepted"
+                        elif result.provider_error is not None:
+                            ai_call_status = "attempted_provider_error"
+                        else:
+                            ai_call_status = "attempted_rejected"
+
     return RuleProposalResponse(
         available=offer.available,
         reason=offer.reason,
         rule=_validation_rule(offer.rule) if offer.rule is not None else None,
         result=_rule_execution_result(offer.result) if offer.result is not None else None,
+        ai_call_status=ai_call_status,
+        evidence_sent_to_model=evidence_sent_to_model,
     )
 
 

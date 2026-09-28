@@ -574,7 +574,8 @@ Invariants:
 - referenced columns
 - null handling
 - source finding IDs
-- provenance
+- provenance (`user_authored`, `detector_generated`, or `ai_assisted` —
+  `RULE-02` slices 1/2, `WP-080`/`WP-081`; additive, closed set)
 
 ### Invariants
 
