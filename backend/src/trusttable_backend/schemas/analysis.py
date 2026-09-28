@@ -696,10 +696,10 @@ class RuleExecutionResultResponse(BaseModel):
 
 
 class ValidationRuleResponse(BaseModel):
-    """Mirrors `domain.rules.ValidationRule` (`RULE-01` slice 1,
-    `docs/domain-model.md` §18). Every parameter field not used by
-    `rule_type` is `null` — the same shape `ValidationRule.__post_init__`
-    itself enforces."""
+    """Mirrors `domain.rules.ValidationRule` (`RULE-01`, all 11 rule
+    types as of slice 2, `WP-079`; `docs/domain-model.md` §18). Every
+    parameter field not used by `rule_type` is `null` — the same shape
+    `ValidationRule.__post_init__` itself enforces."""
 
     rule_id: str
     schema_version: str
@@ -719,27 +719,33 @@ class ValidationRuleResponse(BaseModel):
     pattern: str | None
     threshold_percentage: float | None
     tolerance: float | None
+    comparison_operator: str | None
+    comparison_value: float | None
+    condition_operator: str | None
+    condition_value: float | None
     source_finding_ids: list[str]
     provenance: str
     last_result: RuleExecutionResultResponse | None
 
 
 class ValidationRulesListResponse(BaseModel):
-    """Body for `GET /analyses/{analysis_id}/rules` (`RULE-01` slice 1)."""
+    """Body for `GET /analyses/{analysis_id}/rules` (`RULE-01`)."""
 
     items: list[ValidationRuleResponse]
     total_items: int
 
 
 class CreateValidationRuleRequest(BaseModel):
-    """Request body for `POST /analyses/{analysis_id}/rules` (`RULE-01`
-    slice 1). `column_names` are matched against the dataset's real
-    `original_name` values; an unknown name is rejected with
-    `UNKNOWN_RULE_COLUMN` (422) before any execution. Every parameter
-    field not required by `rule_type` (`docs/domain-model.md` §18's
-    table, mirrored in `domain.rules.ValidationRule`'s own docstring)
-    must be left `null` — a mismatch is rejected with
-    `INVALID_RULE_PARAMETERS` (422)."""
+    """Request body for `POST /analyses/{analysis_id}/rules` (`RULE-01`,
+    all 11 rule types as of slice 2, `WP-079`). `column_names` are
+    matched against the dataset's real `original_name` values; an
+    unknown name is rejected with `UNKNOWN_RULE_COLUMN` (422) before any
+    execution. Every parameter field not required by `rule_type`
+    (`docs/domain-model.md` §18's table, mirrored in
+    `domain.rules.ValidationRule`'s own docstring) must be left `null` —
+    a mismatch is rejected with `INVALID_RULE_PARAMETERS` (422).
+    `comparison_operator`/`condition_operator` are one of
+    `domain.rules.ComparisonOperator`'s closed string values."""
 
     name: str
     description: str
@@ -755,3 +761,7 @@ class CreateValidationRuleRequest(BaseModel):
     pattern: str | None = None
     threshold_percentage: float | None = None
     tolerance: float | None = None
+    comparison_operator: str | None = None
+    comparison_value: float | None = None
+    condition_operator: str | None = None
+    condition_value: float | None = None

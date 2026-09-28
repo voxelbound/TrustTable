@@ -1,5 +1,6 @@
 """Tests for `domain.rules.ValidationRule`/`RuleExecutionResult`
-(`RULE-01` slice 1, `docs/domain-model.md` §18-19).
+(`RULE-01`, `docs/domain-model.md` §18-19). Includes slice 2 (`WP-079`)
+`expression_comparison`/`conditional_rule` coverage.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import pytest
 from trusttable_backend.domain.explanation import ValidationRuleType
 from trusttable_backend.domain.rules import (
     MAX_EXAMPLE_FAILURES,
+    ComparisonOperator,
     NullHandling,
     RuleExecutionResult,
     RuleFailureExample,
@@ -38,6 +40,14 @@ def make_rule(**overrides: object) -> ValidationRule:
     return ValidationRule(**fields)  # type: ignore[arg-type]
 
 
+def test_all_eleven_rule_types_are_supported() -> None:
+    from trusttable_backend.domain.rules import SUPPORTED_RULE_TYPES
+
+    assert len(SUPPORTED_RULE_TYPES) == 11
+    assert ValidationRuleType.EXPRESSION_COMPARISON in SUPPORTED_RULE_TYPES
+    assert ValidationRuleType.CONDITIONAL_RULE in SUPPORTED_RULE_TYPES
+
+
 def test_a_well_formed_not_null_rule_constructs() -> None:
     rule = make_rule()
     assert rule.rule_type is ValidationRuleType.NOT_NULL
@@ -48,13 +58,99 @@ def test_a_well_formed_not_null_rule_constructs() -> None:
     assert rule.last_result is None
 
 
-@pytest.mark.parametrize(
-    "rule_type",
-    [ValidationRuleType.EXPRESSION_COMPARISON, ValidationRuleType.CONDITIONAL_RULE],
-)
-def test_expression_based_types_are_rejected_this_slice(rule_type: ValidationRuleType) -> None:
-    with pytest.raises(ValueError, match="not supported by RULE-01 slice 1"):
-        make_rule(rule_type=rule_type)
+def test_expression_comparison_against_a_literal_requires_comparison_value() -> None:
+    with pytest.raises(ValueError, match="requires comparison_value"):
+        make_rule(
+            rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+            comparison_operator=ComparisonOperator.GREATER_THAN,
+        )
+
+
+def test_expression_comparison_against_a_literal_constructs() -> None:
+    rule = make_rule(
+        rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+        comparison_operator=ComparisonOperator.GREATER_THAN,
+        comparison_value=0.0,
+    )
+    assert rule.comparison_value == 0.0
+
+
+def test_expression_comparison_against_a_column_rejects_comparison_value() -> None:
+    with pytest.raises(ValueError, match="must be None for expression_comparison"):
+        make_rule(
+            rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+            columns=(col("price", 0), col("cost", 1)),
+            comparison_operator=ComparisonOperator.GREATER_THAN,
+            comparison_value=1.0,
+        )
+
+
+def test_expression_comparison_against_a_column_constructs() -> None:
+    rule = make_rule(
+        rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+        columns=(col("price", 0), col("cost", 1)),
+        comparison_operator=ComparisonOperator.GREATER_THAN,
+    )
+    assert len(rule.columns) == 2
+    assert rule.comparison_value is None
+
+
+def test_expression_comparison_rejects_a_bad_column_count() -> None:
+    with pytest.raises(ValueError, match="exactly 1 .* or 2"):
+        make_rule(
+            rule_type=ValidationRuleType.EXPRESSION_COMPARISON,
+            columns=(col("a", 0), col("b", 1), col("c", 2)),
+            comparison_operator=ComparisonOperator.EQUALS,
+        )
+
+
+def test_expression_comparison_requires_comparison_operator() -> None:
+    with pytest.raises(ValueError, match="requires comparison_operator"):
+        make_rule(rule_type=ValidationRuleType.EXPRESSION_COMPARISON, comparison_value=1.0)
+
+
+def test_conditional_rule_requires_exactly_two_columns() -> None:
+    with pytest.raises(ValueError, match="exactly 2 entries for conditional_rule"):
+        make_rule(
+            rule_type=ValidationRuleType.CONDITIONAL_RULE,
+            condition_operator=ComparisonOperator.GREATER_THAN,
+            condition_value=0.0,
+            comparison_operator=ComparisonOperator.GREATER_THAN,
+            comparison_value=0.0,
+        )
+
+
+def test_conditional_rule_requires_the_when_clause() -> None:
+    with pytest.raises(ValueError, match="requires condition_operator and condition_value"):
+        make_rule(
+            rule_type=ValidationRuleType.CONDITIONAL_RULE,
+            columns=(col("status", 0), col("ship_date", 1)),
+            comparison_operator=ComparisonOperator.GREATER_THAN,
+            comparison_value=0.0,
+        )
+
+
+def test_conditional_rule_requires_the_then_clause() -> None:
+    with pytest.raises(ValueError, match="requires comparison_operator and comparison_value"):
+        make_rule(
+            rule_type=ValidationRuleType.CONDITIONAL_RULE,
+            columns=(col("status", 0), col("ship_date", 1)),
+            condition_operator=ComparisonOperator.EQUALS,
+            condition_value=1.0,
+        )
+
+
+def test_conditional_rule_constructs_with_both_clauses() -> None:
+    rule = make_rule(
+        rule_type=ValidationRuleType.CONDITIONAL_RULE,
+        columns=(col("status", 0), col("ship_date", 1)),
+        condition_operator=ComparisonOperator.EQUALS,
+        condition_value=1.0,
+        comparison_operator=ComparisonOperator.GREATER_THAN,
+        comparison_value=0.0,
+    )
+    assert rule.condition_operator is ComparisonOperator.EQUALS
+    assert rule.comparison_operator is ComparisonOperator.GREATER_THAN
 
 
 @pytest.mark.parametrize(
