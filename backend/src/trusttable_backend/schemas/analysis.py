@@ -745,7 +745,13 @@ class CreateValidationRuleRequest(BaseModel):
     `domain.rules.ValidationRule`'s own docstring) must be left `null` —
     a mismatch is rejected with `INVALID_RULE_PARAMETERS` (422).
     `comparison_operator`/`condition_operator` are one of
-    `domain.rules.ComparisonOperator`'s closed string values."""
+    `domain.rules.ComparisonOperator`'s closed string values.
+    `source_finding_id` (`RULE-02` slice 1, `WP-080`) is optional: when
+    given, the finding must exist on this analysis (`FINDING_NOT_FOUND`,
+    404, otherwise) and the persisted rule records
+    `provenance="detector_generated"` with `source_finding_ids` set —
+    accepting a `GET .../rule-proposal` offer. Omitted (the default)
+    means `provenance="user_authored"`, unchanged from `RULE-01`."""
 
     name: str
     description: str
@@ -765,3 +771,25 @@ class CreateValidationRuleRequest(BaseModel):
     comparison_value: float | None = None
     condition_operator: str | None = None
     condition_value: float | None = None
+    source_finding_id: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# RULE-02 slice 1: deterministic rule generation
+# ---------------------------------------------------------------------------
+
+
+class RuleProposalResponse(BaseModel):
+    """Body for `GET /analyses/{analysis_id}/findings/{finding_id}/
+    rule-proposal` (`RULE-02` slice 1, `WP-080`). `available=False` means
+    no safe deterministic mapping exists for this finding's detector
+    (`reason` states why); `rule`/`result` are then both `null`.
+    `available=True` means `rule` is an already-executed candidate,
+    never persisted by this route — `rule.rule_id` is a fresh,
+    disposable id, not a stored identity. Accepting the offer is a
+    separate `POST .../rules` call with `source_finding_id` set."""
+
+    available: bool
+    reason: str | None
+    rule: ValidationRuleResponse | None
+    result: RuleExecutionResultResponse | None

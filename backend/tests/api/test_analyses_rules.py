@@ -11,6 +11,8 @@ import time
 
 from fastapi.testclient import TestClient
 
+from trusttable_backend.rules.generation import GENERATABLE_DETECTOR_IDS
+
 _TIMEOUT = 15.0
 _TERMINAL_STATES = {"completed", "failed", "cancelled"}
 
@@ -438,3 +440,145 @@ def test_unique_rule_reports_real_duplicates_in_the_demo_dataset(client: TestCli
     result = response.json()["last_result"]
     assert result["fail_count"] > 0
     assert len(result["example_failures"]) > 0
+
+
+# ---------------------------------------------------------------------------
+# RULE-02 slice 1: deterministic rule generation from findings (WP-080)
+# ---------------------------------------------------------------------------
+
+
+def _findings(client: TestClient, analysis_id: str) -> list[dict[str, object]]:
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings")
+    assert response.status_code == 200
+    items: list[dict[str, object]] = response.json()["items"]
+    return items
+
+
+def _first_generatable_finding_id(client: TestClient, analysis_id: str) -> str:
+    for finding in _findings(client, analysis_id):
+        if finding["detector_id"] in GENERATABLE_DETECTOR_IDS:
+            return str(finding["finding_id"])
+    raise AssertionError(
+        "expected at least one demo-dataset finding from a RULE-02 slice 1 generatable detector"
+    )
+
+
+def test_rule_proposal_returns_an_executed_unpersisted_candidate(client: TestClient) -> None:
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _first_generatable_finding_id(client, analysis_id)
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/rule-proposal")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is True
+    assert body["reason"] is None
+    assert body["rule"] is not None
+    assert body["rule"]["provenance"] == "detector_generated"
+    assert body["rule"]["source_finding_ids"] == [finding_id]
+    assert body["result"] is not None
+    assert body["result"]["error"] is None
+    # Never persisted by the proposal endpoint itself.
+    assert client.get(f"/api/v1/analyses/{analysis_id}/rules").json()["total_items"] == 0
+
+
+def test_rule_proposal_unavailable_for_an_excluded_detector_reports_a_reason(
+    client: TestClient,
+) -> None:
+    """The decisive false-positive-avoidance proof at the HTTP layer: a
+    finding from a detector RULE-02 slice 1 excludes (e.g. the
+    multiplicative `cross_field.line_total_mismatch` check, which does
+    not fit `APPROXIMATE_EQUALITY`'s additive semantics) must report
+    `available: false`, never a fabricated rule."""
+    analysis_id = _create_completed_analysis(client)
+    excluded = [
+        finding
+        for finding in _findings(client, analysis_id)
+        if finding["detector_id"] not in GENERATABLE_DETECTOR_IDS
+    ]
+    if not excluded:
+        return  # nothing to prove against this dataset run; not a failure
+    finding_id = str(excluded[0]["finding_id"])
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/rule-proposal")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["reason"] is not None
+    assert body["rule"] is None
+    assert body["result"] is None
+
+
+def test_rule_proposal_unknown_finding_returns_404(client: TestClient) -> None:
+    analysis_id = _create_completed_analysis(client)
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/999999/rule-proposal")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "FINDING_NOT_FOUND"
+
+
+def test_rule_proposal_on_a_not_yet_completed_analysis_returns_409(client: TestClient) -> None:
+    created = client.post("/api/v1/demo/sales")
+    analysis_id = created.json()["analysis"]["analysis_id"]
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/rule-proposal")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "INVALID_ANALYSIS_STATE"
+    _wait_for_terminal_state(client, analysis_id)  # drain before the test ends
+
+
+def test_accept_rule_proposal_persists_with_detector_generated_provenance(
+    client: TestClient,
+) -> None:
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _first_generatable_finding_id(client, analysis_id)
+    proposal = client.get(
+        f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/rule-proposal"
+    ).json()["rule"]
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": proposal["name"],
+            "description": proposal["description"],
+            "severity": proposal["severity"],
+            "rule_type": proposal["rule_type"],
+            "column_names": [column["original_name"] for column in proposal["columns"]],
+            "minimum": proposal["minimum"],
+            "maximum": proposal["maximum"],
+            "minimum_date": proposal["minimum_date"],
+            "maximum_date": proposal["maximum_date"],
+            "pattern": proposal["pattern"],
+            "threshold_percentage": proposal["threshold_percentage"],
+            "tolerance": proposal["tolerance"],
+            "source_finding_id": finding_id,
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["provenance"] == "detector_generated"
+    assert body["source_finding_ids"] == [finding_id]
+
+
+def test_create_rule_unknown_source_finding_id_returns_404(client: TestClient) -> None:
+    analysis_id = _create_completed_analysis(client)
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": "x",
+            "description": "x",
+            "severity": "low",
+            "rule_type": "not_null",
+            "column_names": ["quantity"],
+            "source_finding_id": "999999",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "FINDING_NOT_FOUND"
+    assert client.get(f"/api/v1/analyses/{analysis_id}/rules").json()["total_items"] == 0

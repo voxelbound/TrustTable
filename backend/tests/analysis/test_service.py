@@ -59,6 +59,7 @@ from trusttable_backend.analysis.service import (
     delete_rule,
     execute_rule_now,
     finalize_context,
+    generate_rule_proposal,
     get_finding,
     get_finding_evidence,
     get_finding_row_context,
@@ -89,7 +90,7 @@ from trusttable_backend.domain.parsing import (
     SampleMetadata,
     SamplingScope,
 )
-from trusttable_backend.domain.rules import ComparisonOperator, NullHandling
+from trusttable_backend.domain.rules import ComparisonOperator, NullHandling, RuleProvenance
 from trusttable_backend.domain.value_objects import (
     ColumnReference,
     Provenance,
@@ -1877,6 +1878,161 @@ def test_create_rule_requires_a_completed_analysis() -> None:
             rule_type=ValidationRuleType.NOT_NULL,
             column_names=("col",),
         )
+
+
+# ---------------------------------------------------------------------------
+# RULE-02 slice 1: generate_rule_proposal / create_rule(source_finding_id=...)
+# ---------------------------------------------------------------------------
+
+
+def _generated_rule_finding(
+    detector_id: str, *, evidence_id: str = "evidence-1"
+) -> FindingCandidate:
+    column = ColumnReference(original_name="qty", internal_key="qty", ordinal=0)
+    return FindingCandidate(
+        detector_id=detector_id,
+        detector_version="1",
+        category=DetectorCategory.STRUCTURAL,
+        severity=Severity.MEDIUM,
+        confidence=1.0,
+        calculated_observation="qty column condition",
+        affected_columns=(column,),
+        affected_row_references=(),
+        evidence_ids=(evidence_id,),
+        default_remediation_template_key=None,
+        default_validation_rule_template_key=None,
+    )
+
+
+def _generated_rule_evidence(
+    payload: dict[str, object], *, evidence_id: str = "evidence-1"
+) -> Evidence:
+    column = ColumnReference(original_name="qty", internal_key="qty", ordinal=0)
+    return Evidence(
+        evidence_id=evidence_id,
+        evidence_type=EvidenceType.METRIC,
+        calculation_version="1",
+        structured_payload=payload,
+        affected_columns=(column,),
+        affected_row_references=(),
+        scope=SamplingScope.FULL,
+        display_safe_summary="Safe summary.",
+    )
+
+
+def test_generate_rule_proposal_returns_executed_unpersisted_candidate() -> None:
+    finding = _generated_rule_finding("structural.empty_column")
+    evidence = _generated_rule_evidence({"null_count": 0})
+    store = AnalysisStore()
+    store.add(
+        _rule_test_analysis(findings=(finding,), evidence=(evidence,), priority_scores=(50.0,))
+    )
+
+    offer = generate_rule_proposal(store, "analysis-1", "0")
+
+    assert offer.available is True
+    assert offer.reason is None
+    assert offer.rule is not None
+    assert offer.rule.rule_type is ValidationRuleType.NOT_NULL
+    assert offer.rule.provenance is RuleProvenance.DETECTOR_GENERATED
+    assert offer.rule.source_finding_ids == ("0",)
+    assert offer.result is not None
+    assert offer.result.pass_count == 3
+    assert offer.result.fail_count == 0
+    # Never persisted.
+    assert get_status(store, "analysis-1").rules == ()
+
+
+def test_generate_rule_proposal_reports_unavailable_for_excluded_detector() -> None:
+    finding = _generated_rule_finding("cross_field.line_total_mismatch")
+    evidence = _generated_rule_evidence({"tolerance": 0.01, "mismatch_count": 1})
+    store = AnalysisStore()
+    store.add(
+        _rule_test_analysis(findings=(finding,), evidence=(evidence,), priority_scores=(50.0,))
+    )
+
+    offer = generate_rule_proposal(store, "analysis-1", "0")
+
+    assert offer.available is False
+    assert offer.reason is not None
+    assert offer.rule is None
+    assert offer.result is None
+
+
+def test_generate_rule_proposal_requires_a_completed_analysis() -> None:
+    store = AnalysisStore()
+    store.add(_make_analysis(state=AnalysisState.QUEUED))
+
+    with pytest.raises(AnalysisNotReadyError):
+        generate_rule_proposal(store, "analysis-1", "0")
+
+
+def test_generate_rule_proposal_rejects_an_unknown_finding() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+
+    with pytest.raises(FindingNotFoundError):
+        generate_rule_proposal(store, "analysis-1", "0")
+
+
+def test_create_rule_with_source_finding_id_records_detector_generated_provenance() -> None:
+    finding = _generated_rule_finding("structural.empty_column")
+    evidence = _generated_rule_evidence({"null_count": 0})
+    store = AnalysisStore()
+    store.add(
+        _rule_test_analysis(findings=(finding,), evidence=(evidence,), priority_scores=(50.0,))
+    )
+
+    rule = create_rule(
+        store,
+        "analysis-1",
+        name="generated",
+        description="generated",
+        severity=Severity.MEDIUM,
+        rule_type=ValidationRuleType.NOT_NULL,
+        column_names=("qty",),
+        source_finding_id="0",
+    )
+
+    assert rule.provenance is RuleProvenance.DETECTOR_GENERATED
+    assert rule.source_finding_ids == ("0",)
+    assert get_status(store, "analysis-1").rules == (rule,)
+
+
+def test_create_rule_without_source_finding_id_stays_user_authored() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+
+    rule = create_rule(
+        store,
+        "analysis-1",
+        name="manual",
+        description="manual",
+        severity=Severity.MEDIUM,
+        rule_type=ValidationRuleType.NOT_NULL,
+        column_names=("qty",),
+    )
+
+    assert rule.provenance is RuleProvenance.USER_AUTHORED
+    assert rule.source_finding_ids == ()
+
+
+def test_create_rule_rejects_an_unknown_source_finding_id() -> None:
+    store = AnalysisStore()
+    store.add(_rule_test_analysis())
+
+    with pytest.raises(FindingNotFoundError):
+        create_rule(
+            store,
+            "analysis-1",
+            name="x",
+            description="x",
+            severity=Severity.LOW,
+            rule_type=ValidationRuleType.NOT_NULL,
+            column_names=("qty",),
+            source_finding_id="not-a-real-finding",
+        )
+    assert get_status(store, "analysis-1").rules == ()
 
 
 def test_execute_rule_now_recomputes_and_persists() -> None:
