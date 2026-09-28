@@ -99,7 +99,13 @@ from ..domain.evidence import Evidence
 from ..domain.explanation import ValidationRuleType
 from ..domain.parsing import Dataset, DatasetFormat, DatasetSourceType
 from ..domain.row_context import RowContextEntry, RowContextWindow
-from ..domain.rules import ComparisonOperator, NullHandling, ValidationRule
+from ..domain.rules import (
+    ComparisonOperator,
+    NullHandling,
+    RuleExecutionResult,
+    RuleProvenance,
+    ValidationRule,
+)
 from ..domain.value_objects import ColumnReference, Provenance, RowReference, Severity
 from ..parsers.csv_parser import parse_csv
 from ..profiling.metrics import compute_dataset_profile
@@ -109,6 +115,7 @@ from ..risk.scoring import (
     calculate_finding_priority_scores,
     calculate_trust_assessment,
 )
+from ..rules import generation as rule_generation
 from ..rules.engine import execute_rule as _execute_rule
 
 #: Schema version stamped on every newly created `ValidationRule`
@@ -1054,6 +1061,7 @@ def create_rule(
     comparison_value: float | None = None,
     condition_operator: ComparisonOperator | None = None,
     condition_value: float | None = None,
+    source_finding_id: str | None = None,
 ) -> ValidationRule:
     """Define a new `ValidationRule` (`RULE-01`; all 11 rule types as of
     slice 2, `WP-079`) against a `COMPLETED` analysis's real columns,
@@ -1063,14 +1071,25 @@ def create_rule(
     `retry_analysis` already use, never a sample), store the result on
     the rule, persist, and return the executed rule.
 
+    `source_finding_id` (`RULE-02` slice 1, `WP-080`) is optional: when
+    given, the finding must exist on this analysis, and the persisted
+    rule records `provenance=RuleProvenance.DETECTOR_GENERATED` with
+    `source_finding_ids=(source_finding_id,)` — the normal way a caller
+    accepts a `generate_rule_proposal` offer. When omitted (the default),
+    behavior is unchanged: `provenance=RuleProvenance.USER_AUTHORED`,
+    `source_finding_ids=()`.
+
     Raises `AnalysisNotFoundError`/`AnalysisNotReadyError` (via
-    `_require_completed`), `UnknownRuleColumnError` for any
-    `column_names` entry that does not match a real dataset column, and
+    `_require_completed`), `FindingNotFoundError` for an unknown
+    `source_finding_id`, `UnknownRuleColumnError` for any `column_names`
+    entry that does not match a real dataset column, and
     `InvalidRuleParametersError` when the resulting shape violates
     `ValidationRule`'s own invariants for `rule_type` (wraps the
     underlying `ValueError`).
     """
     analysis = _require_completed(store, analysis_id)
+    if source_finding_id is not None:
+        get_finding(store, analysis_id, source_finding_id)  # raises FindingNotFoundError if absent
     parsed = parse_csv(analysis.content)
     columns_by_name: dict[str, ColumnReference] = {
         column.original_name: column for column in parsed.parsed_dataset.columns
@@ -1081,6 +1100,13 @@ def create_rule(
         if column is None:
             raise UnknownRuleColumnError(analysis_id, column_name)
         resolved_columns.append(column)
+
+    provenance = (
+        RuleProvenance.DETECTOR_GENERATED
+        if source_finding_id is not None
+        else RuleProvenance.USER_AUTHORED
+    )
+    source_finding_ids = (source_finding_id,) if source_finding_id is not None else ()
 
     try:
         rule = ValidationRule(
@@ -1104,6 +1130,8 @@ def create_rule(
             comparison_value=comparison_value,
             condition_operator=condition_operator,
             condition_value=condition_value,
+            source_finding_ids=source_finding_ids,
+            provenance=provenance,
         )
     except ValueError as exc:
         raise InvalidRuleParametersError(analysis_id, str(exc)) from exc
@@ -1113,6 +1141,75 @@ def create_rule(
     updated_analysis = replace(analysis, rules=(*analysis.rules, stored_rule))
     store.replace(updated_analysis)
     return stored_rule
+
+
+@dataclass(frozen=True, slots=True)
+class GeneratedRuleOffer:
+    """The result of `generate_rule_proposal` (`RULE-02` slice 1,
+    `WP-080`): an already-executed, **unpersisted** candidate rule, or a
+    stated reason none is available. `rule`/`result` are set together
+    when `available` is `True`; both are `None` when `available` is
+    `False`. Never stored on the analysis — accepting the offer is a
+    separate, explicit `create_rule(..., source_finding_id=...)` call."""
+
+    available: bool
+    reason: str | None
+    rule: ValidationRule | None
+    result: RuleExecutionResult | None
+
+
+def generate_rule_proposal(
+    store: AnalysisStoreProtocol, analysis_id: str, finding_id: str
+) -> GeneratedRuleOffer:
+    """Build and execute (never persist) a deterministic candidate
+    `ValidationRule` for one finding (`RULE-02` slice 1, `WP-080`,
+    `rules.generation.generate_rule_proposal`), against the analysis's
+    real parsed rows — the same reconstruction-on-demand pattern
+    `create_rule` itself already uses. Every generated field is read
+    verbatim from the finding's own already-computed `Evidence`; this
+    function performs no new calculation and calls no AI.
+
+    Raises `AnalysisNotFoundError`/`AnalysisNotReadyError`/
+    `FindingNotFoundError` with the same semantics as `get_finding`.
+    """
+    analysis = _require_completed(store, analysis_id)
+    finding = get_finding(store, analysis_id, finding_id)
+    evidence = get_finding_evidence(store, analysis_id, finding_id)
+    parsed = parse_csv(analysis.content)
+
+    proposal, reason = rule_generation.generate_rule_proposal(
+        finding, evidence, parsed.parsed_dataset.columns
+    )
+    if proposal is None:
+        return GeneratedRuleOffer(available=False, reason=reason, rule=None, result=None)
+
+    params = proposal.parameters
+    try:
+        rule = ValidationRule(
+            rule_id=str(uuid.uuid4()),
+            schema_version=RULE_SCHEMA_VERSION,
+            name=proposal.name,
+            description=proposal.description,
+            severity=finding.severity,
+            rule_type=proposal.rule_type,
+            columns=proposal.columns,
+            accepted_values=params.accepted_values,
+            minimum=params.minimum,
+            maximum=params.maximum,
+            minimum_date=params.minimum_date,
+            maximum_date=params.maximum_date,
+            pattern=params.pattern,
+            threshold_percentage=params.threshold_percentage,
+            tolerance=params.tolerance,
+            source_finding_ids=(finding_id,),
+            provenance=RuleProvenance.DETECTOR_GENERATED,
+        )
+    except ValueError as exc:
+        raise InvalidRuleParametersError(analysis_id, str(exc)) from exc
+
+    executed = _execute_rule(rule, parsed.rows, analysis_id=analysis_id, now=datetime.now(UTC))
+    offered_rule = replace(rule, last_result=executed)
+    return GeneratedRuleOffer(available=True, reason=None, rule=offered_rule, result=executed)
 
 
 def _find_rule(analysis: Analysis, rule_id: str) -> ValidationRule:
