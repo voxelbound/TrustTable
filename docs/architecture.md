@@ -406,6 +406,17 @@ see §6's two-phase model and `docs/decision-log.md` D-037/D-038. CI
 still exercises only stub/fake and `httpx.MockTransport`/real
 `disabled`/`mock` providers, never a live model.
 
+**Extended (`RULE-02` slice 2, `WP-081`):** `ai_boundary.rule_generation`
+adds a second structured output contract, `rule_generation_v1`, deliberately
+much narrower than `finding_analysis`'s (`AI-08`): its only field,
+`canonical_value`, is a JSON-Schema `enum` built per request from
+exactly one finding's own already-observed evidence values, so a
+provider can only select one of them, never invent free text. None of
+`finding_analysis`'s claim-screen/numeric-grounding/consequence-term
+machinery applies — there is no narrative surface to screen. See §8's
+persistence section for the full `rules.ai_generation`/route-layer
+wiring.
+
 **Forward-looking design note (2026-09-13, `CHG-002`, not yet
 implemented):** the `v0.2` design session established that the eventual
 real-provider layer built on this seam must keep three concerns
@@ -931,10 +942,32 @@ detector categories (`consistency.inconsistent_capitalization`,
 `statistical.suspiciously_constant_column`,
 `cross_field.line_total_mismatch`, `security.possible_llm_prompt_injection`)
 have no safe deterministic mapping and are excluded, disclosed, this
-slice — `RuleProvenance.AI_ASSISTED` remains a future slice. AI
-interpretations, review decisions, and exports are **not yet
-persisted** — none of those domain objects exist as implemented code
-yet; their own later backlog items (`REV-01`, `EXP-01`) own that work.
+slice. **`RULE-02` slice 2 (`WP-081`):** `RuleProvenance` gains an
+additive `ai_assisted` member. For exactly one of the 4 excluded
+categories, `consistency.inconsistent_capitalization` — whose own
+evidence already deterministically enumerates every valid candidate
+value, so the only remaining judgment is which is canonical — a new
+`ai_boundary.rule_generation` structured output contract
+(`rule_generation_v1`) constrains a real provider's answer to a closed,
+per-request-enumerated JSON-Schema `enum` built entirely from that
+finding's own evidence: the model can only select one of the exact
+candidates it was given, never invent a value, never free text. The
+provider call itself lives in the new `rules.ai_generation` module and
+is invoked only from the route layer
+(`get_analysis_finding_rule_proposal`), mirroring
+`get_analysis_finding_explanation`'s own established two-phase seam
+(§6, D-037/D-038) exactly — `analysis.service` still never imports
+`ai_boundary`/`ai_provider`. An accepted choice executes an
+`accepted_values` candidate rule against the real analysis rows before
+returning it, unpersisted, exactly like slice 1's own contract;
+accepting it through `POST .../rules` persists
+`provenance=ai_assisted`. The other 3 slice-1-excluded categories
+remain excluded from the AI-assisted path too, for the same `RULE-01`
+rule-type/regex-length structural reason slice 1 already documented —
+AI cannot repair a rule-type limitation. AI interpretations, review
+decisions, and exports are **not yet persisted** — none of those domain
+objects exist as implemented code yet; their own later backlog items
+(`REV-01`, `EXP-01`) own that work.
 
 ## 9. Background work
 

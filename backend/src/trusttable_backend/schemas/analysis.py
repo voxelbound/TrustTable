@@ -781,15 +781,47 @@ class CreateValidationRuleRequest(BaseModel):
 
 class RuleProposalResponse(BaseModel):
     """Body for `GET /analyses/{analysis_id}/findings/{finding_id}/
-    rule-proposal` (`RULE-02` slice 1, `WP-080`). `available=False` means
-    no safe deterministic mapping exists for this finding's detector
-    (`reason` states why); `rule`/`result` are then both `null`.
-    `available=True` means `rule` is an already-executed candidate,
-    never persisted by this route — `rule.rule_id` is a fresh,
-    disposable id, not a stored identity. Accepting the offer is a
-    separate `POST .../rules` call with `source_finding_id` set."""
+    rule-proposal` (`RULE-02` slice 1, `WP-080`; AI-assisted extension,
+    slice 2, `WP-081`). `available=False` means no safe proposal exists
+    for this finding's detector (`reason` states why); `rule`/`result`
+    are then both `null`. `available=True` means `rule` is an
+    already-executed candidate, never persisted by this route —
+    `rule.rule_id` is a fresh, disposable id, not a stored identity.
+    Accepting the offer is a separate `POST .../rules` call with
+    `source_finding_id` set; `rule.provenance` distinguishes
+    `"detector_generated"` (slice 1, no AI involved) from
+    `"ai_assisted"` (slice 2, this response's own AI attempt was
+    accepted).
+
+    `ai_call_status`/`evidence_sent_to_model` (`WP-081`) mirror
+    `FindingExplanationResponse`'s own established disclosure fields
+    exactly, scoped to this specific request's AI-assisted attempt (for
+    `consistency.inconsistent_capitalization` only, and only once slice
+    1's deterministic mapping already reported unavailable):
+
+    - `"not_configured"` — no AI-assisted attempt was made for this
+      request, either because `Settings.llm_provider == "disabled"` or
+      because this finding's detector is not AI-assistable (including
+      every case where slice 1 already found a deterministic mapping).
+    - `"attempted_accepted"` — a provider was called and its chosen
+      value was accepted; `rule.provenance == "ai_assisted"`.
+    - `"attempted_rejected"` — a provider was called, but its output
+      failed `ai_boundary.rule_generation.validate_rule_generation_output`;
+      falls back to slice 1's identical `available=False` response.
+    - `"attempted_provider_error"` — a provider was called and raised a
+      `ProviderError`; falls back to slice 1's identical
+      `available=False` response.
+
+    `evidence_sent_to_model` is `True` whenever `ai_call_status` is any
+    `attempted_*` value (this finding's own evidence is always the
+    envelope's `computed_evidence` on every attempt); `False` otherwise.
+    Never reflects raw dataset sample content — this contract sends
+    zero dataset samples regardless.
+    """
 
     available: bool
     reason: str | None
     rule: ValidationRuleResponse | None
     result: RuleExecutionResultResponse | None
+    ai_call_status: str
+    evidence_sent_to_model: bool
