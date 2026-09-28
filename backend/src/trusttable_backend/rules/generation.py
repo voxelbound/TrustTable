@@ -38,6 +38,15 @@ existing `RULE-01` rule type can faithfully represent the detector:
 Framework-independent: no FastAPI/SQLAlchemy/pydantic/ai_boundary/
 ai_provider import, no `eval`/`exec`. Stdlib only besides the domain,
 detector-contract and guidance types.
+
+`RULE-02` slice 2 (`WP-081`) adds `extract_ai_assist_candidates`/
+`AI_ASSISTABLE_DETECTOR_IDS` below: for
+`consistency.inconsistent_capitalization` only, this finding's own
+evidence already deterministically enumerates every valid candidate
+value, so the only remaining judgment — which is canonical — is a
+genuine choice `rules/ai_generation.py` (a separate, provider-calling
+module) may ask a real AI provider to make, never this module. This
+module itself still calls no AI and still performs no calculation.
 """
 
 from __future__ import annotations
@@ -212,6 +221,48 @@ _GENERATORS: Final[dict[str, _Generator]] = {
 #: prove every other `explanation.guidance` detector id is excluded).
 GENERATABLE_DETECTOR_IDS: Final[frozenset[str]] = frozenset(_GENERATORS)
 
+#: The one detector id `RULE-02` slice 2 (`WP-081`) can attempt
+#: AI-assisted generation for once slice 1 reports no deterministic
+#: mapping: its own evidence already deterministically enumerates every
+#: valid candidate value (`distinct_casings`), so the only remaining
+#: judgment — which is canonical — is a genuine choice, not a
+#: calculation. The other 3 slice-1-excluded categories stay excluded
+#: for the same `RULE-01` rule-type/regex-length structural reasons
+#: this module's own docstring already states — AI cannot repair a
+#: rule-type limitation, so they are deliberately not listed here.
+AI_ASSISTABLE_DETECTOR_IDS: Final[frozenset[str]] = frozenset(
+    {"consistency.inconsistent_capitalization"}
+)
+
+_MIN_AI_ASSIST_CANDIDATES: Final[int] = 2
+
+
+def extract_ai_assist_candidates(
+    finding: FindingCandidate, evidence: tuple[Evidence, ...]
+) -> tuple[str, ...] | None:
+    """The finding's own already-observed candidate values an AI-assisted
+    proposal (`RULE-02` slice 2, `rules/ai_generation.py`) may choose
+    among, or `None` when `finding.detector_id` is not one of
+    `AI_ASSISTABLE_DETECTOR_IDS`, or its referenced evidence does not
+    carry the expected payload shape. Every returned value is read
+    verbatim from the finding's own evidence — this function performs no
+    calculation and calls no AI; it only decides what an AI call would be
+    allowed to choose from."""
+    if finding.detector_id not in AI_ASSISTABLE_DETECTOR_IDS:
+        return None
+    if not finding.evidence_ids:
+        return None
+    evidence_by_id = {item.evidence_id: item for item in evidence}
+    item = evidence_by_id.get(finding.evidence_ids[0])
+    if item is None:
+        return None
+    casings = item.structured_payload.get("distinct_casings")
+    if not isinstance(casings, list | tuple) or len(casings) < _MIN_AI_ASSIST_CANDIDATES:
+        return None
+    if not all(isinstance(value, str) for value in casings):
+        return None
+    return tuple(casings)
+
 
 def generate_rule_proposal(
     finding: FindingCandidate,
@@ -249,8 +300,10 @@ def generate_rule_proposal(
 
 
 __all__ = [
+    "AI_ASSISTABLE_DETECTOR_IDS",
     "GENERATABLE_DETECTOR_IDS",
     "RuleProposal",
     "RuleProposalParameters",
+    "extract_ai_assist_candidates",
     "generate_rule_proposal",
 ]

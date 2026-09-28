@@ -267,15 +267,42 @@ export const getAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingI
 /**
  * Get Analysis Finding Rule Proposal
  *
- * Build and execute (never persist) a deterministic candidate
- * validation rule for one finding (`RULE-02` slice 1, `WP-080`).
+ * Build and execute (never persist) a candidate validation rule for
+ * one finding (`RULE-02` slice 1, `WP-080`; AI-assisted extension,
+ * slice 2, `WP-081`).
  *
- * `available=False` (never an error response) means no safe
- * deterministic mapping exists for this finding's detector — `reason`
- * states why; `rule`/`result` are then both `null`. `available=True`
- * means `rule` already executed against the analysis's real, current
- * rows and `result` is its exact outcome, unpersisted. Accept the offer
- * with `POST .../rules` (`source_finding_id` set to this `finding_id`).
+ * Always attempts slice 1's deterministic mapping first
+ * (`generate_rule_proposal`, no AI, no new calculation). When that
+ * reports unavailable, this finding's detector is
+ * `consistency.inconsistent_capitalization`, and
+ * `Settings.llm_provider != "disabled"` (the default remains
+ * `"disabled"`, so this is a zero-behavior-change addition for any
+ * deployment that has not explicitly configured a provider),
+ * additionally attempts a validated AI-assisted proposal through the
+ * real provider factory: the model may only choose one of this
+ * finding's own already-observed candidate values
+ * (`ai_boundary.rule_generation`), never invent one. An accepted
+ * choice executes an `ACCEPTED_VALUES` candidate rule
+ * (`provenance="ai_assisted"`) against the analysis's real, current
+ * rows before returning it — never persisting it, exactly like slice
+ * 1's own offer-never-persist contract. Disabled, rejected, or a
+ * provider error falls back to slice 1's identical `available=False`
+ * response — the same graceful-degradation contract
+ * `get_analysis_finding_explanation` already established.
+ *
+ * `available=False` (never an error response) means no safe proposal
+ * exists for this finding's detector — `reason` states why (slice 1's
+ * own reason, unchanged even when an AI-assisted attempt was also made
+ * and rejected/failed); `rule`/`result` are then both `null`.
+ * `available=True` means `rule` already executed against the
+ * analysis's real, current rows and `result` is its exact outcome,
+ * unpersisted. Accept the offer with `POST .../rules`
+ * (`source_finding_id` set to this `finding_id`).
+ *
+ * Also returns `ai_call_status`/`evidence_sent_to_model` (`WP-081`,
+ * mirroring `FindingExplanationResponse`'s own established disclosure
+ * fields) — see `RuleProposalResponse`'s own docstring for the exact
+ * four-value contract.
  *
  * Raises `ANALYSIS_NOT_FOUND` (404); `INVALID_ANALYSIS_STATE` (409) for
  * a known analysis not yet `COMPLETED`; `FINDING_NOT_FOUND` (404) for
