@@ -53,6 +53,10 @@ function findingFixture(
     affected_columns: [],
     affected_row_count: 1,
     evidence_count: 1,
+    review_state: 'unreviewed',
+    note: null,
+    dismissal_reason: null,
+    reviewed_at: null,
   }
 }
 

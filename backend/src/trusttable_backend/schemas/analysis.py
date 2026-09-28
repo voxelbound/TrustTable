@@ -251,13 +251,13 @@ class FindingItem(BaseModel):
     `finding_id` (`WP-027`) is a stringified zero-based index into the
     analysis's own findings tuple — a disclosed, reversible interim
     scheme (see `analysis.service.get_finding`); no full persisted
-    identifier exists yet. No review-state field: the full `Finding`
-    aggregate's review state (`docs/domain-model.md` §12) does not exist
-    yet (`REV-01`, a later package). `affected_row_count` and
-    `evidence_count` are bounded counts, not the raw row-reference/
-    evidence-ID lists — matching this repository's established
-    "bounded, not raw" list-response convention (`PROF-03`'s profile
-    endpoint precedent above).
+    identifier exists yet. `review_state`/`note`/`dismissal_reason`/
+    `reviewed_at` (`REV-01`, `WP-083`) default to `"unreviewed"`/`null`/
+    `null`/`null` for a finding with no recorded review.
+    `affected_row_count` and `evidence_count` are bounded counts, not the
+    raw row-reference/evidence-ID lists — matching this repository's
+    established "bounded, not raw" list-response convention (`PROF-03`'s
+    profile endpoint precedent above).
     """
 
     finding_id: str
@@ -271,6 +271,10 @@ class FindingItem(BaseModel):
     affected_columns: list[ColumnReferenceResponse]
     affected_row_count: int
     evidence_count: int
+    review_state: str
+    note: str | None
+    dismissal_reason: str | None
+    reviewed_at: datetime | None
 
 
 class FindingsListResponse(BaseModel):
@@ -291,12 +295,14 @@ class FindingDetailResponse(BaseModel):
     `docs/ui-specification.md` §4.7's "Finding detail" screen sections).
 
     Exposes exactly what is genuinely computable today: observation,
-    affected columns/rows, evidence count, technical metadata, and
-    security exposure. Deliberately omits possible business impact,
-    remediation, proposed validation rules, and review state — no
-    package computes any of those yet (`REM-01`, `RULE-01`, `REV-01` are
-    all later, unimplemented backlog items); a placeholder field would
-    misrepresent "not built yet" as "computed but empty".
+    affected columns/rows, evidence count, technical metadata, security
+    exposure, and (`REV-01`, `WP-083`) review state. Deliberately omits
+    possible business impact, remediation, and proposed validation
+    rules, which live in their own dedicated endpoints
+    (`GET .../explanation`, `GET .../rule-proposal`), not this body.
+    `review_state`/`note`/`dismissal_reason`/`reviewed_at` default to
+    `"unreviewed"`/`null`/`null`/`null` for a finding with no recorded
+    review.
 
     `affected_row_numbers` (`FIND-01`, `WP-038`, extending) is a small,
     disclosed addition: the finding's own affected `RowReference.row_number`
@@ -320,6 +326,32 @@ class FindingDetailResponse(BaseModel):
     affected_row_numbers: list[int]
     evidence_count: int
     security_exposure: SecurityExposureResponse
+    review_state: str
+    note: str | None
+    dismissal_reason: str | None
+    reviewed_at: datetime | None
+
+
+class FindingReviewRequest(BaseModel):
+    """Body for `PUT /analyses/{analysis_id}/findings/{finding_id}/review`
+    (`REV-01`, `WP-083`). `dismissal_reason` is required (and must be
+    non-empty) when `state` is `"dismissed"`, and must be omitted/`null`
+    otherwise — `422 REVIEW_INVALID` on either violation."""
+
+    state: str
+    note: str | None = None
+    dismissal_reason: str | None = None
+
+
+class FindingReviewResponse(BaseModel):
+    """Body for `PUT .../review`'s response, and the shape
+    `FindingItem`/`FindingDetailResponse`'s own review fields mirror."""
+
+    finding_id: str
+    review_state: str
+    note: str | None
+    dismissal_reason: str | None
+    reviewed_at: datetime
 
 
 class FindingEvidenceItem(BaseModel):

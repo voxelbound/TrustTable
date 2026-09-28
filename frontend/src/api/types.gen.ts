@@ -678,12 +678,14 @@ export type FinalizeContextRequest = {
  * `docs/ui-specification.md` §4.7's "Finding detail" screen sections).
  *
  * Exposes exactly what is genuinely computable today: observation,
- * affected columns/rows, evidence count, technical metadata, and
- * security exposure. Deliberately omits possible business impact,
- * remediation, proposed validation rules, and review state — no
- * package computes any of those yet (`REM-01`, `RULE-01`, `REV-01` are
- * all later, unimplemented backlog items); a placeholder field would
- * misrepresent "not built yet" as "computed but empty".
+ * affected columns/rows, evidence count, technical metadata, security
+ * exposure, and (`REV-01`, `WP-083`) review state. Deliberately omits
+ * possible business impact, remediation, and proposed validation
+ * rules, which live in their own dedicated endpoints
+ * (`GET .../explanation`, `GET .../rule-proposal`), not this body.
+ * `review_state`/`note`/`dismissal_reason`/`reviewed_at` default to
+ * `"unreviewed"`/`null`/`null`/`null` for a finding with no recorded
+ * review.
  *
  * `affected_row_numbers` (`FIND-01`, `WP-038`, extending) is a small,
  * disclosed addition: the finding's own affected `RowReference.row_number`
@@ -727,6 +729,10 @@ export type FindingDetailResponse = {
      */
     detector_version: string;
     /**
+     * Dismissal Reason
+     */
+    dismissal_reason: string | null;
+    /**
      * Evidence Count
      */
     evidence_count: number;
@@ -735,9 +741,21 @@ export type FindingDetailResponse = {
      */
     finding_id: string;
     /**
+     * Note
+     */
+    note: string | null;
+    /**
      * Priority Score
      */
     priority_score: number;
+    /**
+     * Review State
+     */
+    review_state: string;
+    /**
+     * Reviewed At
+     */
+    reviewed_at: string | null;
     security_exposure: SecurityExposureResponse;
     /**
      * Severity
@@ -942,13 +960,13 @@ export type FindingExplanationResponse = {
  * `finding_id` (`WP-027`) is a stringified zero-based index into the
  * analysis's own findings tuple — a disclosed, reversible interim
  * scheme (see `analysis.service.get_finding`); no full persisted
- * identifier exists yet. No review-state field: the full `Finding`
- * aggregate's review state (`docs/domain-model.md` §12) does not exist
- * yet (`REV-01`, a later package). `affected_row_count` and
- * `evidence_count` are bounded counts, not the raw row-reference/
- * evidence-ID lists — matching this repository's established
- * "bounded, not raw" list-response convention (`PROF-03`'s profile
- * endpoint precedent above).
+ * identifier exists yet. `review_state`/`note`/`dismissal_reason`/
+ * `reviewed_at` (`REV-01`, `WP-083`) default to `"unreviewed"`/`null`/
+ * `null`/`null` for a finding with no recorded review.
+ * `affected_row_count` and `evidence_count` are bounded counts, not the
+ * raw row-reference/evidence-ID lists — matching this repository's
+ * established "bounded, not raw" list-response convention (`PROF-03`'s
+ * profile endpoint precedent above).
  */
 export type FindingItem = {
     /**
@@ -980,6 +998,10 @@ export type FindingItem = {
      */
     detector_version: string;
     /**
+     * Dismissal Reason
+     */
+    dismissal_reason: string | null;
+    /**
      * Evidence Count
      */
     evidence_count: number;
@@ -988,13 +1010,77 @@ export type FindingItem = {
      */
     finding_id: string;
     /**
+     * Note
+     */
+    note: string | null;
+    /**
      * Priority Score
      */
     priority_score: number;
     /**
+     * Review State
+     */
+    review_state: string;
+    /**
+     * Reviewed At
+     */
+    reviewed_at: string | null;
+    /**
      * Severity
      */
     severity: string;
+};
+
+/**
+ * FindingReviewRequest
+ *
+ * Body for `PUT /analyses/{analysis_id}/findings/{finding_id}/review`
+ * (`REV-01`, `WP-083`). `dismissal_reason` is required (and must be
+ * non-empty) when `state` is `"dismissed"`, and must be omitted/`null`
+ * otherwise — `422 REVIEW_INVALID` on either violation.
+ */
+export type FindingReviewRequest = {
+    /**
+     * Dismissal Reason
+     */
+    dismissal_reason?: string | null;
+    /**
+     * Note
+     */
+    note?: string | null;
+    /**
+     * State
+     */
+    state: string;
+};
+
+/**
+ * FindingReviewResponse
+ *
+ * Body for `PUT .../review`'s response, and the shape
+ * `FindingItem`/`FindingDetailResponse`'s own review fields mirror.
+ */
+export type FindingReviewResponse = {
+    /**
+     * Dismissal Reason
+     */
+    dismissal_reason: string | null;
+    /**
+     * Finding Id
+     */
+    finding_id: string;
+    /**
+     * Note
+     */
+    note: string | null;
+    /**
+     * Review State
+     */
+    review_state: string;
+    /**
+     * Reviewed At
+     */
+    reviewed_at: string;
 };
 
 /**
@@ -2001,6 +2087,40 @@ export type GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingI
 };
 
 export type GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetResponse = GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetResponses[keyof GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetResponses];
+
+export type PutAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPutData = {
+    body: FindingReviewRequest;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Finding Id
+         */
+        finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/findings/{finding_id}/review';
+};
+
+export type PutAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPutError = PutAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPutErrors[keyof PutAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPutErrors];
+
+export type PutAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: FindingReviewResponse;
+};
+
+export type PutAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPutResponse = PutAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPutResponses[keyof PutAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPutResponses];
 
 export type GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetData = {
     body?: never;
