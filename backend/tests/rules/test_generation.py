@@ -311,16 +311,19 @@ def test_unmapped_generic_detector_not_available() -> None:
 
 
 def test_generatable_detector_ids_is_exactly_the_disclosed_nine() -> None:
-    assert frozenset(
-        {
-            "structural.exact_duplicate_rows",
-            "structural.empty_column",
-            "completeness.excessive_missing_values",
-            "completeness.missing_likely_identifier",
-            "validity.future_dates",
-            "validity.negative_likely_non_negative_values",
-            "validity.invalid_percentages",
-            "statistical.extreme_outliers",
-            "consistency.leading_trailing_whitespace",
-        }
-    ) == GENERATABLE_DETECTOR_IDS
+    assert (
+        frozenset(
+            {
+                "structural.exact_duplicate_rows",
+                "structural.empty_column",
+                "completeness.excessive_missing_values",
+                "completeness.missing_likely_identifier",
+                "validity.future_dates",
+                "validity.negative_likely_non_negative_values",
+                "validity.invalid_percentages",
+                "statistical.extreme_outliers",
+                "consistency.leading_trailing_whitespace",
+            }
+        )
+        == GENERATABLE_DETECTOR_IDS
+    )
