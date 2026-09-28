@@ -1926,6 +1926,62 @@ export type PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponses = {
 
 export type PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponse = PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponses[keyof PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponses];
 
+export type GetRulesExportJsonApiV1AnalysesAnalysisIdExportsRulesJsonGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/exports/rules.json';
+};
+
+export type GetRulesExportJsonApiV1AnalysesAnalysisIdExportsRulesJsonGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetRulesExportJsonApiV1AnalysesAnalysisIdExportsRulesJsonGetError = GetRulesExportJsonApiV1AnalysesAnalysisIdExportsRulesJsonGetErrors[keyof GetRulesExportJsonApiV1AnalysesAnalysisIdExportsRulesJsonGetErrors];
+
+export type GetRulesExportJsonApiV1AnalysesAnalysisIdExportsRulesJsonGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type GetRulesExportYamlApiV1AnalysesAnalysisIdExportsRulesYamlGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/exports/rules.yaml';
+};
+
+export type GetRulesExportYamlApiV1AnalysesAnalysisIdExportsRulesYamlGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetRulesExportYamlApiV1AnalysesAnalysisIdExportsRulesYamlGetError = GetRulesExportYamlApiV1AnalysesAnalysisIdExportsRulesYamlGetErrors[keyof GetRulesExportYamlApiV1AnalysesAnalysisIdExportsRulesYamlGetErrors];
+
+export type GetRulesExportYamlApiV1AnalysesAnalysisIdExportsRulesYamlGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
 export type PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostData = {
     body: FinalizeContextRequest;
     path: {

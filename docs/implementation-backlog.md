@@ -600,6 +600,13 @@ Report includes AI-processing security:
 - rejected-output status
 - model location
 
+> **Annotation (2026-09-28, slice 1 of `EXP-01`):** the JSON and YAML rules
+> exports are implemented (`GET /analyses/{id}/exports/rules.json` and
+> `rules.yaml`, `docs/api-specification.md` §12). Only validated rules are
+> exported. The Markdown report, its snapshot and routes, and the
+> AI-processing security section are **not yet implemented**; `EXP-01`
+> stays open.
+
 ## DEL-01 — Analysis deletion
 
 Delete file, derived artifacts, exports, and records.
