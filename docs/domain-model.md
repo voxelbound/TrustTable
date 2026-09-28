@@ -575,7 +575,7 @@ Invariants:
 - null handling
 - source finding IDs
 - provenance (`user_authored`, `detector_generated`, or `ai_assisted` —
-  `RULE-02` slices 1/2, `WP-080`/`WP-081`; additive, closed set)
+  `RULE-02` slices 1/2/3, `WP-080`/`WP-081`/`WP-082`; additive, closed set)
 
 ### Invariants
 

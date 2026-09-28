@@ -1,8 +1,8 @@
-"""Deterministic rule generation from findings (`RULE-02` slice 1,
-`WP-080`).
+"""Deterministic rule generation from findings (`RULE-02` slices 1 and 3,
+`WP-080`/`WP-082`).
 
 `docs/implementation-backlog.md#RULE-02`: "Prefer deterministic mappings;
-validate and execute before offering." For 9 of the 13 detector ids that
+validate and execute before offering." For 10 of the 13 detector ids that
 `explanation.guidance.build_deterministic_guidance` already proposes a
 `rule_type` for (`ProposedValidationRule`, `AI-08`), this module derives
 the *executable* parameters that proposal's `description` text alone
@@ -12,13 +12,14 @@ the detector's own definition already implies (e.g. "non-negative" means
 `minimum=0.0`). Nothing here performs a new calculation over raw rows,
 and nothing here calls AI.
 
-The remaining 4 categories are deliberately **not** mapped, because no
+The remaining 3 categories are deliberately **not** mapped, because no
 existing `RULE-01` rule type can faithfully represent the detector:
 
-- `consistency.inconsistent_capitalization` /
-  `statistical.suspiciously_constant_column`: the evidence never records
-  which observed value is the intended canonical one, so no safe
-  `accepted_values` list can be derived without guessing.
+- `consistency.inconsistent_capitalization`: the evidence enumerates
+  several observed candidate casings but never records which one is the
+  intended canonical value, so no safe `accepted_values` list can be
+  derived without guessing (see `RULE-02` slice 2, `WP-081`, and
+  `rules/ai_generation.py`, below).
 - `cross_field.line_total_mismatch`: the real check is multiplicative
   (`quantity x unit_price x (1 - discount_pct/100) x (1 + tax_pct/100)`);
   `RULE-01`'s only structurally similar type, `APPROXIMATE_EQUALITY`,
@@ -47,6 +48,19 @@ value, so the only remaining judgment — which is canonical — is a
 genuine choice `rules/ai_generation.py` (a separate, provider-calling
 module) may ask a real AI provider to make, never this module. This
 module itself still calls no AI and still performs no calculation.
+
+`RULE-02` slice 3 (`WP-082`) adds `statistical.suspiciously_constant_column`
+to the deterministic mapping table below. Unlike
+`consistency.inconsistent_capitalization`, a constant column's own
+`distinct_count == 1` invariant means exactly one observed value exists —
+no canonical-value judgment is needed, so this stays fully deterministic,
+never AI-assisted. The detector itself (`detectors/statistical.py`) now
+captures that single verbatim value as `Evidence.structured_payload
+["constant_value"]`; this module only reads it. `RULE-02` is feature-
+complete after this slice: every one of the 13 detector categories has a
+final generation outcome — 10 deterministic, 1 AI-assisted, and 2
+(`cross_field.line_total_mismatch`, `security.possible_llm_prompt_injection`)
+permanently unsupported for the structural reasons stated above.
 """
 
 from __future__ import annotations
@@ -204,6 +218,22 @@ def _generate_leading_trailing_whitespace(
     return RuleProposalParameters(pattern=_WHITESPACE_PATTERN)
 
 
+def _generate_suspiciously_constant_column(
+    finding: FindingCandidate,
+    evidence_by_id: Mapping[str, Evidence],
+    all_columns: tuple[ColumnReference, ...],
+) -> RuleProposalParameters:
+    """`RULE-02` slice 3 (`WP-082`): the finding's own evidence already
+    carries the single verbatim value every non-blank sampled row shares
+    (`Evidence.structured_payload["constant_value"]`,
+    `detectors/statistical.py`'s `distinct_count == 1` invariant) — read
+    it verbatim, never re-derive or normalize it."""
+    del all_columns
+    value = _payload(finding, evidence_by_id)["constant_value"]
+    assert isinstance(value, str)
+    return RuleProposalParameters(accepted_values=(value,))
+
+
 _GENERATORS: Final[dict[str, _Generator]] = {
     "structural.exact_duplicate_rows": _generate_exact_duplicate_rows,
     "structural.empty_column": _generate_no_extra_parameters,
@@ -214,22 +244,29 @@ _GENERATORS: Final[dict[str, _Generator]] = {
     "validity.invalid_percentages": _generate_valid_percentage,
     "statistical.extreme_outliers": _generate_extreme_outliers,
     "consistency.leading_trailing_whitespace": _generate_leading_trailing_whitespace,
+    "statistical.suspiciously_constant_column": _generate_suspiciously_constant_column,
 }
 
-#: Detector ids `RULE-02` slice 1 can generate a proposal for (used by
-#: tests to prove full coverage of the disclosed 9-detector set, and to
-#: prove every other `explanation.guidance` detector id is excluded).
+#: Detector ids `RULE-02` slices 1 and 3 can generate a proposal for (used
+#: by tests to prove full coverage of the disclosed 10-detector
+#: deterministic set, and to prove every other `explanation.guidance`
+#: detector id is excluded).
 GENERATABLE_DETECTOR_IDS: Final[frozenset[str]] = frozenset(_GENERATORS)
 
 #: The one detector id `RULE-02` slice 2 (`WP-081`) can attempt
-#: AI-assisted generation for once slice 1 reports no deterministic
+#: AI-assisted generation for once the deterministic table reports no
 #: mapping: its own evidence already deterministically enumerates every
 #: valid candidate value (`distinct_casings`), so the only remaining
 #: judgment — which is canonical — is a genuine choice, not a
-#: calculation. The other 3 slice-1-excluded categories stay excluded
-#: for the same `RULE-01` rule-type/regex-length structural reasons
-#: this module's own docstring already states — AI cannot repair a
-#: rule-type limitation, so they are deliberately not listed here.
+#: calculation. The 2 permanently excluded categories
+#: (`cross_field.line_total_mismatch`, `security.possible_llm_prompt_injection`)
+#: stay excluded for the same `RULE-01` rule-type/regex-length structural
+#: reasons this module's own docstring already states — AI cannot repair
+#: a rule-type limitation, so they are deliberately not listed here.
+#: `statistical.suspiciously_constant_column` moved from this AI-assist
+#: consideration to the fully deterministic table above in slice 3
+#: (`WP-082`): its `distinct_count == 1` invariant means there is only
+#: ever one candidate value, so no AI judgment is ever needed for it.
 AI_ASSISTABLE_DETECTOR_IDS: Final[frozenset[str]] = frozenset(
     {"consistency.inconsistent_capitalization"}
 )
@@ -270,7 +307,7 @@ def generate_rule_proposal(
     all_columns: tuple[ColumnReference, ...],
 ) -> tuple[RuleProposal | None, str | None]:
     """Return `(proposal, None)` when `finding.detector_id` is one of the
-    9 supported detector ids, or `(None, reason)` otherwise. Every
+    10 supported detector ids, or `(None, reason)` otherwise. Every
     `RuleProposal` field is read verbatim from `finding`/`evidence`/
     `all_columns` — this function performs no new calculation over raw
     rows and never invents a value."""
@@ -278,7 +315,7 @@ def generate_rule_proposal(
     if generator is None:
         return None, (
             f"No deterministic rule mapping exists for detector "
-            f"{finding.detector_id!r}. RULE-02 slice 1 supports: "
+            f"{finding.detector_id!r}. RULE-02 supports: "
             f"{', '.join(sorted(GENERATABLE_DETECTOR_IDS))}."
         )
 

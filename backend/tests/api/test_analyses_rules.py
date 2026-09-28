@@ -519,6 +519,88 @@ def test_rule_proposal_unavailable_for_an_excluded_detector_reports_a_reason(
     assert body["result"] is None
 
 
+# ---------------------------------------------------------------------------
+# RULE-02 slice 3: deterministic rule generation for suspiciously constant
+# columns (WP-082) - closes RULE-02 (10 deterministic, 1 AI-assisted, 2
+# permanently unsupported)
+# ---------------------------------------------------------------------------
+
+
+def _suspiciously_constant_column_finding_id(client: TestClient, analysis_id: str) -> str:
+    """Deliberately forward-referencing `_first_finding_id_for_detector`
+    (defined further below, alongside the `RULE-02` slice 2 AI-assist
+    tests) — safe, since Python resolves module-level names at call
+    time, once the whole module is loaded, not at definition time."""
+    finding_id = _first_finding_id_for_detector(
+        client, analysis_id, "statistical.suspiciously_constant_column"
+    )
+    if finding_id is None:
+        raise AssertionError(
+            "expected at least one demo-dataset statistical.suspiciously_constant_column finding"
+        )
+    return finding_id
+
+
+def test_rule_proposal_for_suspiciously_constant_column_offers_its_own_observed_value(
+    client: TestClient,
+) -> None:
+    """The decisive AC-03 proof: the demo dataset's real `constant_col`
+    finding gets a real, already-executed `accepted_values` proposal
+    whose sole value is exactly the column's own observed constant
+    (`manual_entry`, `demo_data.generator.CONSTANT_COL_VALUE`) - never
+    invented, never AI."""
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _suspiciously_constant_column_finding_id(client, analysis_id)
+
+    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/rule-proposal")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is True
+    assert body["reason"] is None
+    assert body["rule"]["rule_type"] == "accepted_values"
+    assert body["rule"]["accepted_values"] == ["manual_entry"]
+    assert body["rule"]["provenance"] == "detector_generated"
+    assert body["rule"]["source_finding_ids"] == [finding_id]
+    assert body["result"] is not None
+    assert body["result"]["error"] is None
+    # No AI attempt is ever made for a detector the deterministic path
+    # already serves.
+    assert body["ai_call_status"] == "not_configured"
+    assert body["evidence_sent_to_model"] is False
+    # Never persisted by the proposal endpoint itself.
+    assert client.get(f"/api/v1/analyses/{analysis_id}/rules").json()["total_items"] == 0
+
+
+def test_accept_suspiciously_constant_column_proposal_persists_detector_generated(
+    client: TestClient,
+) -> None:
+    analysis_id = _create_completed_analysis(client)
+    finding_id = _suspiciously_constant_column_finding_id(client, analysis_id)
+    proposal = client.get(
+        f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/rule-proposal"
+    ).json()["rule"]
+
+    response = client.post(
+        f"/api/v1/analyses/{analysis_id}/rules",
+        json={
+            "name": proposal["name"],
+            "description": proposal["description"],
+            "severity": proposal["severity"],
+            "rule_type": proposal["rule_type"],
+            "column_names": [column["original_name"] for column in proposal["columns"]],
+            "accepted_values": proposal["accepted_values"],
+            "source_finding_id": finding_id,
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["provenance"] == "detector_generated"
+    assert body["source_finding_ids"] == [finding_id]
+    assert body["accepted_values"] == ["manual_entry"]
+
+
 def test_rule_proposal_unknown_finding_returns_404(client: TestClient) -> None:
     analysis_id = _create_completed_analysis(client)
 
