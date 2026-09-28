@@ -1,11 +1,15 @@
-"""Tests for the statistical detectors (DET-02 final, WP-019).
+"""Tests for the statistical detectors (DET-02 final, WP-019; raw-row
+scanning for `SuspiciouslyConstantColumnDetector`, RULE-02 slice 3,
+WP-082).
 
 Covers this package's acceptance criteria AC-01..AC-14, AC-17, AC-18:
 `SuspiciouslyConstantColumnDetector`/`ExtremeOutliersDetector` metadata,
 `supports()`, and `run()` positive/negative/boundary/null cases,
-`run_detectors()` interoperation (including the `requires_raw_rows ==
-False` scoping case), and a real-file end-to-end check against the
-committed `demo-data/sales_demo.csv`.
+`run_detectors()` interoperation (both detectors now declare
+`requires_raw_rows=True`, so `run_detectors()`'s own `False`-scoping
+behavior is covered elsewhere against a detector that still declares
+`False`), and a real-file end-to-end check against the committed
+`demo-data/sales_demo.csv`.
 """
 
 from __future__ import annotations
@@ -107,7 +111,9 @@ def test_suspiciously_constant_column_metadata() -> None:
     detector = SuspiciouslyConstantColumnDetector()
     assert detector.metadata.detector_id == "statistical.suspiciously_constant_column"
     assert detector.metadata.category is DetectorCategory.STATISTICAL
-    assert detector.metadata.requires_raw_rows is False
+    # RULE-02 slice 3 (WP-082): now scans raw rows to capture the
+    # observed constant value for deterministic rule generation.
+    assert detector.metadata.requires_raw_rows is True
     assert detector.metadata.requires_confirmed_context is False
 
 
@@ -156,7 +162,8 @@ def test_suspiciously_constant_column_run_one_finding() -> None:
         ),
         row_count=5,
     )
-    result = detector.run(make_run_request(dataset_profile, ()))
+    rows: tuple[Mapping[str, object], ...] = tuple({"constant_col": "USD"} for _ in range(5))
+    result = detector.run(make_run_request(dataset_profile, rows))
 
     assert result.status is DetectorRunStatus.SUCCESS
     assert len(result.findings) == 1
@@ -167,7 +174,33 @@ def test_suspiciously_constant_column_run_one_finding() -> None:
     assert finding.severity is Severity.MEDIUM
     assert len(result.evidence) == 1
     assert result.evidence[0].evidence_type is EvidenceType.METRIC
+    # RULE-02 slice 3 (WP-082): the verbatim observed constant value is
+    # captured for deterministic rule generation.
+    assert result.evidence[0].structured_payload["constant_value"] == "USD"
     assert finding.evidence_ids == (result.evidence[0].evidence_id,)
+
+
+def test_suspiciously_constant_column_run_no_finding_when_raw_rows_do_not_confirm_value() -> None:
+    """A defensive guard, not an expected production case: if the raw
+    `rows` scope ever disagreed with the profile (e.g. no non-blank value
+    for this column at all), the detector must not fabricate a finding
+    with no real observed value rather than trusting profile metadata
+    alone."""
+    detector = SuspiciouslyConstantColumnDetector()
+    column = make_column("constant_col", 0)
+    dataset_profile = make_dataset_profile(
+        (
+            make_column_profile(
+                column, InferredColumnType.CATEGORICAL, distinct_count=1, null_count=0
+            ),
+        ),
+        row_count=5,
+    )
+    rows: tuple[Mapping[str, object], ...] = tuple({"constant_col": None} for _ in range(5))
+    result = detector.run(make_run_request(dataset_profile, rows))
+
+    assert result.findings == ()
+    assert result.evidence == ()
 
 
 def test_suspiciously_constant_column_run_boundary_single_non_blank_value() -> None:
@@ -209,9 +242,11 @@ def test_suspiciously_constant_column_run_applies_to_categorical_type() -> None:
         ),
         row_count=3,
     )
-    result = detector.run(make_run_request(dataset_profile, ()))
+    rows: tuple[Mapping[str, object], ...] = tuple({"category": "Electronics"} for _ in range(3))
+    result = detector.run(make_run_request(dataset_profile, rows))
 
     assert len(result.findings) == 1
+    assert result.evidence[0].structured_payload["constant_value"] == "Electronics"
 
 
 # ---------------------------------------------------------------------------
@@ -414,8 +449,13 @@ def test_run_detectors_scopes_rows_correctly_for_both_statistical_detectors() ->
     )
 
     by_id = {r.detector_id: r for r in results}
-    assert by_id["statistical.suspiciously_constant_column"].status is DetectorRunStatus.SUCCESS
-    assert len(by_id["statistical.suspiciously_constant_column"].findings) == 1
+    constant_result = by_id["statistical.suspiciously_constant_column"]
+    assert constant_result.status is DetectorRunStatus.SUCCESS
+    assert len(constant_result.findings) == 1
+    # RULE-02 slice 3 (WP-082): `run_detectors()` really does scope real
+    # `rows` through to this detector now that it declares
+    # `requires_raw_rows=True`, and the verbatim value is captured.
+    assert constant_result.evidence[0].structured_payload["constant_value"] == "manual_entry"
     assert by_id["statistical.extreme_outliers"].status is DetectorRunStatus.SUCCESS
     assert len(by_id["statistical.extreme_outliers"].findings) == 1
 
@@ -446,6 +486,9 @@ def test_real_demo_csv_statistical_detectors() -> None:
     constant_result = by_id["statistical.suspiciously_constant_column"]
     assert len(constant_result.findings) == 1
     assert constant_result.findings[0].affected_columns[0].original_name == "constant_col"
+    # RULE-02 slice 3 (WP-082): the real demo dataset's known constant
+    # value (`demo_data.generator.CONSTANT_COL_VALUE`) is captured verbatim.
+    assert constant_result.evidence[0].structured_payload["constant_value"] == "manual_entry"
 
     # `extreme_outliers` fires on `quantity`/`unit_price` (the injected
     # `numeric_outliers` issue, exactly 1 row each) and, as a genuine,

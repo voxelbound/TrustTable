@@ -1,5 +1,5 @@
-"""Tests for `rules.generation.generate_rule_proposal` (`RULE-02` slice 1,
-`WP-080`).
+"""Tests for `rules.generation.generate_rule_proposal` (`RULE-02` slices 1
+and 3, `WP-080`/`WP-082`).
 
 Per supported detector id: a fixture finding + real-shaped `Evidence`
 proves the exact derived `rule_type`/`columns`/parameters, read verbatim
@@ -229,6 +229,46 @@ def test_leading_trailing_whitespace_generates_bounded_regex() -> None:
     assert compiled.search("clean") is None
 
 
+# --- statistical.suspiciously_constant_column (RULE-02 slice 3, WP-082) -------
+
+
+def test_suspiciously_constant_column_generates_accepted_values_from_evidence() -> None:
+    """Unlike `consistency.inconsistent_capitalization`, a constant
+    column's own `distinct_count == 1` invariant means the detector's
+    evidence already carries exactly one candidate value
+    (`constant_value`) - deterministic, never AI-assisted."""
+    column = col("currency", 8)
+    finding = make_finding(
+        "statistical.suspiciously_constant_column",
+        category=DetectorCategory.STATISTICAL,
+        columns=(column,),
+    )
+    evidence = make_evidence({"non_null_count": 300, "constant_value": "USD"})
+    proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
+    assert reason is None
+    assert proposal is not None
+    assert proposal.rule_type is ValidationRuleType.ACCEPTED_VALUES
+    assert proposal.parameters.accepted_values == ("USD",)
+
+
+def test_suspiciously_constant_column_reads_value_verbatim_never_normalized() -> None:
+    """The captured value is read exactly as observed - including
+    whitespace or mixed case a naive normalization might otherwise
+    silently alter - because `detectors/statistical.py`'s own
+    `distinct_count == 1` computation already used the identical,
+    unnormalized string comparison."""
+    finding = make_finding(
+        "statistical.suspiciously_constant_column",
+        category=DetectorCategory.STATISTICAL,
+        columns=(col("notes", 8),),
+    )
+    evidence = make_evidence({"non_null_count": 12, "constant_value": " N/A "})
+    proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
+    assert reason is None
+    assert proposal is not None
+    assert proposal.parameters.accepted_values == (" N/A ",)
+
+
 # --- excluded categories: honest available=False, never a fabricated rule -----
 
 
@@ -244,20 +284,6 @@ def test_inconsistent_capitalization_not_available() -> None:
     proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
     assert proposal is None
     assert reason is not None and "consistency.inconsistent_capitalization" in reason
-
-
-def test_suspiciously_constant_column_not_available() -> None:
-    """The evidence records only a non-null count, never the actual
-    constant value string an accepted_values list would need."""
-    finding = make_finding(
-        "statistical.suspiciously_constant_column",
-        category=DetectorCategory.STATISTICAL,
-        columns=(col("currency", 8),),
-    )
-    evidence = make_evidence({"non_null_count": 300})
-    proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
-    assert proposal is None
-    assert reason is not None
 
 
 def test_line_total_mismatch_not_available_avoids_additive_false_positive() -> None:
@@ -315,7 +341,7 @@ def test_unmapped_generic_detector_not_available() -> None:
     assert reason is not None
 
 
-def test_generatable_detector_ids_is_exactly_the_disclosed_nine() -> None:
+def test_generatable_detector_ids_is_exactly_the_disclosed_ten() -> None:
     assert (
         frozenset(
             {
@@ -328,6 +354,7 @@ def test_generatable_detector_ids_is_exactly_the_disclosed_nine() -> None:
                 "validity.invalid_percentages",
                 "statistical.extreme_outliers",
                 "consistency.leading_trailing_whitespace",
+                "statistical.suspiciously_constant_column",
             }
         )
         == GENERATABLE_DETECTOR_IDS
@@ -352,16 +379,18 @@ def test_extract_ai_assist_candidates_returns_evidence_distinct_casings_verbatim
 
 
 def test_extract_ai_assist_candidates_none_for_unsupported_detector() -> None:
-    """Every other detector id, including the 3 categories that remain
-    excluded for a `RULE-01` rule-type/regex-length structural reason AI
-    cannot repair, yields no candidates — the AI-assisted path must
-    never silently apply to them."""
+    """Every other detector id yields no candidates — including this one,
+    which is now fully deterministic (RULE-02 slice 3, WP-082: exactly
+    one candidate value, no AI judgment needed), and the 2 categories
+    that remain excluded for a `RULE-01` rule-type/regex-length
+    structural reason AI cannot repair. The AI-assisted path must never
+    silently apply to any of them."""
     finding = make_finding(
         "statistical.suspiciously_constant_column",
         category=DetectorCategory.STATISTICAL,
         columns=(col("currency", 8),),
     )
-    evidence = make_evidence({"non_null_count": 300})
+    evidence = make_evidence({"non_null_count": 300, "constant_value": "USD"})
     assert extract_ai_assist_candidates(finding, evidence) is None
 
 

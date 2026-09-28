@@ -592,16 +592,29 @@ established four-value contract exactly:
 disabled" and "this detector is not AI-assistable" (including every
 case where slice 1 already found a deterministic mapping).
 `evidence_sent_to_model` is `true` whenever `ai_call_status` is any
-`attempted_*` value. The other 3 slice-1-excluded categories
-(`statistical.suspiciously_constant_column`,
-`cross_field.line_total_mismatch`,
-`security.possible_llm_prompt_injection`) remain excluded from the
+`attempted_*` value. The 2 remaining permanently-excluded categories
+(`cross_field.line_total_mismatch`,
+`security.possible_llm_prompt_injection`) stay excluded from the
 AI-assisted path too — a `RULE-01` rule-type/regex-length structural
 limit AI cannot repair — and any detector id without a dedicated
 `explanation.guidance` template. `POST .../rules` accepting an
 AI-assisted proposal persists `provenance: "ai_assisted"`; every other
 `source_finding_id` still persists `provenance: "detector_generated"`,
 unchanged.
+
+**Implemented (`RULE-02` slice 3, `WP-082`, `RULE-02` now feature-complete):**
+`statistical.suspiciously_constant_column` moves from AI-assist
+consideration to the deterministic mapping table: a constant column's
+own `distinct_count == 1` invariant means exactly one observed value
+exists — no canonical-choice judgment is needed, so this stays fully
+deterministic, never AI-assisted. `GET .../rule-proposal` now returns
+`available: true` for this detector with a real, already-executed
+`accepted_values` candidate whose sole value is that column's own
+verbatim observed constant; `POST .../rules` persists
+`provenance: "detector_generated"`, identical to the other 9 slice-1
+categories. Every one of `RULE-02`'s 13 detector categories now has a
+final generation outcome: 10 deterministic, 1 AI-assisted, and 2
+permanently unsupported for the structural reasons stated above.
 
 ## 12. Reports and exports
 

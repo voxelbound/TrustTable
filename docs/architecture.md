@@ -961,13 +961,28 @@ is invoked only from the route layer
 `accepted_values` candidate rule against the real analysis rows before
 returning it, unpersisted, exactly like slice 1's own contract;
 accepting it through `POST .../rules` persists
-`provenance=ai_assisted`. The other 3 slice-1-excluded categories
+`provenance=ai_assisted`. The 2 permanently-excluded categories
+(`cross_field.line_total_mismatch`, `security.possible_llm_prompt_injection`)
 remain excluded from the AI-assisted path too, for the same `RULE-01`
 rule-type/regex-length structural reason slice 1 already documented —
-AI cannot repair a rule-type limitation. AI interpretations, review
-decisions, and exports are **not yet persisted** — none of those domain
-objects exist as implemented code yet; their own later backlog items
-(`REV-01`, `EXP-01`) own that work.
+AI cannot repair a rule-type limitation. **`RULE-02` slice 3 (`WP-082`,
+`RULE-02` now feature-complete):**
+`statistical.suspiciously_constant_column` moves from slice 1's excluded
+set to the deterministic mapping table:
+`detectors/statistical.py`'s `SuspiciouslyConstantColumnDetector` now
+declares `requires_raw_rows=True` and captures the column's single
+verbatim observed value (`Evidence.structured_payload["constant_value"]`)
+— a constant column's own `distinct_count == 1` invariant means exactly
+one value exists, so unlike `consistency.inconsistent_capitalization`
+there is no canonical-choice judgment to make, and this stays fully
+deterministic, never AI-assisted. `rules.generation` reads that value
+verbatim to offer a real `accepted_values` candidate, executed and
+persisted through the identical slice-1 `detector_generated` path. Every
+one of `RULE-02`'s 13 detector categories now has a final generation
+outcome — 10 deterministic, 1 AI-assisted, 2 permanently unsupported. AI
+interpretations, review decisions, and exports are **not yet
+persisted** — none of those domain objects exist as implemented code
+yet; their own later backlog items (`REV-01`, `EXP-01`) own that work.
 
 ## 9. Background work
 

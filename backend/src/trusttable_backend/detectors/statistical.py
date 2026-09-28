@@ -63,10 +63,16 @@ class SuspiciouslyConstantColumnDetector:
     `UNKNOWN`-typed column where every non-blank sampled value is
     identical.
 
-    Does not declare `requires_raw_rows`: `PROF-02`'s already-computed
-    `distinct_count`/`null_count` are sufficient evidence, matching
-    `structural.empty_column`'s exact precedent. `UNKNOWN`-typed columns
-    (zero non-blank values) are excluded — that is
+    `RULE-02` slice 3 (`WP-082`) adds `requires_raw_rows=True`: eligibility
+    still comes entirely from `PROF-02`'s already-computed `distinct_count`/
+    `null_count` (matching `structural.empty_column`'s precedent, unchanged
+    from slice 1/2), but once a column is confirmed constant this detector
+    now also scans `request.rows` once to capture the single verbatim
+    non-blank value observed — `RULE-02`'s deterministic rule-generation
+    slice 3 needs that literal value to propose a real `accepted_values`
+    rule; `distinct_count == 1` already guarantees every non-blank value is
+    identical, so the first one found is definitionally the only one.
+    `UNKNOWN`-typed columns (zero non-blank values) are excluded — that is
     `structural.empty_column`'s territory, not a "constant" signal.
     """
 
@@ -82,10 +88,10 @@ class SuspiciouslyConstantColumnDetector:
             "column_profiles[].distinct_count",
             "column_profiles[].null_count",
         ),
-        requires_raw_rows=False,
+        requires_raw_rows=True,
         requires_confirmed_context=False,
         default_configuration={},
-        performance_class=PerformanceClass.CONSTANT_OR_METADATA_ONLY,
+        performance_class=PerformanceClass.LINEAR_BY_ROW,
         documented_limitations=(
             "Requires at least two non-blank sampled values to fire; a column with "
             "exactly one non-blank value (sparse, not constant) is not flagged.",
@@ -112,6 +118,20 @@ class SuspiciouslyConstantColumnDetector:
             if profile.distinct_count != 1:
                 continue
 
+            # `distinct_count == 1` (computed identically to `PROF-02`'s own
+            # non-`None`/non-`""` "non-blank" definition) guarantees every
+            # non-blank raw value in this column is byte-identical, so the
+            # first one found is definitionally the column's only value —
+            # never normalized/stripped, matching PROF-02's own comparison.
+            constant_value: str | None = None
+            for row in request.rows:
+                value = row.get(profile.column.internal_key)
+                if isinstance(value, str) and value != "":
+                    constant_value = value
+                    break
+            if constant_value is None:
+                continue
+
             evidence_id = (
                 f"statistical.suspiciously_constant_column.evidence.{profile.column.internal_key}"
             )
@@ -119,7 +139,10 @@ class SuspiciouslyConstantColumnDetector:
                 evidence_id=evidence_id,
                 evidence_type=EvidenceType.METRIC,
                 calculation_version="1",
-                structured_payload={"non_null_count": non_null_count},
+                structured_payload={
+                    "non_null_count": non_null_count,
+                    "constant_value": constant_value,
+                },
                 affected_columns=(profile.column,),
                 affected_row_references=(),
                 scope=SamplingScope.FULL,
