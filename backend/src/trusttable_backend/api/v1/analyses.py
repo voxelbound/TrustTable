@@ -34,7 +34,7 @@ creating a new, independent analysis over the same dataset content — see
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Query, Request, UploadFile
 
@@ -52,6 +52,7 @@ from trusttable_backend.analysis import (
     ContextFieldNotEditableError,
     ContextVersionConflictError,
     FindingNotFoundError,
+    InvalidReviewParametersError,
     InvalidRuleParametersError,
     QuestionNotFoundError,
     RowNotInFindingError,
@@ -76,6 +77,7 @@ from trusttable_backend.analysis import (
     get_or_infer_context,
     get_status,
     retry_analysis,
+    set_finding_review,
 )
 from trusttable_backend.config import get_settings
 from trusttable_backend.context_inference.ai_context import (
@@ -93,6 +95,7 @@ from trusttable_backend.domain.context import ContextField, ContextFieldValue, D
 from trusttable_backend.domain.evidence import Evidence
 from trusttable_backend.domain.explanation import FindingExplanation, ValidationRuleType
 from trusttable_backend.domain.parsing import Dataset
+from trusttable_backend.domain.review import FindingReview, FindingReviewState
 from trusttable_backend.domain.row_context import RowContextWindow
 from trusttable_backend.domain.rules import (
     ComparisonOperator,
@@ -141,6 +144,8 @@ from trusttable_backend.schemas.analysis import (
     FindingEvidenceListResponse,
     FindingExplanationResponse,
     FindingItem,
+    FindingReviewRequest,
+    FindingReviewResponse,
     FindingsListResponse,
     ProfilingTimingResponse,
     ProposedValidationRuleResponse,
@@ -363,6 +368,19 @@ def _rule_invalid(analysis_id: str, reason: str) -> AppError:
     )
 
 
+def _review_invalid(analysis_id: str, reason: str) -> AppError:
+    """`REV-01` (`WP-083`)'s `RULE_INVALID`-shaped counterpart: covers a
+    `dismissal_reason` supplied for a non-`dismissed` state or missing
+    for `dismissed`, or an unrecognized `state` string — "the supplied
+    review is invalid", never a 500."""
+    return AppError(
+        "REVIEW_INVALID",
+        "The supplied review is invalid.",
+        status_code=422,
+        details={"analysis_id": analysis_id, "reason": reason},
+    )
+
+
 def _rule_not_found(analysis_id: str, rule_id: str) -> AppError:
     return AppError(
         "RULE_NOT_FOUND",
@@ -454,7 +472,23 @@ def _profile_response(profile: DatasetProfile) -> AnalysisProfileResponse:
     )
 
 
-def _finding_item(finding: FindingCandidate, priority_score: float, finding_id: str) -> FindingItem:
+def _review_fields(
+    review: FindingReview | None,
+) -> tuple[str, str | None, str | None, datetime | None]:
+    """`REV-01` (`WP-083`) shared default: a finding with no recorded
+    review is `"unreviewed"` with no note/reason/timestamp."""
+    if review is None:
+        return FindingReviewState.UNREVIEWED.value, None, None, None
+    return review.state.value, review.note, review.dismissal_reason, review.reviewed_at
+
+
+def _finding_item(
+    finding: FindingCandidate,
+    priority_score: float,
+    finding_id: str,
+    review: FindingReview | None,
+) -> FindingItem:
+    review_state, note, dismissal_reason, reviewed_at = _review_fields(review)
     return FindingItem(
         finding_id=finding_id,
         detector_id=finding.detector_id,
@@ -467,6 +501,10 @@ def _finding_item(finding: FindingCandidate, priority_score: float, finding_id: 
         affected_columns=[_column_reference(column) for column in finding.affected_columns],
         affected_row_count=len(finding.affected_row_references),
         evidence_count=len(finding.evidence_ids),
+        review_state=review_state,
+        note=note,
+        dismissal_reason=dismissal_reason,
+        reviewed_at=reviewed_at,
     )
 
 
@@ -475,7 +513,9 @@ def _finding_detail(
     priority_score: float,
     finding_id: str,
     exposure: SecurityExposureState,
+    review: FindingReview | None,
 ) -> FindingDetailResponse:
+    review_state, note, dismissal_reason, reviewed_at = _review_fields(review)
     return FindingDetailResponse(
         finding_id=finding_id,
         detector_id=finding.detector_id,
@@ -492,6 +532,20 @@ def _finding_detail(
         ),
         evidence_count=len(finding.evidence_ids),
         security_exposure=_security_exposure(exposure),
+        review_state=review_state,
+        note=note,
+        dismissal_reason=dismissal_reason,
+        reviewed_at=reviewed_at,
+    )
+
+
+def _finding_review_response(review: FindingReview) -> FindingReviewResponse:
+    return FindingReviewResponse(
+        finding_id=review.finding_id,
+        review_state=review.state.value,
+        note=review.note,
+        dismissal_reason=review.dismissal_reason,
+        reviewed_at=review.reviewed_at,
     )
 
 
@@ -1140,7 +1194,7 @@ def get_analysis_findings(analysis_id: str, request: Request) -> FindingsListRes
     """
     analysis = _get_or_404(get_analysis_store(request), analysis_id)
     items = [
-        _finding_item(finding, priority_score, str(index))
+        _finding_item(finding, priority_score, str(index), analysis.finding_reviews.get(str(index)))
         for index, (finding, priority_score) in enumerate(
             zip(analysis.findings, analysis.priority_scores, strict=True)
         )
@@ -1164,7 +1218,64 @@ def get_analysis_finding(
     analysis = _get_or_404(store, analysis_id)
     finding = _get_finding_or_404(store, analysis_id, finding_id)
     priority_score = analysis.priority_scores[int(finding_id)]
-    return _finding_detail(finding, priority_score, finding_id, analysis.security_exposure)
+    return _finding_detail(
+        finding,
+        priority_score,
+        finding_id,
+        analysis.security_exposure,
+        analysis.finding_reviews.get(finding_id),
+    )
+
+
+@router.put(
+    "/analyses/{analysis_id}/findings/{finding_id}/review",
+    response_model=FindingReviewResponse,
+)
+def put_analysis_finding_review(
+    analysis_id: str, finding_id: str, body: FindingReviewRequest, request: Request
+) -> FindingReviewResponse:
+    """Set one finding's review state (`REV-01`, `WP-083`) — unlike
+    `RULE-02`'s rule proposals, this persists immediately; there is no
+    separate offer/execute step, only a decision to record.
+
+    `body.state` must be one of `domain.review.FindingReviewState`'s
+    values; `dismissal_reason` is required (and must be non-empty) when
+    `state` is `"dismissed"`, and forbidden otherwise —
+    `422 REVIEW_INVALID` on either violation, or an unrecognized `state`
+    string.
+
+    Raises `ANALYSIS_NOT_FOUND` (404) for an unknown `analysis_id`,
+    `INVALID_ANALYSIS_STATE` (409) for a known analysis not yet
+    `completed`, and `FINDING_NOT_FOUND` (404) for an unknown/
+    out-of-range `finding_id` — the same semantics as the sibling
+    finding routes.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    try:
+        state = FindingReviewState(body.state)
+    except ValueError:
+        raise _review_invalid(analysis_id, f"unrecognized state: {body.state!r}") from None
+
+    try:
+        review = set_finding_review(
+            store,
+            analysis_id,
+            finding_id,
+            state=state,
+            note=body.note,
+            dismissal_reason=body.dismissal_reason,
+            now=datetime.now(UTC),
+        )
+    except AnalysisNotFoundError as exc:
+        raise _not_found(analysis_id) from exc
+    except AnalysisNotReadyError as exc:
+        raise _analysis_not_ready(analysis_id, analysis.state) from exc
+    except FindingNotFoundError as exc:
+        raise _finding_not_found(analysis_id, finding_id) from exc
+    except InvalidReviewParametersError as exc:
+        raise _review_invalid(analysis_id, exc.reason) from exc
+    return _finding_review_response(review)
 
 
 @router.get(

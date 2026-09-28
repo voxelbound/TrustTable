@@ -45,6 +45,7 @@ from trusttable_backend.analysis.service import (
     ContextFieldNotEditableError,
     ContextVersionConflictError,
     FindingNotFoundError,
+    InvalidReviewParametersError,
     InvalidRuleParametersError,
     QuestionNotFoundError,
     RowNotInFindingError,
@@ -70,6 +71,7 @@ from trusttable_backend.analysis.service import (
     get_status,
     retry_analysis,
     run_analysis,
+    set_finding_review,
 )
 from trusttable_backend.demo_data import SEED, generate
 from trusttable_backend.detectors.catalogue import DETECTORS
@@ -90,6 +92,7 @@ from trusttable_backend.domain.parsing import (
     SampleMetadata,
     SamplingScope,
 )
+from trusttable_backend.domain.review import FindingReviewState
 from trusttable_backend.domain.rules import ComparisonOperator, NullHandling, RuleProvenance
 from trusttable_backend.domain.value_objects import (
     ColumnReference,
@@ -864,6 +867,166 @@ def test_finding_not_found_error_carries_requested_ids() -> None:
     error = FindingNotFoundError("analysis-1", "99")
     assert error.analysis_id == "analysis-1"
     assert error.finding_id == "99"
+
+
+# ---------------------------------------------------------------------------
+# REV-01 (WP-083): set_finding_review
+# ---------------------------------------------------------------------------
+
+
+def test_set_finding_review_persists_and_returns_it() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+    assert len(completed.findings) > 0
+
+    review = set_finding_review(
+        store,
+        completed.analysis_id,
+        "0",
+        state=FindingReviewState.CONFIRMED,
+        note="Verified against the source system.",
+        dismissal_reason=None,
+        now=FIXED_NOW,
+    )
+
+    assert review.finding_id == "0"
+    assert review.state is FindingReviewState.CONFIRMED
+    assert review.reviewed_at == FIXED_NOW
+    stored = get_status(store, completed.analysis_id)
+    assert stored.finding_reviews == {"0": review}
+    # Every other field is unaffected.
+    assert stored.findings == completed.findings
+
+
+def test_set_finding_review_dismissed_requires_a_reason() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+    with pytest.raises(InvalidReviewParametersError):
+        set_finding_review(
+            store,
+            completed.analysis_id,
+            "0",
+            state=FindingReviewState.DISMISSED,
+            note=None,
+            dismissal_reason=None,
+            now=FIXED_NOW,
+        )
+    # Nothing persisted.
+    assert get_status(store, completed.analysis_id).finding_reviews == {}
+
+
+def test_set_finding_review_rejects_a_dismissal_reason_for_a_non_dismissed_state() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+    with pytest.raises(InvalidReviewParametersError):
+        set_finding_review(
+            store,
+            completed.analysis_id,
+            "0",
+            state=FindingReviewState.CONFIRMED,
+            note=None,
+            dismissal_reason="should not be allowed",
+            now=FIXED_NOW,
+        )
+    assert get_status(store, completed.analysis_id).finding_reviews == {}
+
+
+def test_set_finding_review_raises_finding_not_found_for_unknown_id() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+    with pytest.raises(FindingNotFoundError):
+        set_finding_review(
+            store,
+            completed.analysis_id,
+            str(len(completed.findings)),
+            state=FindingReviewState.CONFIRMED,
+            note=None,
+            dismissal_reason=None,
+            now=FIXED_NOW,
+        )
+
+
+def test_set_finding_review_requires_a_completed_analysis() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+
+    with pytest.raises(AnalysisNotReadyError):
+        set_finding_review(
+            store,
+            created.analysis_id,
+            "0",
+            state=FindingReviewState.CONFIRMED,
+            note=None,
+            dismissal_reason=None,
+            now=FIXED_NOW,
+        )
+
+
+def test_set_finding_review_twice_replaces_the_prior_record_no_history() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+
+    set_finding_review(
+        store,
+        completed.analysis_id,
+        "0",
+        state=FindingReviewState.NEEDS_INVESTIGATION,
+        note="first pass",
+        dismissal_reason=None,
+        now=FIXED_NOW,
+    )
+    second = set_finding_review(
+        store,
+        completed.analysis_id,
+        "0",
+        state=FindingReviewState.DISMISSED,
+        note=None,
+        dismissal_reason="Confirmed as expected behavior.",
+        now=FIXED_NOW,
+    )
+
+    stored = get_status(store, completed.analysis_id)
+    assert stored.finding_reviews == {"0": second}
+    assert stored.finding_reviews["0"].state is FindingReviewState.DISMISSED
+
+
+def test_set_finding_review_does_not_affect_other_findings_reviews() -> None:
+    store = AnalysisStore()
+    created = create_analysis(store)
+    completed = run_analysis(store, created.analysis_id, now=FIXED_NOW)
+    assert len(completed.findings) > 1
+
+    set_finding_review(
+        store,
+        completed.analysis_id,
+        "0",
+        state=FindingReviewState.CONFIRMED,
+        note=None,
+        dismissal_reason=None,
+        now=FIXED_NOW,
+    )
+    set_finding_review(
+        store,
+        completed.analysis_id,
+        "1",
+        state=FindingReviewState.NEEDS_INVESTIGATION,
+        note=None,
+        dismissal_reason=None,
+        now=FIXED_NOW,
+    )
+
+    stored = get_status(store, completed.analysis_id)
+    assert set(stored.finding_reviews) == {"0", "1"}
+    assert stored.finding_reviews["0"].state is FindingReviewState.CONFIRMED
+    assert stored.finding_reviews["1"].state is FindingReviewState.NEEDS_INVESTIGATION
 
 
 # ---------------------------------------------------------------------------

@@ -650,16 +650,37 @@ captures every `DetectorRunResult.evidence` it already receives instead
 of discarding it. `finding_id` (also now present on the existing
 findings-list item) is a stringified zero-based index into the
 analysis's own `findings` tuple — a disclosed, reversible interim
-addressing scheme pending real persistence (`DB-01`/`REV-01`).
+addressing scheme that stayed stable once real persistence (`DB-01`)
+arrived, since a `COMPLETED` analysis's `findings` tuple order never
+changes.
 `FindingDetailResponse` exposes only what is genuinely computable today
 (observation, affected columns/rows, evidence count, technical metadata,
-security exposure); `FindingEvidenceItem` exposes only each `Evidence`
+security exposure, and — `REV-01`, `WP-083` — review state);
+`FindingEvidenceItem` exposes only each `Evidence`
 object's `display_safe_summary`, never its raw `structured_payload`, per
 `docs/domain-model.md` §13's "report references use display-safe
-summaries" invariant. Business impact, remediation, proposed validation
-rules, and review state remain unbuilt (`REM-01`/`RULE-01`/`REV-01`);
+summaries" invariant. Business impact, remediation, and proposed
+validation rules live in their own dedicated endpoints
+(`GET .../explanation`, `GET .../rule-proposal`), not this response;
 findings-list filter/sort/pagination query parameters remain a later,
 separate extension.
+
+**`REV-01` (`WP-083`):** `domain.review.FindingReview` (`state` — one of
+`unreviewed`/`confirmed`/`dismissed`/`needs_investigation` —, `note`,
+`dismissal_reason`, `reviewed_at`) persists per-finding review state,
+keyed by `finding_id`, in a new additive `Analysis.finding_reviews`
+mapping (`finding_reviews_json`, `0004_add_finding_reviews_json.py`,
+identical nullable-column/generic-codec pattern to `rules_json`).
+`dismissal_reason` is required exactly when `state` is `dismissed`,
+enforced in `FindingReview.__post_init__` — never left to the API layer
+alone. `PUT /analyses/{id}/findings/{finding_id}/review` sets it
+immediately (no offer/execute split, unlike a rule proposal); `GET
+.../findings`/`GET .../findings/{finding_id}` both now expose
+`review_state`/`note`/`dismissal_reason`/`reviewed_at`, defaulting to
+`unreviewed`/`null`/`null`/`null` when no review is recorded. The
+immutable, detector-computed `FindingCandidate` (`self.findings`) is
+never mutated by a review — see that type's own docstring, which
+anticipated exactly this later package.
 
 ## 4. Frontend architecture
 
@@ -979,10 +1000,11 @@ deterministic, never AI-assisted. `rules.generation` reads that value
 verbatim to offer a real `accepted_values` candidate, executed and
 persisted through the identical slice-1 `detector_generated` path. Every
 one of `RULE-02`'s 13 detector categories now has a final generation
-outcome — 10 deterministic, 1 AI-assisted, 2 permanently unsupported. AI
-interpretations, review decisions, and exports are **not yet
-persisted** — none of those domain objects exist as implemented code
-yet; their own later backlog items (`REV-01`, `EXP-01`) own that work.
+outcome — 10 deterministic, 1 AI-assisted, 2 permanently unsupported.
+Review decisions are now persisted (`REV-01`, `WP-083`, above). Exports
+are **not yet persisted** — that domain object does not exist as
+implemented code yet; its own later backlog item (`EXP-01`) owns that
+work.
 
 ## 9. Background work
 

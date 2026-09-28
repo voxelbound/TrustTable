@@ -81,6 +81,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Protocol
 
 from ..context_inference.guided_questions import generate_guided_questions
@@ -98,6 +99,7 @@ from ..domain.context import ConfirmationState, ContextField, ContextFieldValue,
 from ..domain.evidence import Evidence
 from ..domain.explanation import ValidationRuleType
 from ..domain.parsing import Dataset, DatasetFormat, DatasetSourceType
+from ..domain.review import FindingReview, FindingReviewState
 from ..domain.row_context import RowContextEntry, RowContextWindow
 from ..domain.rules import (
     ComparisonOperator,
@@ -273,6 +275,13 @@ class Analysis:
     additive layer over an already-`COMPLETED` analysis, exactly like
     `context`/`guided_questions` above: computed and mutated entirely
     independently of `state`. Empty unless `state is COMPLETED`."""
+    finding_reviews: Mapping[str, FindingReview] = MappingProxyType({})
+    """Per-finding review state (`REV-01`, `WP-083`), keyed by the same
+    stringified `finding_id` `get_finding` already uses — a strictly
+    additive layer, exactly like `rules` above. A finding with no entry
+    here is implicitly unreviewed with no note; this mapping never
+    stores that default explicitly. `FindingCandidate` itself
+    (`self.findings`) is never mutated by a review."""
     retry_source_analysis_id: str | None = None
     """The originating `analysis_id` when this analysis is itself a retry
     (`JOB-01` slice 2: retry creates a new, independent `Analysis`, never
@@ -479,6 +488,18 @@ class InvalidRuleParametersError(Exception):
 
     def __init__(self, analysis_id: str, reason: str) -> None:
         super().__init__(f"Invalid rule parameters for analysis {analysis_id}: {reason}")
+        self.analysis_id = analysis_id
+        self.reason = reason
+
+
+class InvalidReviewParametersError(Exception):
+    """Raised by `set_finding_review` (`REV-01`, `WP-083`) when the
+    requested `state`/`dismissal_reason` combination does not satisfy
+    `domain.review.FindingReview`'s own `__post_init__` invariant — wraps
+    the original `ValueError` message rather than re-deriving it."""
+
+    def __init__(self, analysis_id: str, reason: str) -> None:
+        super().__init__(f"Invalid review parameters for analysis {analysis_id}: {reason}")
         self.analysis_id = analysis_id
         self.reason = reason
 
@@ -870,6 +891,47 @@ def get_finding_evidence(
         for evidence_id in finding.evidence_ids
         if evidence_id in evidence_by_id
     )
+
+
+def set_finding_review(
+    store: AnalysisStoreProtocol,
+    analysis_id: str,
+    finding_id: str,
+    *,
+    state: FindingReviewState,
+    note: str | None,
+    dismissal_reason: str | None,
+    now: datetime,
+) -> FindingReview:
+    """Set (replacing any prior value) one finding's review record
+    (`REV-01`, `WP-083`) and persist it immediately — unlike `RULE-02`'s
+    rule proposals, a review has no separate offer/execute step; there is
+    nothing to "run" against rows, only a decision to record.
+
+    Raises `AnalysisNotFoundError`/`AnalysisNotReadyError` with the same
+    semantics as `_require_completed`, `FindingNotFoundError` for an
+    unknown `finding_id` (via `get_finding`), and
+    `InvalidReviewParametersError` when `state`/`dismissal_reason` do not
+    satisfy `domain.review.FindingReview`'s own invariant (wrapping the
+    underlying `ValueError`) — nothing is persisted on that path.
+    """
+    analysis = _require_completed(store, analysis_id)
+    get_finding(store, analysis_id, finding_id)  # existence check only
+    try:
+        review = FindingReview(
+            finding_id=finding_id,
+            state=state,
+            note=note,
+            dismissal_reason=dismissal_reason,
+            reviewed_at=now,
+        )
+    except ValueError as exc:
+        raise InvalidReviewParametersError(analysis_id, str(exc)) from exc
+
+    updated_reviews = dict(analysis.finding_reviews)
+    updated_reviews[finding_id] = review
+    store.replace(replace(analysis, finding_reviews=MappingProxyType(updated_reviews)))
+    return review
 
 
 def get_finding_row_context(

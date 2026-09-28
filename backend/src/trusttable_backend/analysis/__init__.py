@@ -22,6 +22,7 @@ from .service import (
     ContextVersionConflictError,
     FindingNotFoundError,
     GeneratedRuleOffer,
+    InvalidReviewParametersError,
     InvalidRuleParametersError,
     QuestionNotFoundError,
     RowNotInFindingError,
@@ -50,6 +51,7 @@ from .service import (
     get_status,
     retry_analysis,
     run_analysis,
+    set_finding_review,
 )
 
 __all__ = [
@@ -67,6 +69,7 @@ __all__ = [
     "ContextVersionConflictError",
     "FindingNotFoundError",
     "GeneratedRuleOffer",
+    "InvalidReviewParametersError",
     "InvalidRuleParametersError",
     "QuestionNotFoundError",
     "RowNotInFindingError",
@@ -95,4 +98,5 @@ __all__ = [
     "get_status",
     "retry_analysis",
     "run_analysis",
+    "set_finding_review",
 ]

@@ -429,6 +429,10 @@ def test_get_analysis_findings_item_shape(client: TestClient) -> None:
         "affected_columns",
         "affected_row_count",
         "evidence_count",
+        "review_state",
+        "note",
+        "dismissal_reason",
+        "reviewed_at",
     }
     assert item["finding_id"] == "0"
     assert "." in item["detector_id"]
@@ -437,6 +441,12 @@ def test_get_analysis_findings_item_shape(client: TestClient) -> None:
     # Every FindingCandidate has at least one evidence object
     # (docs/domain-model.md #12, DET-01's own invariant).
     assert item["evidence_count"] >= 1
+    # REV-01 (WP-083): a finding with no recorded review defaults to
+    # unreviewed with no note/reason/timestamp.
+    assert item["review_state"] == "unreviewed"
+    assert item["note"] is None
+    assert item["dismissal_reason"] is None
+    assert item["reviewed_at"] is None
 
 
 def test_get_analysis_findings_item_finding_ids_are_distinct_and_ordered(
@@ -497,6 +507,10 @@ def test_get_analysis_finding_detail_shape(client: TestClient) -> None:
         "affected_row_numbers",
         "evidence_count",
         "security_exposure",
+        "review_state",
+        "note",
+        "dismissal_reason",
+        "reviewed_at",
     }
     assert body["finding_id"] == "0"
     assert body["evidence_count"] >= 1
@@ -506,6 +520,12 @@ def test_get_analysis_finding_detail_shape(client: TestClient) -> None:
         "model_provider_enabled": False,
         "sample_transmission_enabled": False,
     }
+    # REV-01 (WP-083): a finding with no recorded review defaults to
+    # unreviewed with no note/reason/timestamp.
+    assert body["review_state"] == "unreviewed"
+    assert body["note"] is None
+    assert body["dismissal_reason"] is None
+    assert body["reviewed_at"] is None
 
 
 def test_get_analysis_finding_detail_matches_list_item(client: TestClient) -> None:
