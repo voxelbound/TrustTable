@@ -76,6 +76,10 @@ export function makeFindingsListResponse(
       ],
       affected_row_count: 2,
       evidence_count: 2,
+      review_state: 'unreviewed',
+      note: null,
+      dismissal_reason: null,
+      reviewed_at: null,
     },
     {
       finding_id: '1',
@@ -91,6 +95,10 @@ export function makeFindingsListResponse(
       ],
       affected_row_count: 83,
       evidence_count: 2,
+      review_state: 'unreviewed',
+      note: null,
+      dismissal_reason: null,
+      reviewed_at: null,
     },
   ]
   return { total_items: items.length, ...overrides, items }
@@ -118,6 +126,10 @@ export function makeFindingDetailResponse(
       model_provider_enabled: false,
       sample_transmission_enabled: false,
     },
+    review_state: 'unreviewed',
+    note: null,
+    dismissal_reason: null,
+    reviewed_at: null,
     ...overrides,
   }
 }

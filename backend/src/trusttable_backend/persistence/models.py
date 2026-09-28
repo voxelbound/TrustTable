@@ -77,6 +77,13 @@ class AnalysisRecord(Base):
     `store._row_to_analysis`, matching `retry_source_analysis_id`'s own
     nullable-additive-column precedent (`0002`)."""
 
+    finding_reviews_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    """Per-finding review state (`REV-01`, `WP-083`), keyed by
+    `finding_id` -- `NULL` for every analysis persisted before this
+    column existed (`0004_add_finding_reviews_json.py`), decoded as an
+    empty mapping by `store._row_to_analysis`, matching `rules_json`'s
+    own nullable-additive-column precedent (`0003`)."""
+
     context_version: Mapped[int] = mapped_column(nullable=False, default=0)
     context_finalized: Mapped[bool] = mapped_column(nullable=False, default=False)
 

@@ -19,6 +19,7 @@ from trusttable_backend.analysis.service import (
     get_or_infer_context,
     retry_analysis,
     run_analysis,
+    set_finding_review,
 )
 from trusttable_backend.analysis.service import (
     AnalysisStore as InMemoryStore,
@@ -27,6 +28,7 @@ from trusttable_backend.config import Settings
 from trusttable_backend.detectors.contract import SecurityExposureState
 from trusttable_backend.domain.context import ContextField
 from trusttable_backend.domain.explanation import ValidationRuleType
+from trusttable_backend.domain.review import FindingReviewState
 from trusttable_backend.domain.rules import ComparisonOperator
 from trusttable_backend.domain.value_objects import Severity
 from trusttable_backend.persistence import SqlAnalysisStore, build_engine, run_migrations
@@ -281,6 +283,101 @@ def test_analysis_without_rules_round_trips_as_empty_tuple(store: SqlAnalysisSto
 
     assert round_tripped is not None
     assert round_tripped.rules == ()
+
+
+# ---------------------------------------------------------------------------
+# finding_reviews_json round trip (REV-01, WP-083)
+# ---------------------------------------------------------------------------
+
+
+def test_finding_review_round_trips(store: SqlAnalysisStore) -> None:
+    working_store = InMemoryStore()
+    created = create_analysis(working_store)
+    completed = run_analysis(working_store, created.analysis_id)
+    assert completed.state is AnalysisState.COMPLETED
+    store.add(completed)
+
+    review = set_finding_review(
+        store,
+        completed.analysis_id,
+        "0",
+        state=FindingReviewState.DISMISSED,
+        note="Known-fixed value, not a defect.",
+        dismissal_reason="Confirmed with the source-system owner.",
+        now=datetime(2026, 9, 28, 12, 0, tzinfo=UTC),
+    )
+
+    round_tripped = store.get(completed.analysis_id)
+
+    assert round_tripped is not None
+    assert round_tripped.finding_reviews == {"0": review}
+    assert round_tripped.finding_reviews["0"].state is FindingReviewState.DISMISSED
+    assert round_tripped.finding_reviews["0"].dismissal_reason == (
+        "Confirmed with the source-system owner."
+    )
+
+
+def test_setting_a_review_twice_replaces_the_prior_record(store: SqlAnalysisStore) -> None:
+    working_store = InMemoryStore()
+    created = create_analysis(working_store)
+    completed = run_analysis(working_store, created.analysis_id)
+    store.add(completed)
+
+    set_finding_review(
+        store,
+        completed.analysis_id,
+        "0",
+        state=FindingReviewState.NEEDS_INVESTIGATION,
+        note="first pass",
+        dismissal_reason=None,
+        now=datetime(2026, 9, 28, 12, 0, tzinfo=UTC),
+    )
+    set_finding_review(
+        store,
+        completed.analysis_id,
+        "0",
+        state=FindingReviewState.CONFIRMED,
+        note=None,
+        dismissal_reason=None,
+        now=datetime(2026, 9, 28, 13, 0, tzinfo=UTC),
+    )
+
+    round_tripped = store.get(completed.analysis_id)
+
+    assert round_tripped is not None
+    assert len(round_tripped.finding_reviews) == 1
+    assert round_tripped.finding_reviews["0"].state is FindingReviewState.CONFIRMED
+    assert round_tripped.finding_reviews["0"].note is None
+
+
+def test_analysis_without_reviews_round_trips_as_empty_mapping(store: SqlAnalysisStore) -> None:
+    analysis = create_analysis(InMemoryStore())
+
+    store.add(analysis)
+    round_tripped = store.get(analysis.analysis_id)
+
+    assert round_tripped is not None
+    assert round_tripped.finding_reviews == {}
+
+
+def test_a_row_with_null_finding_reviews_json_round_trips_as_empty_mapping(
+    store: SqlAnalysisStore,
+) -> None:
+    """Simulates a row persisted before `0004_add_finding_reviews_json.py`
+    existed (`REV-01`, `WP-083`): `finding_reviews_json` is `NULL` at the
+    database layer, decoded as an empty mapping, not raising."""
+    analysis = create_analysis(InMemoryStore())
+    store.add(analysis)
+    with store._session_factory() as session:  # noqa: SLF001 - white-box for this test only
+        row = session.get(AnalysisRecord, analysis.analysis_id)
+        assert row is not None
+        row.finding_reviews_json = None
+        session.commit()
+
+    round_tripped = store.get(analysis.analysis_id)
+
+    assert round_tripped is not None
+    assert round_tripped.finding_reviews == {}
 
 
 def test_a_row_with_null_rules_json_round_trips_as_empty_tuple(store: SqlAnalysisStore) -> None:

@@ -25,6 +25,10 @@ const FIXTURE_ITEMS = [
     ],
     affected_row_count: 2,
     evidence_count: 2,
+    review_state: 'unreviewed',
+    note: null,
+    dismissal_reason: null,
+    reviewed_at: null,
   },
   {
     finding_id: '1',
@@ -40,6 +44,10 @@ const FIXTURE_ITEMS = [
     ],
     affected_row_count: 83,
     evidence_count: 2,
+    review_state: 'unreviewed',
+    note: null,
+    dismissal_reason: null,
+    reviewed_at: null,
   },
 ]
 
