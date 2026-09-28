@@ -79,7 +79,7 @@ import hashlib
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Protocol
 
@@ -96,9 +96,11 @@ from ..domain.clarification import (
 )
 from ..domain.context import ConfirmationState, ContextField, ContextFieldValue, DatasetContext
 from ..domain.evidence import Evidence
+from ..domain.explanation import ValidationRuleType
 from ..domain.parsing import Dataset, DatasetFormat, DatasetSourceType
 from ..domain.row_context import RowContextEntry, RowContextWindow
-from ..domain.value_objects import Provenance, RowReference
+from ..domain.rules import NullHandling, ValidationRule
+from ..domain.value_objects import ColumnReference, Provenance, RowReference, Severity
 from ..parsers.csv_parser import parse_csv
 from ..profiling.metrics import compute_dataset_profile
 from ..profiling.schemas import DatasetProfile
@@ -107,6 +109,12 @@ from ..risk.scoring import (
     calculate_finding_priority_scores,
     calculate_trust_assessment,
 )
+from ..rules.engine import execute_rule as _execute_rule
+
+#: Schema version stamped on every newly created `ValidationRule`
+#: (`RULE-01` slice 1) — mirrors `ai_boundary.finding_analysis`'s own
+#: `FINDING_ANALYSIS_SCHEMA_VERSION` convention for future evolution.
+RULE_SCHEMA_VERSION = "validation_rule_v1"
 
 #: Maximum rows returned on either side of the anchor row for
 #: `get_finding_row_context` (`FIND-01`). CHG-001 Decision 6 left the exact
@@ -253,6 +261,11 @@ class Analysis:
     guided_questions: tuple[ClarificationQuestion, ...] = ()
     context_version: int = 0
     context_finalized: bool = False
+    rules: tuple[ValidationRule, ...] = ()
+    """User-defined validation rules (`RULE-01` slice 1) — a strictly
+    additive layer over an already-`COMPLETED` analysis, exactly like
+    `context`/`guided_questions` above: computed and mutated entirely
+    independently of `state`. Empty unless `state is COMPLETED`."""
     retry_source_analysis_id: str | None = None
     """The originating `analysis_id` when this analysis is itself a retry
     (`JOB-01` slice 2: retry creates a new, independent `Analysis`, never
@@ -293,6 +306,8 @@ class Analysis:
                 raise ValueError(
                     "Analysis: guided_questions must be empty unless state is COMPLETED"
                 )
+            if self.rules:
+                raise ValueError("Analysis: rules must be empty unless state is COMPLETED")
             if self.context_version != 0:
                 raise ValueError("Analysis: context_version must be 0 unless state is COMPLETED")
             if self.context_finalized:
@@ -437,6 +452,38 @@ class AnalysisNotRetryableError(Exception):
         super().__init__(f"Analysis not retryable in state {state.value}: {analysis_id}")
         self.analysis_id = analysis_id
         self.state = state
+
+
+class UnknownRuleColumnError(Exception):
+    """Raised by `create_rule` (`RULE-01` slice 1) when a requested column
+    name does not match any of the analysis's own dataset columns."""
+
+    def __init__(self, analysis_id: str, column_name: str) -> None:
+        super().__init__(f"Unknown column {column_name!r} for analysis {analysis_id}")
+        self.analysis_id = analysis_id
+        self.column_name = column_name
+
+
+class InvalidRuleParametersError(Exception):
+    """Raised by `create_rule` (`RULE-01` slice 1) when the supplied
+    parameters do not satisfy `domain.rules.ValidationRule`'s own
+    `__post_init__` invariants for the requested `rule_type` — wraps the
+    original `ValueError` message rather than re-deriving it."""
+
+    def __init__(self, analysis_id: str, reason: str) -> None:
+        super().__init__(f"Invalid rule parameters for analysis {analysis_id}: {reason}")
+        self.analysis_id = analysis_id
+        self.reason = reason
+
+
+class RuleNotFoundError(Exception):
+    """Raised by `execute_rule_now`/`delete_rule` (`RULE-01` slice 1) for a
+    `rule_id` that does not match any of the analysis's own `rules`."""
+
+    def __init__(self, analysis_id: str, rule_id: str) -> None:
+        super().__init__(f"Rule not found: {rule_id} (analysis {analysis_id})")
+        self.analysis_id = analysis_id
+        self.rule_id = rule_id
 
 
 class AnalysisStoreProtocol(Protocol):
@@ -983,6 +1030,120 @@ def _require_completed(store: AnalysisStoreProtocol, analysis_id: str) -> Analys
     if analysis.state is not AnalysisState.COMPLETED:
         raise AnalysisNotReadyError(analysis_id)
     return analysis
+
+
+def create_rule(
+    store: AnalysisStoreProtocol,
+    analysis_id: str,
+    *,
+    name: str,
+    description: str,
+    severity: Severity,
+    rule_type: ValidationRuleType,
+    column_names: tuple[str, ...],
+    null_handling: NullHandling = NullHandling.SKIP,
+    accepted_values: tuple[str, ...] | None = None,
+    minimum: float | None = None,
+    maximum: float | None = None,
+    minimum_date: date | None = None,
+    maximum_date: date | None = None,
+    pattern: str | None = None,
+    threshold_percentage: float | None = None,
+    tolerance: float | None = None,
+) -> ValidationRule:
+    """Define a new `ValidationRule` (`RULE-01` slice 1) against a
+    `COMPLETED` analysis's real columns, execute it immediately against
+    the analysis's actual parsed rows (`parse_csv(analysis.content)` —
+    the same reconstruction-on-demand pattern `get_finding_row_context`/
+    `retry_analysis` already use, never a sample), store the result on
+    the rule, persist, and return the executed rule.
+
+    Raises `AnalysisNotFoundError`/`AnalysisNotReadyError` (via
+    `_require_completed`), `UnknownRuleColumnError` for any
+    `column_names` entry that does not match a real dataset column, and
+    `InvalidRuleParametersError` when the resulting shape violates
+    `ValidationRule`'s own invariants for `rule_type` (wraps the
+    underlying `ValueError`).
+    """
+    analysis = _require_completed(store, analysis_id)
+    parsed = parse_csv(analysis.content)
+    columns_by_name: dict[str, ColumnReference] = {
+        column.original_name: column for column in parsed.parsed_dataset.columns
+    }
+    resolved_columns: list[ColumnReference] = []
+    for column_name in column_names:
+        column = columns_by_name.get(column_name)
+        if column is None:
+            raise UnknownRuleColumnError(analysis_id, column_name)
+        resolved_columns.append(column)
+
+    try:
+        rule = ValidationRule(
+            rule_id=str(uuid.uuid4()),
+            schema_version=RULE_SCHEMA_VERSION,
+            name=name,
+            description=description,
+            severity=severity,
+            rule_type=rule_type,
+            columns=tuple(resolved_columns),
+            null_handling=null_handling,
+            accepted_values=accepted_values,
+            minimum=minimum,
+            maximum=maximum,
+            minimum_date=minimum_date,
+            maximum_date=maximum_date,
+            pattern=pattern,
+            threshold_percentage=threshold_percentage,
+            tolerance=tolerance,
+        )
+    except ValueError as exc:
+        raise InvalidRuleParametersError(analysis_id, str(exc)) from exc
+
+    executed = _execute_rule(rule, parsed.rows, analysis_id=analysis_id, now=datetime.now(UTC))
+    stored_rule = replace(rule, last_result=executed)
+    updated_analysis = replace(analysis, rules=(*analysis.rules, stored_rule))
+    store.replace(updated_analysis)
+    return stored_rule
+
+
+def _find_rule(analysis: Analysis, rule_id: str) -> ValidationRule:
+    for rule in analysis.rules:
+        if rule.rule_id == rule_id:
+            return rule
+    raise RuleNotFoundError(analysis.analysis_id, rule_id)
+
+
+def execute_rule_now(
+    store: AnalysisStoreProtocol, analysis_id: str, rule_id: str
+) -> ValidationRule:
+    """Re-run an existing rule against the analysis's current parsed rows
+    and persist the refreshed result (`RULE-01` slice 1).
+
+    Raises `AnalysisNotFoundError`/`AnalysisNotReadyError` and
+    `RuleNotFoundError` for an unknown `rule_id`.
+    """
+    analysis = _require_completed(store, analysis_id)
+    rule = _find_rule(analysis, rule_id)
+    parsed = parse_csv(analysis.content)
+    executed = _execute_rule(rule, parsed.rows, analysis_id=analysis_id, now=datetime.now(UTC))
+    updated_rule = replace(rule, last_result=executed)
+    updated_rules = tuple(
+        updated_rule if existing.rule_id == rule_id else existing for existing in analysis.rules
+    )
+    store.replace(replace(analysis, rules=updated_rules))
+    return updated_rule
+
+
+def delete_rule(store: AnalysisStoreProtocol, analysis_id: str, rule_id: str) -> None:
+    """Remove a rule from the analysis (`RULE-01` slice 1).
+
+    Raises `AnalysisNotFoundError`/`AnalysisNotReadyError` and
+    `RuleNotFoundError` for an unknown `rule_id`.
+    """
+    analysis = _require_completed(store, analysis_id)
+    _find_rule(analysis, rule_id)  # raises RuleNotFoundError if absent
+    remaining = tuple(rule for rule in analysis.rules if rule.rule_id != rule_id)
+    store.replace(replace(analysis, rules=remaining))
 
 
 def get_or_infer_context(store: AnalysisStoreProtocol, analysis_id: str) -> DatasetContext:

@@ -70,6 +70,12 @@ class AnalysisRecord(Base):
     failure_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     context_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     guided_questions_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    rules_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    """User-defined validation rules (`RULE-01` slice 1) -- `NULL` for
+    every analysis persisted before this column existed
+    (`0003_add_rules_json.py`), decoded as an empty tuple by
+    `store._row_to_analysis`, matching `retry_source_analysis_id`'s own
+    nullable-additive-column precedent (`0002`)."""
 
     context_version: Mapped[int] = mapped_column(nullable=False, default=0)
     context_finalized: Mapped[bool] = mapped_column(nullable=False, default=False)

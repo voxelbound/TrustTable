@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetAnalysisApiV1AnalysesAnalysisIdGetData, GetAnalysisApiV1AnalysesAnalysisIdGetErrors, GetAnalysisApiV1AnalysesAnalysisIdGetResponses, GetAnalysisContextApiV1AnalysesAnalysisIdContextGetData, GetAnalysisContextApiV1AnalysesAnalysisIdContextGetErrors, GetAnalysisContextApiV1AnalysesAnalysisIdContextGetResponses, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetData, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetErrors, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetData, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetErrors, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetData, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetErrors, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetResponses, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetData, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetErrors, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetResponses, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetData, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetErrors, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetErrors, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses, GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetData, GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetErrors, GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetResponses, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetData, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetErrors, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses, GetLivenessApiV1HealthLiveGetData, GetLivenessApiV1HealthLiveGetResponses, GetReadinessApiV1HealthReadyGetData, GetReadinessApiV1HealthReadyGetResponses, GetVersionApiV1VersionGetData, GetVersionApiV1VersionGetResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostData, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostData, PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostErrors, PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostResponses, PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostData, PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostErrors, PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses, PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostData, PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostErrors, PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponses, PostAnalysisUploadApiV1AnalysesPostData, PostAnalysisUploadApiV1AnalysesPostErrors, PostAnalysisUploadApiV1AnalysesPostResponses, PostDemoSalesApiV1DemoSalesPostData, PostDemoSalesApiV1DemoSalesPostResponses, PutAnalysisContextApiV1AnalysesAnalysisIdContextPutData, PutAnalysisContextApiV1AnalysesAnalysisIdContextPutErrors, PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponses } from './types.gen';
+import type { DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteData, DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteErrors, DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteResponses, GetAnalysisApiV1AnalysesAnalysisIdGetData, GetAnalysisApiV1AnalysesAnalysisIdGetErrors, GetAnalysisApiV1AnalysesAnalysisIdGetResponses, GetAnalysisContextApiV1AnalysesAnalysisIdContextGetData, GetAnalysisContextApiV1AnalysesAnalysisIdContextGetErrors, GetAnalysisContextApiV1AnalysesAnalysisIdContextGetResponses, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetData, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetErrors, GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetData, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetErrors, GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetResponses, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetData, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetErrors, GetAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGetResponses, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetData, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetErrors, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetResponses, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetData, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetErrors, GetAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGetResponses, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetErrors, GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetResponses, GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetData, GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetErrors, GetAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGetResponses, GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetData, GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetErrors, GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetResponses, GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetData, GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetErrors, GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetResponses, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetData, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetErrors, GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses, GetLivenessApiV1HealthLiveGetData, GetLivenessApiV1HealthLiveGetResponses, GetReadinessApiV1HealthReadyGetData, GetReadinessApiV1HealthReadyGetResponses, GetVersionApiV1VersionGetData, GetVersionApiV1VersionGetResponses, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostData, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostErrors, PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses, PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostData, PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostErrors, PostAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePostResponses, PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostData, PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostErrors, PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses, PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostData, PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostErrors, PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponses, PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostData, PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostErrors, PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostResponses, PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostData, PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostErrors, PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostResponses, PostAnalysisUploadApiV1AnalysesPostData, PostAnalysisUploadApiV1AnalysesPostErrors, PostAnalysisUploadApiV1AnalysesPostResponses, PostDemoSalesApiV1DemoSalesPostData, PostDemoSalesApiV1DemoSalesPostResponses, PutAnalysisContextApiV1AnalysesAnalysisIdContextPutData, PutAnalysisContextApiV1AnalysesAnalysisIdContextPutErrors, PutAnalysisContextApiV1AnalysesAnalysisIdContextPutResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -321,6 +321,72 @@ export const postAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionI
  * `FAILED` state. The original analysis is never mutated by this call.
  */
 export const postAnalysisRetryApiV1AnalysesAnalysisIdRetryPost = <ThrowOnError extends boolean = false>(options: Options<PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostData, ThrowOnError>): RequestResult<PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponses, PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostErrors, ThrowOnError> => (options.client ?? client).post<PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostResponses, PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/retry', ...options });
+
+/**
+ * Get Analysis Rules
+ *
+ * List every validation rule defined on this analysis (`RULE-01`
+ * slice 1), each with its latest execution result.
+ *
+ * Raises `ANALYSIS_NOT_FOUND` (404) for an unknown `analysis_id`.
+ */
+export const getAnalysisRulesApiV1AnalysesAnalysisIdRulesGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetData, ThrowOnError>): RequestResult<GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetResponses, GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetResponses, GetAnalysisRulesApiV1AnalysesAnalysisIdRulesGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/rules', ...options });
+
+/**
+ * Post Analysis Rule
+ *
+ * Define a new validation rule and execute it immediately against
+ * the analysis's real, current rows (`RULE-01` slice 1; `docs/domain-
+ * model.md` §18, `docs/api-specification.md`).
+ *
+ * Raises `ANALYSIS_NOT_FOUND` (404); `INVALID_ANALYSIS_STATE` (409) for
+ * a known analysis not yet `COMPLETED`; and `RULE_INVALID` (422,
+ * `docs/api-specification.md` §14) for a `column_names` entry that does
+ * not match a real dataset column, an unrecognized `rule_type`/
+ * `severity`/`null_handling` value, a malformed `minimum_date`/
+ * `maximum_date`, or a parameter shape that does not match `rule_type`
+ * (`docs/domain-model.md` §18's table).
+ */
+export const postAnalysisRuleApiV1AnalysesAnalysisIdRulesPost = <ThrowOnError extends boolean = false>(options: Options<PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostData, ThrowOnError>): RequestResult<PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostResponses, PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostErrors, ThrowOnError> => (options.client ?? client).post<PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostResponses, PostAnalysisRuleApiV1AnalysesAnalysisIdRulesPostErrors, ThrowOnError>({
+    url: '/api/v1/analyses/{analysis_id}/rules',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete Analysis Rule
+ *
+ * Remove a validation rule from the analysis (`RULE-01` slice 1).
+ *
+ * Raises `ANALYSIS_NOT_FOUND` (404), `INVALID_ANALYSIS_STATE` (409),
+ * and `RULE_NOT_FOUND` (404) for an unknown `rule_id`.
+ */
+export const deleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteData, ThrowOnError>): RequestResult<DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteResponses, DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteErrors, ThrowOnError> => (options.client ?? client).delete<DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteResponses, DeleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDeleteErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/rules/{rule_id}', ...options });
+
+/**
+ * Get Analysis Rule
+ *
+ * Return one validation rule by `rule_id` (`RULE-01` slice 1).
+ *
+ * Raises `ANALYSIS_NOT_FOUND` (404) and `RULE_NOT_FOUND` (404) for an
+ * unknown `rule_id`.
+ */
+export const getAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetData, ThrowOnError>): RequestResult<GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetResponses, GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetResponses, GetAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/rules/{rule_id}', ...options });
+
+/**
+ * Post Analysis Rule Test
+ *
+ * Re-run an existing rule against the analysis's current parsed rows
+ * and persist the refreshed result (`docs/api-specification.md` §11's
+ * already-planned `POST .../rules/{rule_id}/test`; `RULE-01` slice 1).
+ *
+ * Raises `ANALYSIS_NOT_FOUND` (404), `INVALID_ANALYSIS_STATE` (409),
+ * and `RULE_NOT_FOUND` (404) for an unknown `rule_id`.
+ */
+export const postAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPost = <ThrowOnError extends boolean = false>(options: Options<PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostData, ThrowOnError>): RequestResult<PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostResponses, PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostErrors, ThrowOnError> => (options.client ?? client).post<PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostResponses, PostAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPostErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/rules/{rule_id}/test', ...options });
 
 /**
  * Get Analysis Status

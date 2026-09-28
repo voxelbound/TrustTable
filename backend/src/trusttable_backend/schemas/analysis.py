@@ -663,3 +663,95 @@ class FinalizeContextRequest(BaseModel):
     slice 2, `WP-064`)."""
 
     expected_version: int
+
+
+# ---------------------------------------------------------------------------
+# RULE-01 slice 1: validation rules
+# ---------------------------------------------------------------------------
+
+
+class RuleFailureExampleResponse(BaseModel):
+    """Mirrors `domain.rules.RuleFailureExample` — one bounded example of
+    a row that failed a rule (`RULE-01` slice 1)."""
+
+    row_number: int
+    reason: str
+
+
+class RuleExecutionResultResponse(BaseModel):
+    """Mirrors `domain.rules.RuleExecutionResult` (`RULE-01` slice 1,
+    `docs/domain-model.md` §19). `MAX_MISSING_PERCENTAGE`/
+    `MAX_DUPLICATE_PERCENTAGE` report the raw incident count per row —
+    compare `fail_count / (pass_count + fail_count)` against the rule's
+    own `threshold_percentage` for the intended pass/fail interpretation.
+    """
+
+    executed_at: datetime
+    pass_count: int
+    fail_count: int
+    skipped_count: int
+    example_failures: list[RuleFailureExampleResponse]
+    duration_ms: float
+    error: str | None
+
+
+class ValidationRuleResponse(BaseModel):
+    """Mirrors `domain.rules.ValidationRule` (`RULE-01` slice 1,
+    `docs/domain-model.md` §18). Every parameter field not used by
+    `rule_type` is `null` — the same shape `ValidationRule.__post_init__`
+    itself enforces."""
+
+    rule_id: str
+    schema_version: str
+    name: str
+    description: str
+    severity: str
+    rule_type: str
+    columns: list[ColumnReferenceResponse]
+    null_handling: str
+    enabled: bool
+    scope: str
+    accepted_values: list[str] | None
+    minimum: float | None
+    maximum: float | None
+    minimum_date: str | None
+    maximum_date: str | None
+    pattern: str | None
+    threshold_percentage: float | None
+    tolerance: float | None
+    source_finding_ids: list[str]
+    provenance: str
+    last_result: RuleExecutionResultResponse | None
+
+
+class ValidationRulesListResponse(BaseModel):
+    """Body for `GET /analyses/{analysis_id}/rules` (`RULE-01` slice 1)."""
+
+    items: list[ValidationRuleResponse]
+    total_items: int
+
+
+class CreateValidationRuleRequest(BaseModel):
+    """Request body for `POST /analyses/{analysis_id}/rules` (`RULE-01`
+    slice 1). `column_names` are matched against the dataset's real
+    `original_name` values; an unknown name is rejected with
+    `UNKNOWN_RULE_COLUMN` (422) before any execution. Every parameter
+    field not required by `rule_type` (`docs/domain-model.md` §18's
+    table, mirrored in `domain.rules.ValidationRule`'s own docstring)
+    must be left `null` — a mismatch is rejected with
+    `INVALID_RULE_PARAMETERS` (422)."""
+
+    name: str
+    description: str
+    severity: str
+    rule_type: str
+    column_names: list[str]
+    null_handling: str = "skip"
+    accepted_values: list[str] | None = None
+    minimum: float | None = None
+    maximum: float | None = None
+    minimum_date: str | None = None
+    maximum_date: str | None = None
+    pattern: str | None = None
+    threshold_percentage: float | None = None
+    tolerance: float | None = None

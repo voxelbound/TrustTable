@@ -14,6 +14,7 @@ from trusttable_backend.analysis.service import (
     AnalysisState,
     confirm_context_fields,
     create_analysis,
+    create_rule,
     finalize_context,
     get_or_infer_context,
     retry_analysis,
@@ -25,6 +26,8 @@ from trusttable_backend.analysis.service import (
 from trusttable_backend.config import Settings
 from trusttable_backend.detectors.contract import SecurityExposureState
 from trusttable_backend.domain.context import ContextField
+from trusttable_backend.domain.explanation import ValidationRuleType
+from trusttable_backend.domain.value_objects import Severity
 from trusttable_backend.persistence import SqlAnalysisStore, build_engine, run_migrations
 from trusttable_backend.persistence.models import AnalysisRecord
 
@@ -207,3 +210,60 @@ def test_non_terminal_analysis_ids_excludes_terminal_states(store: SqlAnalysisSt
 
     assert queued.analysis_id in non_terminal
     assert completed.analysis_id not in non_terminal
+
+
+# ---------------------------------------------------------------------------
+# rules_json round trip (RULE-01 slice 1, WP-078)
+# ---------------------------------------------------------------------------
+
+
+def test_rule_round_trips_with_its_result(store: SqlAnalysisStore) -> None:
+    working_store = InMemoryStore()
+    created = create_analysis(working_store)
+    completed = run_analysis(working_store, created.analysis_id)
+    assert completed.state is AnalysisState.COMPLETED
+    store.add(completed)
+
+    rule = create_rule(
+        store,
+        completed.analysis_id,
+        name="quantity must not be blank",
+        description="quantity should always be present",
+        severity=Severity.MEDIUM,
+        rule_type=ValidationRuleType.NOT_NULL,
+        column_names=("quantity",),
+    )
+
+    round_tripped = store.get(completed.analysis_id)
+
+    assert round_tripped is not None
+    assert round_tripped.rules == (rule,)
+    assert round_tripped.rules[0].last_result is not None
+
+
+def test_analysis_without_rules_round_trips_as_empty_tuple(store: SqlAnalysisStore) -> None:
+    analysis = create_analysis(InMemoryStore())
+
+    store.add(analysis)
+    round_tripped = store.get(analysis.analysis_id)
+
+    assert round_tripped is not None
+    assert round_tripped.rules == ()
+
+
+def test_a_row_with_null_rules_json_round_trips_as_empty_tuple(store: SqlAnalysisStore) -> None:
+    """Simulates a row persisted before `0003_add_rules_json.py` existed
+    (`RULE-01` slice 1, `WP-078`): `rules_json` is `NULL` at the database
+    layer, decoded as an empty tuple, not raising."""
+    analysis = create_analysis(InMemoryStore())
+    store.add(analysis)
+    with store._session_factory() as session:  # noqa: SLF001 - white-box for this test only
+        row = session.get(AnalysisRecord, analysis.analysis_id)
+        assert row is not None
+        row.rules_json = None
+        session.commit()
+
+    round_tripped = store.get(analysis.analysis_id)
+
+    assert round_tripped is not None
+    assert round_tripped.rules == ()
