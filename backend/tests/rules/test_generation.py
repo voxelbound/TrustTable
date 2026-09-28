@@ -20,7 +20,12 @@ from trusttable_backend.domain.evidence import Evidence, EvidenceType
 from trusttable_backend.domain.explanation import ValidationRuleType
 from trusttable_backend.domain.parsing import SamplingScope
 from trusttable_backend.domain.value_objects import ColumnReference, Severity
-from trusttable_backend.rules.generation import GENERATABLE_DETECTOR_IDS, generate_rule_proposal
+from trusttable_backend.rules.generation import (
+    AI_ASSISTABLE_DETECTOR_IDS,
+    GENERATABLE_DETECTOR_IDS,
+    extract_ai_assist_candidates,
+    generate_rule_proposal,
+)
 
 
 def col(name: str, ordinal: int) -> ColumnReference:
@@ -327,3 +332,64 @@ def test_generatable_detector_ids_is_exactly_the_disclosed_nine() -> None:
         )
         == GENERATABLE_DETECTOR_IDS
     )
+
+
+# --- RULE-02 slice 2 (WP-081): AI-assist candidate extraction ---------------
+
+
+def test_ai_assistable_detector_ids_is_exactly_inconsistent_capitalization() -> None:
+    assert frozenset({"consistency.inconsistent_capitalization"}) == AI_ASSISTABLE_DETECTOR_IDS
+
+
+def test_extract_ai_assist_candidates_returns_evidence_distinct_casings_verbatim() -> None:
+    finding = make_finding(
+        "consistency.inconsistent_capitalization",
+        category=DetectorCategory.CONSISTENCY,
+        columns=(col("city", 7),),
+    )
+    evidence = make_evidence({"distinct_casings": ["ny", "NY"], "affected_row_count": 2})
+    assert extract_ai_assist_candidates(finding, evidence) == ("ny", "NY")
+
+
+def test_extract_ai_assist_candidates_none_for_unsupported_detector() -> None:
+    """Every other detector id, including the 3 categories that remain
+    excluded for a `RULE-01` rule-type/regex-length structural reason AI
+    cannot repair, yields no candidates — the AI-assisted path must
+    never silently apply to them."""
+    finding = make_finding(
+        "statistical.suspiciously_constant_column",
+        category=DetectorCategory.STATISTICAL,
+        columns=(col("currency", 8),),
+    )
+    evidence = make_evidence({"non_null_count": 300})
+    assert extract_ai_assist_candidates(finding, evidence) is None
+
+
+def test_extract_ai_assist_candidates_none_when_payload_missing_distinct_casings() -> None:
+    finding = make_finding(
+        "consistency.inconsistent_capitalization",
+        category=DetectorCategory.CONSISTENCY,
+        columns=(col("city", 7),),
+    )
+    evidence = make_evidence({"affected_row_count": 2})
+    assert extract_ai_assist_candidates(finding, evidence) is None
+
+
+def test_extract_ai_assist_candidates_none_when_fewer_than_two_values() -> None:
+    """A single candidate is not a genuine choice — never offered to AI."""
+    finding = make_finding(
+        "consistency.inconsistent_capitalization",
+        category=DetectorCategory.CONSISTENCY,
+        columns=(col("city", 7),),
+    )
+    evidence = make_evidence({"distinct_casings": ["NY"], "affected_row_count": 1})
+    assert extract_ai_assist_candidates(finding, evidence) is None
+
+
+def test_extract_ai_assist_candidates_none_when_referenced_evidence_missing() -> None:
+    finding = make_finding(
+        "consistency.inconsistent_capitalization",
+        category=DetectorCategory.CONSISTENCY,
+        columns=(col("city", 7),),
+    )
+    assert extract_ai_assist_candidates(finding, ()) is None

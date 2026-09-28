@@ -558,20 +558,50 @@ the finding's own `Evidence`, never a new calculation, never AI), builds
 and executes it against the analysis's real current rows, and returns it
 **unpersisted** — `{"available": bool, "reason": str | null, "rule":
 ValidationRuleResponse | null, "result": RuleExecutionResultResponse |
-null}`. `available: false` (never an error) with a stated `reason` means
-no safe deterministic mapping exists for that detector — the 4 remaining
-categories (`consistency.inconsistent_capitalization`,
-`statistical.suspiciously_constant_column`,
-`cross_field.line_total_mismatch`,
-`security.possible_llm_prompt_injection`) and any detector id without a
-dedicated `explanation.guidance` template. `POST .../rules` gained an
-optional `source_finding_id`: when given, the finding must exist
+null, "ai_call_status": str, "evidence_sent_to_model": bool}`.
+`available: false` (never an error) with a stated `reason` means no safe
+proposal exists for that detector. `POST .../rules` gained an optional
+`source_finding_id`: when given, the finding must exist
 (`404 FINDING_NOT_FOUND` otherwise) and the persisted rule records
-`provenance: "detector_generated"` with `source_finding_ids` set —
-accepting a proposal offer. Omitted (the default): unchanged
+`source_finding_ids` set, with `provenance` determined by that finding's
+own detector (see below). Omitted (the default): unchanged
 `provenance: "user_authored"`. Raises the same `ANALYSIS_NOT_FOUND`/
 `INVALID_ANALYSIS_STATE`/`FINDING_NOT_FOUND` semantics as the sibling
 finding routes.
+
+**Implemented (`RULE-02` slice 2, `WP-081`):** for exactly one of the 4
+slice-1-excluded categories,
+`consistency.inconsistent_capitalization` — whose own evidence already
+deterministically enumerates every valid candidate value
+(`distinct_casings`), so the only remaining judgment is which is
+canonical — `GET .../rule-proposal` additionally attempts a validated
+AI-assisted proposal once slice 1 reports `available: false` **and**
+`Settings.llm_provider != "disabled"`: a real provider may only choose
+one of that finding's own already-observed candidate values (a closed,
+per-request-enumerated JSON-Schema contract, `rule_generation_v1` —
+never free text, never an invented value). An accepted choice executes
+an `accepted_values` candidate rule (`provenance: "ai_assisted"`)
+against the analysis's real current rows before returning it, exactly
+like slice 1's own offer-never-persist contract. Disabled, rejected, or
+a provider error falls back to slice 1's identical `available: false`
+response, unchanged. `ai_call_status` discloses this specific request's
+own AI-assisted attempt, mirroring `GET .../explanation`'s own
+established four-value contract exactly:
+`"not_configured"`/`"attempted_accepted"`/`"attempted_rejected"`/
+`"attempted_provider_error"` — `"not_configured"` covers both "AI
+disabled" and "this detector is not AI-assistable" (including every
+case where slice 1 already found a deterministic mapping).
+`evidence_sent_to_model` is `true` whenever `ai_call_status` is any
+`attempted_*` value. The other 3 slice-1-excluded categories
+(`statistical.suspiciously_constant_column`,
+`cross_field.line_total_mismatch`,
+`security.possible_llm_prompt_injection`) remain excluded from the
+AI-assisted path too — a `RULE-01` rule-type/regex-length structural
+limit AI cannot repair — and any detector id without a dedicated
+`explanation.guidance` template. `POST .../rules` accepting an
+AI-assisted proposal persists `provenance: "ai_assisted"`; every other
+`source_finding_id` still persists `provenance: "detector_generated"`,
+unchanged.
 
 ## 12. Reports and exports
 
