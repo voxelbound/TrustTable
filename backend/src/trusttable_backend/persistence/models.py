@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import JSON, Index, LargeBinary, String
+from sqlalchemy import JSON, Index, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -92,3 +92,27 @@ class AnalysisRecord(Base):
     slice 2, `WP-076`, `DEC-013`) -- `NULL` for every analysis that is not
     itself a retry, including every row persisted before this column
     existed (`0002_add_retry_source_analysis_id.py`)."""
+
+
+class ReportRecord(Base):
+    """One immutable rendered report snapshot (`EXP-01` slice 3, `WP-086`).
+
+    Stores data only. `seq` is a monotonic insertion order so listing is
+    in creation order; `report_id` is the public identifier. `markdown` is
+    the exact rendered text and `content_sha256` its digest -- rows are
+    inserted once and never updated.
+    """
+
+    __tablename__ = "reports"
+    __table_args__ = (Index("ix_reports_analysis_id", "analysis_id"),)
+
+    seq: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_id: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    analysis_id: Mapped[str] = mapped_column(String, nullable=False)
+    generated_at: Mapped[str] = mapped_column(String, nullable=False)
+    include_dismissed: Mapped[bool] = mapped_column(nullable=False)
+    include_technical_appendix: Mapped[bool] = mapped_column(nullable=False)
+    include_bounded_examples: Mapped[bool] = mapped_column(nullable=False)
+    schema_version: Mapped[str] = mapped_column(String, nullable=False)
+    markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String, nullable=False)
