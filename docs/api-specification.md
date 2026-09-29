@@ -690,6 +690,20 @@ known analysis that is not `COMPLETED` is `409 INVALID_ANALYSIS_STATE`;
 an unknown one is `404 ANALYSIS_NOT_FOUND`. The Markdown report routes
 above are **not yet implemented**.
 
+**Implemented as a library only (`EXP-01` slice 2):** the Markdown report
+itself is rendered by `trusttable_backend.reports`, with no route,
+persistence or generated-client change yet. The four report routes above
+remain the target contract. The three request options map as follows:
+*include dismissed findings* adds dismissed findings and their reasons;
+*include technical appendix* adds detector versions, confidence, evidence
+identifiers and rule provenance; *include bounded examples* adds detector
+observation text (which can quote dataset values, so it is withheld
+otherwise) and up to five affected row numbers per finding. The report has
+the sections of `docs/product-requirements.md` §8.9 in a fixed order and no
+render timestamp, so identical input yields identical bytes. Its
+AI-processing security section reports only recorded state and says when
+per-request AI enrichment is not recorded (`D-046`).
+
 ## 13. Security exposure fields
 
 Prompt-injection findings expose:
