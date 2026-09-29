@@ -609,7 +609,7 @@ Report includes AI-processing security:
 >
 > **Annotation (2026-09-29, slice 2 of `EXP-01`):** the deterministic Markdown
 > report renderer and immutable report snapshot are implemented as a library
-> (`trusttable_backend.reports`), including the AI-processing security
+> (`trusttable_backend.exports.report_markdown`), including the AI-processing security
 > section, which reports only recorded state (`D-046`). Still **not
 > implemented**: report snapshot persistence, the four report routes with
 > their API contract and generated client, a durable per-analysis record of

@@ -575,12 +575,15 @@ clamped result to one of `docs/product-requirements.md` §9's four fixed
 aggregate, persistence, confirmed column role (`CTX-01`), or report/UI
 rendering exists yet; those remain later packages.
 
-### Report renderer package
+### Report renderer modules
 
-`trusttable_backend.reports` (`EXP-01` slice 2) renders an immutable
-Markdown report snapshot from an already-computed, `COMPLETED` `Analysis`.
-It is framework-independent (no FastAPI/SQLAlchemy/pydantic/`ai_provider`/
-`ai_boundary` import) and performs no AI call, persistence or I/O.
+`trusttable_backend.exports.report_markdown`, `report_snapshot` and
+`report_build` (`EXP-01` slice 2) render an immutable Markdown report
+snapshot from an already-computed, `COMPLETED` `Analysis`. They live in the
+`exports` package (a `reports/` directory would be git-ignored by this
+repository). They are framework-independent (no FastAPI/SQLAlchemy/
+pydantic/`ai_provider`/`ai_boundary` import) and perform no AI call,
+persistence or I/O.
 `render_markdown` is a pure function of the analysis, `ReportOptions`,
 `ReportVersions` and an optional caller-supplied `AiEnrichmentDisclosure`;
 it emits the `docs/product-requirements.md` §8.9 sections in a fixed order
