@@ -467,3 +467,20 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** changes no code, workflow, dependency or default; does not reopen `D-041` or `D-044`.
 
 **Decided by:** the human owner narrowed bullet 2, pushed the tag and ran and observed the clean-host smoke (2026-09-21); the documentation mapping was completed under delegated implementation authority.
+
+## D-046 — the Markdown report describes findings without quoting dataset values by default, and states unrecorded AI enrichment as unrecorded
+
+**Decision:**
+
+1. **Renderer first.** `EXP-01` slice 2 adds a pure Markdown report renderer and an immutable report snapshot (`trusttable_backend.exports.report_markdown`, `report_snapshot`, `report_build`; a `reports/` directory would be git-ignored by this repository). Snapshot persistence, the report routes and the report screen remain later slices, so `EXP-01` stays in progress.
+2. **No dataset values by default.** A detector observation can quote dataset values (for example the differing casings `inconsistent_capitalization` found). By default a finding is therefore described by its detector name, category, columns, counts and review state only. The `include bounded examples` option adds the observation text and up to five affected physical row numbers per finding. The renderer never reads the analysis's raw content or evidence payloads.
+3. **Unrecorded is not absent.** `Analysis.security_exposure` records only the deterministic pipeline's own posture (`D-037`, `D-038`); per-request AI enrichment (explanations, context suggestions) is not recorded on the analysis. The report's AI-processing security section states the recorded pipeline posture and the suspicious-content findings, and reports enrichment only from an explicit, caller-supplied disclosure. With none supplied it says enrichment is not recorded and makes no statement about whether it was used. It never asserts that nothing was sent to a model, and prints protections only when a caller attests them.
+4. **Consequence for the next slice.** A truthful "sent to a model" and "model location" statement for a whole analysis needs a durable per-analysis record of enrichment calls. That record does not exist yet and is a required input of the report-route slice; until it does, reports say "not recorded".
+
+**Basis:** an exported report travels beyond the application, so it must not carry dataset content the manager did not choose to include, and an audit document must not imply an assurance the recorded state cannot support.
+
+**Alternatives considered:** emit observations by default (simpler and richer, but it exports dataset values without an explicit choice); infer "no AI used" from the pipeline posture (would be false whenever an enrichment route was called).
+
+**Explicit non-scope:** changes no route, persistence, scoring, detector, review or AI-boundary behavior; does not reopen `D-037`/`D-038`.
+
+**Decided by:** delegated implementation authority under the active work package; both choices preserve the package's stated intent and are reversible.

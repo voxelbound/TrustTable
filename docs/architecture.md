@@ -575,6 +575,29 @@ clamped result to one of `docs/product-requirements.md` §9's four fixed
 aggregate, persistence, confirmed column role (`CTX-01`), or report/UI
 rendering exists yet; those remain later packages.
 
+### Report renderer modules
+
+`trusttable_backend.exports.report_markdown`, `report_snapshot` and
+`report_build` (`EXP-01` slice 2) render an immutable Markdown report
+snapshot from an already-computed, `COMPLETED` `Analysis`. They live in the
+`exports` package (a `reports/` directory would be git-ignored by this
+repository). They are framework-independent (no FastAPI/SQLAlchemy/
+pydantic/`ai_provider`/`ai_boundary` import) and perform no AI call,
+persistence or I/O.
+`render_markdown` is a pure function of the analysis, `ReportOptions`,
+`ReportVersions` and an optional caller-supplied `AiEnrichmentDisclosure`;
+it emits the `docs/product-requirements.md` §8.9 sections in a fixed order
+with no render timestamp, so identical input yields identical bytes.
+`build_report_snapshot` freezes the result with a SHA-256 of its content.
+Detector observations can quote dataset values, so they and example row
+numbers appear only with the bounded-examples option; every interpolated
+string is escaped. The renderer never reads `Analysis.content` or evidence
+payloads. Because the analysis does not record per-request AI enrichment,
+the AI-processing security section states the recorded pipeline posture and
+suspicious-content findings, and says enrichment is "not recorded" unless a
+disclosure is supplied (`D-046`). Persistence, routes and the report screen
+are later slices.
+
 ### Analysis orchestration module
 
 `trusttable_backend.analysis` (`API-01`, enabling slice; generalized to
