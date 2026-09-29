@@ -687,13 +687,29 @@ its type uses, `provenance`, `source_finding_ids`, and aggregate
 example failures, row numbers, timestamps or other dataset row content
 are exported, and output is byte-identical for the same analysis. A
 known analysis that is not `COMPLETED` is `409 INVALID_ANALYSIS_STATE`;
-an unknown one is `404 ANALYSIS_NOT_FOUND`. The Markdown report routes
-above are **not yet implemented**.
+an unknown one is `404 ANALYSIS_NOT_FOUND`.
 
-**Implemented as a library only (`EXP-01` slice 2):** the Markdown report
-itself is rendered by `trusttable_backend.exports.report_markdown`, with no route,
-persistence or generated-client change yet. The four report routes above
-remain the target contract. The three request options map as follows:
+**Implemented (`EXP-01` slice 3):** the four report routes are real. `POST`
+takes an optional body `{"options": {"include_dismissed": false,
+"include_technical_appendix": false, "include_bounded_examples": false}}`
+(each defaults to `false`; an unknown option is `422`) and returns `201`
+with the report's metadata: `report_id`, `analysis_id`, `generated_at`,
+`options`, `schema_version` and `content_sha256`. The Markdown is rendered
+once, at creation, and stored; `GET` metadata, the list (in creation
+order) and `download` serve the stored snapshot and never re-render, so a
+later review or rule change does not alter an existing report. `download`
+returns the exact stored bytes as `text/markdown` with an attachment
+disposition, and their SHA-256 equals `content_sha256`. A known analysis
+that is not `COMPLETED` is `409 INVALID_ANALYSIS_STATE` on `POST`; an
+unknown analysis is `404 ANALYSIS_NOT_FOUND` on every route; an unknown
+report, or one belonging to a different analysis, is `404 REPORT_NOT_FOUND`.
+Reports are stored in a new additive `reports` table. Because no per-request
+AI enrichment record exists yet, the report's AI-processing security
+section states that it is not recorded (`D-046`).
+
+**Rendering (`EXP-01` slice 2):** the Markdown report itself is rendered by
+`trusttable_backend.exports.report_markdown`. The three request options
+map as follows:
 *include dismissed findings* adds dismissed findings and their reasons;
 *include technical appendix* adds detector versions, confidence, evidence
 identifiers and rule provenance; *include bounded examples* adds detector
@@ -749,6 +765,7 @@ call's own status via its own `ai_call_status` field.
 - ROW_NOT_IN_FINDING
 - QUESTION_NOT_FOUND
 - RULE_NOT_FOUND
+- REPORT_NOT_FOUND
 - RULE_INVALID
 - RULE_EXECUTION_FAILED
 - MODEL_UNAVAILABLE
