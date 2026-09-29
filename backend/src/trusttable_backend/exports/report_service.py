@@ -44,7 +44,9 @@ ENRICHMENT_PROTECTIONS: tuple[str, ...] = (
 class ReportStoreProtocol(Protocol):
     """The durable report interface the report routes call through."""
 
-    def add(self, snapshot: ReportSnapshot) -> None: ...
+    def add(self, snapshot: ReportSnapshot) -> bool:
+        """Store the snapshot; `False` when its analysis no longer exists."""
+        ...
 
     def get(self, analysis_id: str, report_id: str) -> ReportSnapshot | None: ...
 

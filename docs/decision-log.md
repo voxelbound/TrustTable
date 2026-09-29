@@ -500,3 +500,21 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** reports created before this change keep their stored wording; no backfill; the offline benchmark harness is not a per-analysis path and records nothing; `D-037`/`D-038` are not reopened.
 
 **Decided by:** the human owner (option A, 2026-09-29); implementation details under delegated authority.
+
+## D-048 — deleting an analysis is permanent, cannot be undone by a late write, and overwrites the stored bytes
+
+**Decision (2026-09-29, `DEL-01`):**
+
+1. **Hard delete, as specified.** `DELETE /analyses/{id}` (`docs/api-specification.md` §6, `docs/product-requirements.md` §8.8) removes the analysis row and every report of the analysis in one transaction. There is no soft delete, trash or retention period. A deleted analysis is `404` everywhere, including a repeated `DELETE`.
+2. **A late write cannot resurrect it.** The store's `replace` only updates an existing row and never inserts; a write for a deleted analysis is dropped. This is what makes deleting a still-running analysis safe: the route asks the job pool to cancel it and deletes immediately without waiting, and the worker's remaining writes (including its final `COMPLETED` write) do nothing. A worker that starts after deletion ends quietly.
+3. **No orphaned report.** A report is inserted only by a single `INSERT ... SELECT ... WHERE EXISTS (analysis)`, so it cannot be stored for an analysis deleted at any earlier point; the create route then answers `404`.
+4. **Bytes are overwritten.** SQLite is opened with `PRAGMA secure_delete=ON`, so freed pages are zeroed and the uploaded file's bytes are not left readable in the database file. A test scans the raw database file and its journal for a unique upload marker before and after deletion. This covers the database file only; it cannot reach filesystem-level remanence, snapshots or backups, which remain the operator's concern.
+5. **Not included.** The lifecycle event `analysis_deleted` (`docs/domain-model.md` §21) is not emitted because no lifecycle event log exists; the deletion control and its completion message belong to `UI-03`.
+
+**Basis:** the requirement says deletion removes the uploaded file and derived data; an API that returned `204` while a worker re-created the row, a report survived, or the upload's bytes stayed in the file would not do that.
+
+**Alternatives considered:** waiting for the worker to stop before deleting (simple to explain, but a delete could hang for the duration of a pipeline stage); a soft-delete flag (contradicts the requirement and leaves the data); `VACUUM` after each delete (rewrites the whole file and is slow).
+
+**Explicit non-scope:** no bulk delete, no undo, no change to cancellation semantics.
+
+**Decided by:** delegated implementation authority under the active work package; every choice serves the stated requirement and none adds a product behavior.
