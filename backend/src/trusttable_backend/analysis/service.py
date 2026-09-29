@@ -76,6 +76,7 @@ otherwise (`dataclasses`, `enum`, `datetime`, `uuid`, `hashlib`). No
 from __future__ import annotations
 
 import hashlib
+import threading
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
@@ -90,6 +91,11 @@ from ..demo_data import SEED, generate
 from ..detectors.catalogue import DETECTORS
 from ..detectors.contract import FindingCandidate, SecurityExposureState
 from ..detectors.engine import run_detectors
+from ..domain.ai_enrichment import (
+    AiEnrichmentRecord,
+    EnrichmentModelLocation,
+    EnrichmentOutcome,
+)
 from ..domain.clarification import (
     ClarificationAnswer,
     ClarificationQuestion,
@@ -290,6 +296,11 @@ class Analysis:
     `create_analysis_from_upload`/this dataclass's own constructor is
     unaffected (defaults to `None`). Set exactly once, at construction,
     by `retry_analysis` below; never mutated afterward."""
+    ai_enrichment: AiEnrichmentRecord | None = AiEnrichmentRecord()
+    """Counters of optional AI enrichment calls (`EXP-01` slice 4). A new
+    analysis starts with the zero record; `None` means the analysis was
+    persisted before recording existed, i.e. *not recorded* (never *no
+    calls*). Updated only by `record_ai_enrichment_call`."""
 
     def __post_init__(self) -> None:
         if not self.analysis_id:
@@ -531,16 +542,28 @@ class AnalysisStoreProtocol(Protocol):
 
     def replace(self, analysis: Analysis) -> None: ...
 
+    def update_ai_enrichment(
+        self,
+        analysis_id: str,
+        update: Callable[[AiEnrichmentRecord | None], AiEnrichmentRecord | None],
+    ) -> None: ...
+
 
 class AnalysisStore:
-    """A minimal in-memory dict-backed store. No concurrency safety
-    (disclosed, matching this package's stated non-goals). `DB-01` adds a
-    durable alternative, `persistence.SqlAnalysisStore`, structurally
-    satisfying the same `AnalysisStoreProtocol` above.
+    """A minimal in-memory dict-backed store. Whole-analysis writes have no
+    concurrency safety (disclosed, matching this package's stated
+    non-goals). `DB-01` adds a durable alternative,
+    `persistence.SqlAnalysisStore`, structurally satisfying the same
+    `AnalysisStoreProtocol` above.
+
+    `Analysis.ai_enrichment` is owned by `update_ai_enrichment` alone
+    (`EXP-01` slice 4): `replace` keeps the stored record and ignores the
+    one on the analysis it is given, so a stale copy cannot revert a count.
     """
 
     def __init__(self) -> None:
         self._analyses: dict[str, Analysis] = {}
+        self._enrichment_lock = threading.Lock()
 
     def add(self, analysis: Analysis) -> None:
         self._analyses[analysis.analysis_id] = analysis
@@ -549,7 +572,23 @@ class AnalysisStore:
         return self._analyses.get(analysis_id)
 
     def replace(self, analysis: Analysis) -> None:
-        self._analyses[analysis.analysis_id] = analysis
+        with self._enrichment_lock:
+            stored = self._analyses.get(analysis.analysis_id)
+            if stored is not None:
+                analysis = replace(analysis, ai_enrichment=stored.ai_enrichment)
+            self._analyses[analysis.analysis_id] = analysis
+
+    def update_ai_enrichment(
+        self,
+        analysis_id: str,
+        update: Callable[[AiEnrichmentRecord | None], AiEnrichmentRecord | None],
+    ) -> None:
+        with self._enrichment_lock:
+            stored = self._analyses.get(analysis_id)
+            if stored is not None:
+                self._analyses[analysis_id] = replace(
+                    stored, ai_enrichment=update(stored.ai_enrichment)
+                )
 
 
 def _generate_demo_content() -> bytes:
@@ -815,6 +854,42 @@ def run_analysis(
     )
     store.replace(completed)
     return completed
+
+
+def record_ai_enrichment_call(
+    store: AnalysisStoreProtocol,
+    analysis_id: str,
+    *,
+    outcome: EnrichmentOutcome,
+    evidence_sent: bool,
+    confirmed_context_sent: bool,
+    location: EnrichmentModelLocation,
+) -> None:
+    """Add one attempted AI enrichment call to the analysis's record
+    (`EXP-01` slice 4). Every route that can reach a model calls this.
+
+    An analysis whose record is `None` (persisted before recording
+    existed) is left as is: starting to count now would turn *not
+    recorded* into a false *no other calls*. An unknown analysis is
+    ignored.
+
+    The record is updated through the store's own atomic
+    `update_ai_enrichment`, never through a whole-analysis `replace`, and
+    `replace` never overwrites it: a concurrent writer holding a stale copy
+    of the analysis therefore cannot revert or drop a count.
+    """
+
+    def add_call(current: AiEnrichmentRecord | None) -> AiEnrichmentRecord | None:
+        if current is None:
+            return None
+        return current.with_call(
+            outcome,
+            evidence_sent=evidence_sent,
+            confirmed_context_sent=confirmed_context_sent,
+            location=location,
+        )
+
+    store.update_ai_enrichment(analysis_id, add_call)
 
 
 def get_status(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:

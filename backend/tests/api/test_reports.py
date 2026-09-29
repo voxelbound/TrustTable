@@ -189,8 +189,12 @@ def test_options_change_the_stored_content(client: TestClient) -> None:
     assert plain["content_sha256"] != appendix["content_sha256"]
 
 
-def test_default_report_states_ai_enrichment_is_not_recorded(client: TestClient) -> None:
+def test_report_for_an_analysis_without_a_record_states_ai_enrichment_is_not_recorded(
+    client: TestClient,
+) -> None:
     analysis_id = _completed_analysis(client)
+    store = client.app.state.analysis_store  # type: ignore[attr-defined]
+    store.update_ai_enrichment(analysis_id, lambda _: None)
     report = _create(client, analysis_id)
 
     text = _download(client, analysis_id, report["report_id"]).decode("utf-8")

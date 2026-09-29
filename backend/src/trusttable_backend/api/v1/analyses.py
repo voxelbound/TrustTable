@@ -40,6 +40,7 @@ from fastapi import APIRouter, Query, Request, UploadFile
 
 from trusttable_backend.ai_provider.display import describe_provenance, sanitize_model_identifier
 from trusttable_backend.ai_provider.factory import create_provider
+from trusttable_backend.ai_provider.location import model_location_for
 from trusttable_backend.analysis import (
     AiAssistanceNotAvailableError,
     Analysis,
@@ -76,11 +77,13 @@ from trusttable_backend.analysis import (
     get_guided_questions,
     get_or_infer_context,
     get_status,
+    record_ai_enrichment_call,
     retry_analysis,
     set_finding_review,
 )
 from trusttable_backend.config import get_settings
 from trusttable_backend.context_inference.ai_context import (
+    ContextInferenceResult,
     build_context_inference_envelope,
     combine_hypotheses,
     run_context_inference,
@@ -90,6 +93,7 @@ from trusttable_backend.context_inference.heuristics import (
     infer_context_hypotheses,
 )
 from trusttable_backend.detectors.contract import FindingCandidate, SecurityExposureState
+from trusttable_backend.domain.ai_enrichment import EnrichmentOutcome
 from trusttable_backend.domain.clarification import ClarificationAnswer, ClarificationQuestion
 from trusttable_backend.domain.context import ContextField, ContextFieldValue, DatasetContext
 from trusttable_backend.domain.evidence import Evidence
@@ -201,6 +205,36 @@ def get_job_pool(request: Request) -> JobPool:
     """
     job_pool: JobPool = request.app.state.job_pool
     return job_pool
+
+
+_AI_CALL_STATUS_OUTCOME = {
+    "attempted_accepted": EnrichmentOutcome.ACCEPTED,
+    "attempted_rejected": EnrichmentOutcome.REJECTED,
+    "attempted_provider_error": EnrichmentOutcome.PROVIDER_ERROR,
+}
+
+
+def _record_enrichment(
+    store: AnalysisStoreProtocol,
+    analysis_id: str,
+    outcome: EnrichmentOutcome,
+    *,
+    evidence_sent: bool,
+    confirmed_context_sent: bool,
+) -> None:
+    """Record one attempted AI enrichment call on the analysis (`EXP-01`
+    slice 4). Every route that can reach a model calls this exactly once
+    per attempt; a deployment with AI disabled never does. Only the
+    outcome, the sent flags and a derived location are stored."""
+    settings = get_settings()
+    record_ai_enrichment_call(
+        store,
+        analysis_id,
+        outcome=outcome,
+        evidence_sent=evidence_sent,
+        confirmed_context_sent=confirmed_context_sent,
+        location=model_location_for(settings.llm_provider, settings.llm_base_url),
+    )
 
 
 def _not_found(analysis_id: str) -> AppError:
@@ -768,6 +802,14 @@ def get_analysis_finding_explanation(
                 else:
                     ai_call_status = "attempted_rejected"
 
+    if ai_call_status != "not_configured":
+        _record_enrichment(
+            store,
+            analysis_id,
+            _AI_CALL_STATUS_OUTCOME[ai_call_status],
+            evidence_sent=evidence_sent_to_model,
+            confirmed_context_sent=confirmed_context_sent_to_model,
+        )
     return _finding_explanation_response(
         finding_id,
         explanation,
@@ -916,6 +958,9 @@ def get_analysis_context(analysis_id: str, request: Request) -> ContextResponse:
         assert updated.dataset_profile is not None  # guaranteed by COMPLETED invariant
         # Optional enrichment: a misconfigured or misbehaving provider must
         # leave the deterministic context in place, never fail the request.
+        outcome = EnrichmentOutcome.PROVIDER_ERROR
+        evidence_sent = False
+        ai_result: ContextInferenceResult | None = None
         try:
             provider = create_provider(
                 settings.llm_provider,
@@ -924,15 +969,36 @@ def get_analysis_context(analysis_id: str, request: Request) -> ContextResponse:
                 timeout_seconds=float(settings.llm_timeout_seconds),
             )
             envelope = build_context_inference_envelope(context, evidence=updated.evidence)
-            ai_result = run_context_inference(provider, envelope)
         except Exception:
-            ai_result = None
+            # Nothing was built or sent.
+            pass
+        else:
+            # Conservative from here on: a request may have been made. The
+            # context sent is the inferred, unconfirmed one, so this call
+            # never counts as sending confirmed context.
+            evidence_sent = True
+            try:
+                ai_result = run_context_inference(provider, envelope)
+            except Exception:
+                ai_result = None
+            else:
+                if ai_result.accepted:
+                    outcome = EnrichmentOutcome.ACCEPTED
+                elif ai_result.provider_error is None:
+                    outcome = EnrichmentOutcome.REJECTED
         if ai_result is not None and ai_result.accepted and ai_result.hypothesis is not None:
             deterministic_hypotheses = infer_context_hypotheses(updated.dataset_profile)
             combined = combine_hypotheses(deterministic_hypotheses, ai_result)
             context = consolidate_dataset_context(combined)
             apply_ai_context_augmentation(store, analysis_id, context)
             updated = get_status(store, analysis_id)
+        _record_enrichment(
+            store,
+            analysis_id,
+            outcome,
+            evidence_sent=evidence_sent,
+            confirmed_context_sent=False,
+        )
 
     return _context_response(updated.context_version, context)
 
@@ -1443,6 +1509,14 @@ def get_analysis_finding_rule_proposal(
                         else:
                             ai_call_status = "attempted_rejected"
 
+    if ai_call_status != "not_configured":
+        _record_enrichment(
+            store,
+            analysis_id,
+            _AI_CALL_STATUS_OUTCOME[ai_call_status],
+            evidence_sent=evidence_sent_to_model,
+            confirmed_context_sent=False,
+        )
     return RuleProposalResponse(
         available=offer.available,
         reason=offer.reason,
