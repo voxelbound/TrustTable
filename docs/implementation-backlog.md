@@ -606,6 +606,15 @@ Report includes AI-processing security:
 > exported. The Markdown report, its snapshot and routes, and the
 > AI-processing security section are **not yet implemented**; `EXP-01`
 > stays open.
+>
+> **Annotation (2026-09-29, slice 2 of `EXP-01`):** the deterministic Markdown
+> report renderer and immutable report snapshot are implemented as a library
+> (`trusttable_backend.exports.report_markdown`), including the AI-processing security
+> section, which reports only recorded state (`D-046`). Still **not
+> implemented**: report snapshot persistence, the four report routes with
+> their API contract and generated client, a durable per-analysis record of
+> AI enrichment calls (needed for a complete "sent to a model" statement),
+> and the report screen (`UI-03`). `EXP-01` stays open.
 
 ## DEL-01 — Analysis deletion
 
