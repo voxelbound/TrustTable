@@ -703,9 +703,13 @@ disposition, and their SHA-256 equals `content_sha256`. A known analysis
 that is not `COMPLETED` is `409 INVALID_ANALYSIS_STATE` on `POST`; an
 unknown analysis is `404 ANALYSIS_NOT_FOUND` on every route; an unknown
 report, or one belonging to a different analysis, is `404 REPORT_NOT_FOUND`.
-Reports are stored in a new additive `reports` table. Because no per-request
-AI enrichment record exists yet, the report's AI-processing security
-section states that it is not recorded (`D-046`).
+Reports are stored in a new additive `reports` table. The report's
+AI-processing security section is built from the analysis's AI enrichment
+record (`EXP-01` slice 4, `D-047`): counts of attempted calls by outcome,
+whether evidence or confirmed context may have been sent, the model
+location and the protections that hold on every call path. An analysis
+created before recording existed has no record, and its reports state that
+enrichment is not recorded and make no statement about use (`D-046`).
 
 **Rendering (`EXP-01` slice 2):** the Markdown report itself is rendered by
 `trusttable_backend.exports.report_markdown`. The three request options

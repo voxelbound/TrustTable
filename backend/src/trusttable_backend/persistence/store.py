@@ -16,12 +16,15 @@ distinguishing insert-only from update-only.
 
 from __future__ import annotations
 
+import threading
+from collections.abc import Callable
 from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
 
 from ..analysis.service import Analysis, AnalysisState
+from ..domain.ai_enrichment import AiEnrichmentRecord
 from . import serializers
 from .database import build_session_factory
 from .models import AnalysisRecord
@@ -65,6 +68,7 @@ def _analysis_to_row_values(analysis: Analysis) -> dict[str, object]:
         "guided_questions_json": serializers.encode(analysis.guided_questions),
         "rules_json": serializers.encode(analysis.rules),
         "finding_reviews_json": serializers.encode(analysis.finding_reviews),
+        "ai_enrichment_json": serializers.encode(analysis.ai_enrichment),
         "context_version": analysis.context_version,
         "context_finalized": analysis.context_finalized,
         "retry_source_analysis_id": analysis.retry_source_analysis_id,
@@ -99,17 +103,34 @@ def _row_to_analysis(row: AnalysisRecord) -> Analysis:
         finding_reviews=serializers.decode(row.finding_reviews_json)
         if row.finding_reviews_json is not None
         else {},
+        # NULL is *not recorded*, never a zero record (`EXP-01` slice 4).
+        ai_enrichment=serializers.decode(row.ai_enrichment_json)
+        if row.ai_enrichment_json is not None
+        else None,
         context_version=row.context_version,
         context_finalized=row.context_finalized,
         retry_source_analysis_id=row.retry_source_analysis_id,
     )
 
 
+#: Columns owned by a dedicated atomic operation. A whole-analysis write to
+#: an existing row never sets them, so a stale copy of an `Analysis` cannot
+#: revert them (`EXP-01` slice 4: `ai_enrichment_json`).
+_SEPARATELY_OWNED_COLUMNS = frozenset({"ai_enrichment_json"})
+
+
 class SqlAnalysisStore:
-    """A durable `Analysis` store backed by SQLAlchemy 2 + SQLite."""
+    """A durable `Analysis` store backed by SQLAlchemy 2 + SQLite.
+
+    `ai_enrichment_json` is written when a row is first added and after
+    that only by `update_ai_enrichment`; `replace` leaves it as stored, so
+    a concurrent writer holding a stale `Analysis` cannot drop a recorded
+    AI enrichment call.
+    """
 
     def __init__(self, engine: Engine) -> None:
         self._session_factory = build_session_factory(engine)
+        self._enrichment_lock = threading.Lock()
 
     def add(self, analysis: Analysis) -> None:
         self._upsert(analysis)
@@ -125,7 +146,29 @@ class SqlAnalysisStore:
                 session.add(AnalysisRecord(**values))
             else:
                 for key, value in values.items():
-                    setattr(existing, key, value)
+                    if key not in _SEPARATELY_OWNED_COLUMNS:
+                        setattr(existing, key, value)
+            session.commit()
+
+    def update_ai_enrichment(
+        self,
+        analysis_id: str,
+        update: Callable[[AiEnrichmentRecord | None], AiEnrichmentRecord | None],
+    ) -> None:
+        """Atomically read, transform and write only the AI enrichment
+        column. An unknown analysis is ignored. Serialized so concurrent
+        recordings cannot lose a count; no whole-analysis write can touch
+        this column, so none can revert it."""
+        with self._enrichment_lock, self._session_factory() as session:
+            row = session.get(AnalysisRecord, analysis_id)
+            if row is None:
+                return
+            current = (
+                serializers.decode(row.ai_enrichment_json)
+                if row.ai_enrichment_json is not None
+                else None
+            )
+            row.ai_enrichment_json = serializers.encode(update(current))
             session.commit()
 
     def get(self, analysis_id: str) -> Analysis | None:
