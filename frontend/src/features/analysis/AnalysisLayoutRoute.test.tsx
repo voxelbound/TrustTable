@@ -25,6 +25,7 @@ function renderLayout(initialPath = `/analyses/${ANALYSIS_ID}/overview`) {
         children: [
           { path: 'overview', element: <p>Overview screen</p> },
           { path: 'report', element: <p>Report screen</p> },
+          { path: 'rules', element: <p>Rules screen</p> },
         ],
       },
       { path: '/analyses/new', element: <p>Start screen</p> },
@@ -194,6 +195,27 @@ describe('AnalysisLayoutRoute', () => {
 
     expect(router.state.location.pathname).toBe(
       `/analyses/${ANALYSIS_ID}/report`,
+    )
+  })
+
+  it('offers a Rules link for a completed analysis that opens the rules route', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/status', () =>
+        HttpResponse.json(
+          makeStatusResponse({ state: 'completed', cancellable: false }),
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+
+    const router = renderLayout()
+    const nav = await screen.findByRole('navigation', {
+      name: 'Analysis sections',
+    })
+    await user.click(within(nav).getByRole('link', { name: 'Rules' }))
+
+    expect(router.state.location.pathname).toBe(
+      `/analyses/${ANALYSIS_ID}/rules`,
     )
   })
 
