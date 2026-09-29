@@ -504,6 +504,15 @@ export type ContextResponse = {
 };
 
 /**
+ * CreateReportRequest
+ *
+ * Body for `POST /analyses/{analysis_id}/reports`.
+ */
+export type CreateReportRequest = {
+    options?: ReportOptionsModel;
+};
+
+/**
  * CreateValidationRuleRequest
  *
  * Request body for `POST /analyses/{analysis_id}/rules` (`RULE-01`,
@@ -1266,6 +1275,67 @@ export type RemediationOptionResponse = {
      * Verification Step
      */
     verification_step: string;
+};
+
+/**
+ * ReportListResponse
+ *
+ * Body for `GET /analyses/{analysis_id}/reports`.
+ */
+export type ReportListResponse = {
+    /**
+     * Reports
+     */
+    reports: Array<ReportResponse>;
+};
+
+/**
+ * ReportOptionsModel
+ *
+ * The three report options; each defaults to off.
+ */
+export type ReportOptionsModel = {
+    /**
+     * Include Bounded Examples
+     */
+    include_bounded_examples?: boolean;
+    /**
+     * Include Dismissed
+     */
+    include_dismissed?: boolean;
+    /**
+     * Include Technical Appendix
+     */
+    include_technical_appendix?: boolean;
+};
+
+/**
+ * ReportResponse
+ *
+ * Metadata of one generated report snapshot.
+ */
+export type ReportResponse = {
+    /**
+     * Analysis Id
+     */
+    analysis_id: string;
+    /**
+     * Content Sha256
+     */
+    content_sha256: string;
+    /**
+     * Generated At
+     */
+    generated_at: string;
+    options: ReportOptionsModel;
+    /**
+     * Report Id
+     */
+    report_id: string;
+    /**
+     * Schema Version
+     */
+    schema_version: string;
 };
 
 /**
@@ -2352,6 +2422,135 @@ export type PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionId
 };
 
 export type PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponse = PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses[keyof PostAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPostResponses];
+
+export type ListReportsApiV1AnalysesAnalysisIdReportsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/reports';
+};
+
+export type ListReportsApiV1AnalysesAnalysisIdReportsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListReportsApiV1AnalysesAnalysisIdReportsGetError = ListReportsApiV1AnalysesAnalysisIdReportsGetErrors[keyof ListReportsApiV1AnalysesAnalysisIdReportsGetErrors];
+
+export type ListReportsApiV1AnalysesAnalysisIdReportsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ReportListResponse;
+};
+
+export type ListReportsApiV1AnalysesAnalysisIdReportsGetResponse = ListReportsApiV1AnalysesAnalysisIdReportsGetResponses[keyof ListReportsApiV1AnalysesAnalysisIdReportsGetResponses];
+
+export type CreateReportApiV1AnalysesAnalysisIdReportsPostData = {
+    /**
+     * Body
+     */
+    body?: CreateReportRequest | null;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/reports';
+};
+
+export type CreateReportApiV1AnalysesAnalysisIdReportsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateReportApiV1AnalysesAnalysisIdReportsPostError = CreateReportApiV1AnalysesAnalysisIdReportsPostErrors[keyof CreateReportApiV1AnalysesAnalysisIdReportsPostErrors];
+
+export type CreateReportApiV1AnalysesAnalysisIdReportsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: ReportResponse;
+};
+
+export type CreateReportApiV1AnalysesAnalysisIdReportsPostResponse = CreateReportApiV1AnalysesAnalysisIdReportsPostResponses[keyof CreateReportApiV1AnalysesAnalysisIdReportsPostResponses];
+
+export type GetReportApiV1AnalysesAnalysisIdReportsReportIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Report Id
+         */
+        report_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/reports/{report_id}';
+};
+
+export type GetReportApiV1AnalysesAnalysisIdReportsReportIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetReportApiV1AnalysesAnalysisIdReportsReportIdGetError = GetReportApiV1AnalysesAnalysisIdReportsReportIdGetErrors[keyof GetReportApiV1AnalysesAnalysisIdReportsReportIdGetErrors];
+
+export type GetReportApiV1AnalysesAnalysisIdReportsReportIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ReportResponse;
+};
+
+export type GetReportApiV1AnalysesAnalysisIdReportsReportIdGetResponse = GetReportApiV1AnalysesAnalysisIdReportsReportIdGetResponses[keyof GetReportApiV1AnalysesAnalysisIdReportsReportIdGetResponses];
+
+export type DownloadReportApiV1AnalysesAnalysisIdReportsReportIdDownloadGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Report Id
+         */
+        report_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/reports/{report_id}/download';
+};
+
+export type DownloadReportApiV1AnalysesAnalysisIdReportsReportIdDownloadGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DownloadReportApiV1AnalysesAnalysisIdReportsReportIdDownloadGetError = DownloadReportApiV1AnalysesAnalysisIdReportsReportIdDownloadGetErrors[keyof DownloadReportApiV1AnalysesAnalysisIdReportsReportIdDownloadGetErrors];
+
+export type DownloadReportApiV1AnalysesAnalysisIdReportsReportIdDownloadGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
 
 export type PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostData = {
     body?: never;
