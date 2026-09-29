@@ -258,7 +258,9 @@ def test_security_section_tracks_the_recorded_enrichment_disclosure() -> None:
 
     assert "No AI enrichment call is recorded as attempted." in none_attempted
     assert "Calls attempted" not in none_attempted
-    assert "Model location: unknown." in none_attempted
+    assert "Model location" not in none_attempted
+    assert "Protections recorded as applied" not in none_attempted
+    assert "Output validated against a fixed schema" not in none_attempted
 
 
 def test_security_section_tracks_the_pipeline_exposure_state() -> None:
