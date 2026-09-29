@@ -203,9 +203,12 @@ def test_migration_0003_upgrades_downgrades_and_reupgrades_cleanly(tmp_path: Pat
 
 def test_migration_0004_upgrades_downgrades_and_reupgrades_cleanly(tmp_path: Path) -> None:
     """`0004_add_finding_reviews_json.py` is additive and reversible:
-    `upgrade head` adds the `finding_reviews_json` column, `downgrade -1`
+    `upgrade 0004` adds the `finding_reviews_json` column, `downgrade -1`
     removes exactly it (leaving `rules_json` from `0003` untouched), and
-    a second `upgrade head` restores it — all against a fresh database.
+    a second `upgrade 0004` restores it — all against a fresh database.
+    Targets the exact revision `0004` (not `head`, `EXP-01` slice 3,
+    `WP-086`) so this test keeps proving 0004's own reversibility in
+    isolation regardless of how many later migrations exist.
     """
     from alembic import command
     from alembic.config import Config
@@ -218,7 +221,7 @@ def test_migration_0004_upgrades_downgrades_and_reupgrades_cleanly(tmp_path: Pat
     config.set_main_option("script_location", str(_BACKEND_ROOT / "alembic"))
     config.set_main_option("sqlalchemy.url", settings.database_url)
 
-    command.upgrade(config, "head")
+    command.upgrade(config, "0004")
     inspector = inspect(engine)
     columns_after_upgrade = {col["name"] for col in inspector.get_columns("analyses")}
     assert "finding_reviews_json" in columns_after_upgrade
@@ -230,7 +233,7 @@ def test_migration_0004_upgrades_downgrades_and_reupgrades_cleanly(tmp_path: Pat
     assert "finding_reviews_json" not in columns_after_downgrade
     assert "rules_json" in columns_after_downgrade
 
-    command.upgrade(config, "head")
+    command.upgrade(config, "0004")
     inspector = inspect(engine)
     columns_after_reupgrade = {col["name"] for col in inspector.get_columns("analyses")}
     assert "finding_reviews_json" in columns_after_reupgrade
