@@ -22,7 +22,10 @@ function renderLayout(initialPath = `/analyses/${ANALYSIS_ID}/overview`) {
       {
         path: '/analyses/:analysisId',
         element: <AnalysisLayoutRoute />,
-        children: [{ path: 'overview', element: <p>Overview screen</p> }],
+        children: [
+          { path: 'overview', element: <p>Overview screen</p> },
+          { path: 'report', element: <p>Report screen</p> },
+        ],
       },
       { path: '/analyses/new', element: <p>Start screen</p> },
     ],
