@@ -691,7 +691,7 @@ an unknown one is `404 ANALYSIS_NOT_FOUND`. The Markdown report routes
 above are **not yet implemented**.
 
 **Implemented as a library only (`EXP-01` slice 2):** the Markdown report
-itself is rendered by `trusttable_backend.reports`, with no route,
+itself is rendered by `trusttable_backend.exports.report_markdown`, with no route,
 persistence or generated-client change yet. The four report routes above
 remain the target contract. The three request options map as follows:
 *include dismissed findings* adds dismissed findings and their reasons;
