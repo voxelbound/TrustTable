@@ -10,6 +10,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createReportApiV1AnalysesAnalysisIdReportsPost,
   deleteAnalysisResourceApiV1AnalysesAnalysisIdDelete,
+  deleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDelete,
+  getAnalysisRulesApiV1AnalysesAnalysisIdRulesGet,
+  getRulesExportJsonApiV1AnalysesAnalysisIdExportsRulesJsonGet,
+  getRulesExportYamlApiV1AnalysesAnalysisIdExportsRulesYamlGet,
+  postAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPost,
   downloadReportApiV1AnalysesAnalysisIdReportsReportIdDownloadGet,
   getAnalysisApiV1AnalysesAnalysisIdGet,
   getAnalysisContextApiV1AnalysesAnalysisIdContextGet,
@@ -38,6 +43,8 @@ import {
   type ReportOptionsModel,
   type ReportResponse,
   type RetryAnalysisResponse,
+  type ValidationRuleResponse,
+  type ValidationRulesListResponse,
   type FindingDetailResponse,
   type FindingEvidenceListResponse,
   type FindingExplanationResponse,
@@ -557,6 +564,96 @@ export function useDownloadReport(analysisId: string | undefined) {
           },
           parseAs: 'text',
         })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data as string
+    },
+  })
+}
+
+/** `GET .../rules` (`UI-03` slice 3, `RULE-01`): every stored rule with
+ * its latest execution result. */
+export function useRules(analysisId: string | undefined) {
+  return useQuery<ValidationRulesListResponse, ApiCallError>({
+    queryKey: ['analysis-rules', analysisId],
+    enabled: Boolean(analysisId),
+    queryFn: async () => {
+      const result = await getAnalysisRulesApiV1AnalysesAnalysisIdRulesGet({
+        path: { analysis_id: analysisId as string },
+      })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+  })
+}
+
+/** `POST .../rules/{rule_id}/test` (`UI-03` slice 3): re-executes one rule
+ * against the immutable dataset; the refreshed rule replaces the list. */
+export function useRunRule(analysisId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation<ValidationRuleResponse, ApiCallError, string>({
+    mutationFn: async (ruleId) => {
+      const result =
+        await postAnalysisRuleTestApiV1AnalysesAnalysisIdRulesRuleIdTestPost({
+          path: { analysis_id: analysisId as string, rule_id: ruleId },
+        })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['analysis-rules', analysisId],
+      })
+    },
+  })
+}
+
+/** `DELETE .../rules/{rule_id}` (`UI-03` slice 3). `204` has no body. */
+export function useDeleteRule(analysisId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation<void, ApiCallError, string>({
+    mutationFn: async (ruleId) => {
+      const result =
+        await deleteAnalysisRuleApiV1AnalysesAnalysisIdRulesRuleIdDelete({
+          path: { analysis_id: analysisId as string, rule_id: ruleId },
+        })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['analysis-rules', analysisId],
+      })
+    },
+  })
+}
+
+export type RulesExportFormat = 'json' | 'yaml'
+
+/** `GET .../exports/rules.{json,yaml}` (`UI-03` slice 3, `EXP-01`): the
+ * validated-rules document exactly as served. Resolves to the text; the
+ * caller decides how to save it. */
+export function useDownloadRulesExport(analysisId: string | undefined) {
+  return useMutation<string, ApiCallError, RulesExportFormat>({
+    mutationFn: async (format) => {
+      const options = {
+        path: { analysis_id: analysisId as string },
+        parseAs: 'text' as const,
+      }
+      const result =
+        format === 'json'
+          ? await getRulesExportJsonApiV1AnalysesAnalysisIdExportsRulesJsonGet(
+              options,
+            )
+          : await getRulesExportYamlApiV1AnalysesAnalysisIdExportsRulesYamlGet(
+              options,
+            )
       if (result.error) {
         throw new ApiCallError(result.error)
       }

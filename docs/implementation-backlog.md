@@ -661,6 +661,14 @@ Review, remediation, rules, report, deletion, retry.
 > a report's Markdown. Still **not implemented**: the rules screen (with
 > the rules export downloads), finding review controls and the technical
 > details screen. `UI-03` stays open.
+>
+> **Annotation (2026-09-29, slice 3 of `UI-03`):** the rules screen is
+> implemented (`docs/ui-specification.md` §4.9): list rules with their
+> latest results, expand read-only details, re-run and delete a rule, and
+> download the validated rules as JSON or YAML. Still **not implemented**:
+> editing rule parameters and the enabled toggle (no update route exists),
+> finding review controls and the technical details screen. `UI-03` stays
+> open.
 
 ## REL-03 — v0.3 package
 
