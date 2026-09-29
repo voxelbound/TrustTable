@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -171,6 +171,44 @@ describe('AnalysisLayoutRoute', () => {
     expect(
       screen.getByRole('button', { name: 'Return to start' }),
     ).toBeInTheDocument()
+  })
+
+  it('offers a Report link for a completed analysis that opens the report route', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/status', () =>
+        HttpResponse.json(
+          makeStatusResponse({ state: 'completed', cancellable: false }),
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+
+    const router = renderLayout()
+    const nav = await screen.findByRole('navigation', {
+      name: 'Analysis sections',
+    })
+    await user.click(within(nav).getByRole('link', { name: 'Report' }))
+
+    expect(router.state.location.pathname).toBe(
+      `/analyses/${ANALYSIS_ID}/report`,
+    )
+  })
+
+  it('offers no Report link while the analysis is not completed', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/status', () =>
+        HttpResponse.json(
+          makeStatusResponse({ state: 'validating', cancellable: true }),
+        ),
+      ),
+    )
+
+    renderLayout()
+    await screen.findByText('Validating the dataset.')
+
+    expect(
+      screen.queryByRole('link', { name: 'Report' }),
+    ).not.toBeInTheDocument()
   })
 
   it('renders a safe message when the status request itself fails (unknown analysis)', async () => {

@@ -1,4 +1,4 @@
-import { Outlet, useNavigate, useParams } from 'react-router'
+import { Link, Outlet, useNavigate, useParams } from 'react-router'
 import { AppShell } from '../../components/layout/AppShell'
 import { AnalysisStageProgress } from '../../components/provenance/AnalysisStageProgress'
 import { Alert } from '../../components/ui/Alert'
@@ -106,7 +106,23 @@ export function AnalysisLayoutRoute() {
   return (
     <AppShell datasetName={datasetName} statusText="Completed">
       {actions}
-      <Outlet />
+      <nav aria-label="Analysis sections" className="mt-4 flex gap-4 text-sm">
+        <Link
+          to={`/analyses/${analysisId ?? ''}/overview`}
+          className="font-medium text-slate-900 underline dark:text-slate-100"
+        >
+          Overview
+        </Link>
+        <Link
+          to={`/analyses/${analysisId ?? ''}/report`}
+          className="font-medium text-slate-900 underline dark:text-slate-100"
+        >
+          Report
+        </Link>
+      </nav>
+      <div className="mt-6">
+        <Outlet />
+      </div>
     </AppShell>
   )
 }

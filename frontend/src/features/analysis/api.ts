@@ -8,7 +8,9 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  createReportApiV1AnalysesAnalysisIdReportsPost,
   deleteAnalysisResourceApiV1AnalysesAnalysisIdDelete,
+  downloadReportApiV1AnalysesAnalysisIdReportsReportIdDownloadGet,
   getAnalysisApiV1AnalysesAnalysisIdGet,
   getAnalysisContextApiV1AnalysesAnalysisIdContextGet,
   getAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGet,
@@ -18,6 +20,7 @@ import {
   getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet,
   getAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGet,
   getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet,
+  listReportsApiV1AnalysesAnalysisIdReportsGet,
   postAnalysisCancelApiV1AnalysesAnalysisIdCancelPost,
   postAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePost,
   postAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPost,
@@ -31,6 +34,9 @@ import {
   type ClarificationQuestionListResponse,
   type ContextResponse,
   type DemoAnalysisResponse,
+  type ReportListResponse,
+  type ReportOptionsModel,
+  type ReportResponse,
   type RetryAnalysisResponse,
   type FindingDetailResponse,
   type FindingEvidenceListResponse,
@@ -492,6 +498,69 @@ export function useRetryAnalysis(analysisId: string | undefined) {
         throw new ApiCallError(result.error)
       }
       return result.data
+    },
+  })
+}
+
+/** `GET .../reports` (`UI-03` slice 2, `EXP-01`): the stored report
+ * snapshots of an analysis, in creation order. */
+export function useReports(analysisId: string | undefined) {
+  return useQuery<ReportListResponse, ApiCallError>({
+    queryKey: ['analysis-reports', analysisId],
+    enabled: Boolean(analysisId),
+    queryFn: async () => {
+      const result = await listReportsApiV1AnalysesAnalysisIdReportsGet({
+        path: { analysis_id: analysisId as string },
+      })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+  })
+}
+
+/** `POST .../reports` (`UI-03` slice 2): renders and stores one immutable
+ * snapshot with exactly the options given (each off unless set). */
+export function useCreateReport(analysisId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation<ReportResponse, ApiCallError, ReportOptionsModel>({
+    mutationFn: async (options) => {
+      const result = await createReportApiV1AnalysesAnalysisIdReportsPost({
+        path: { analysis_id: analysisId as string },
+        body: { options },
+      })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['analysis-reports', analysisId],
+      })
+    },
+  })
+}
+
+/** `GET .../reports/{id}/download` (`UI-03` slice 2): the stored Markdown
+ * of one report, exactly as served (never re-rendered). Resolves to the
+ * text; the caller decides how to save it. */
+export function useDownloadReport(analysisId: string | undefined) {
+  return useMutation<string, ApiCallError, string>({
+    mutationFn: async (reportId) => {
+      const result =
+        await downloadReportApiV1AnalysesAnalysisIdReportsReportIdDownloadGet({
+          path: {
+            analysis_id: analysisId as string,
+            report_id: reportId,
+          },
+          parseAs: 'text',
+        })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data as string
     },
   })
 }
