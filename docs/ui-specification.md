@@ -63,6 +63,15 @@ The analysis layout shows:
 - cancel or retry where applicable
 - delete action
 
+**Implemented (`UI-03` slice 1):** the analysis layout shows these controls
+in every state. *Cancel analysis* appears only while the status response
+says the analysis is cancellable; *Retry analysis* only when it is
+retryable (a failed analysis) and opens the new attempt, leaving the
+original untouched; *Delete analysis* is always available, asks for
+confirmation in an accessible dialog that states the removal is permanent
+and cannot be undone, and returns to the start screen. Failures are shown
+inline and the page stays put.
+
 ## 4. Screen definitions
 
 ### 4.1 Start
