@@ -387,7 +387,6 @@ def _ai_security(
         lines.append("- This report makes no statement about whether it was used.")
     elif disclosure.attempt_count == 0:
         lines.append("- No AI enrichment call is recorded as attempted.")
-        lines.append(f"- Model location: {disclosure.model_location.value}.")
     else:
         lines.append(f"- Calls attempted: {disclosure.attempt_count}.")
         lines.append(f"- Output accepted: {disclosure.accepted_count}.")
@@ -398,7 +397,6 @@ def _ai_security(
         lines.append(f"- Bounded finding evidence {evidence} sent to a model.")
         lines.append(f"- Confirmed context {context} sent to a model.")
         lines.append(f"- Model location: {disclosure.model_location.value}.")
-    if disclosure is not None:
         if disclosure.protections:
             lines.append("- Protections recorded as applied:")
             lines.extend(f"  - {_md(protection)}" for protection in disclosure.protections)
