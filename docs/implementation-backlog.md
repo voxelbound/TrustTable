@@ -654,6 +654,13 @@ Review, remediation, rules, report, deletion, retry.
 > confirmation (`docs/ui-specification.md` §3). Still **not implemented**:
 > the rules screen, the report screen, finding review controls and the
 > technical details screen. `UI-03` stays open.
+>
+> **Annotation (2026-09-29, slice 2 of `UI-03`):** the report screen is
+> implemented (`docs/ui-specification.md` §4.10): choose the report
+> options, generate an immutable snapshot, list stored reports and download
+> a report's Markdown. Still **not implemented**: the rules screen (with
+> the rules export downloads), finding review controls and the technical
+> details screen. `UI-03` stays open.
 
 ## REL-03 — v0.3 package
 

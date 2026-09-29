@@ -245,6 +245,21 @@ Show:
 - Markdown download
 - JSON/YAML rule downloads
 
+**Implemented (`UI-03` slice 2):** `/analyses/:analysisId/report`, linked as
+*Report* from the analysis layout of a completed analysis. The screen
+offers the three report options (*include dismissed findings*, *include
+technical appendix*, *include bounded examples*), all **off** by default;
+the bounded-examples option says examples may quote values from the
+dataset. *Generate report* stores one immutable snapshot with exactly the
+chosen options. *Generated reports* lists the stored snapshots in the order
+served, each with its generation time, chosen options and content hash,
+and an honest empty state. *Download Markdown* saves the stored Markdown of
+that report as a file (never re-rendered). Report text is only saved, never
+inserted into the page. Failures show an inline error and the page stays
+put. Still **not implemented**: an in-page report preview, included-section
+listing, generation-progress status (generation is a single request) and
+the JSON/YAML rule downloads, which belong with the rules screen.
+
 ### 4.11 Technical details
 
 Expandable technical information:
