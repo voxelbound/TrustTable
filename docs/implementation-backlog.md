@@ -615,6 +615,15 @@ Report includes AI-processing security:
 > their API contract and generated client, a durable per-analysis record of
 > AI enrichment calls (needed for a complete "sent to a model" statement),
 > and the report screen (`UI-03`). `EXP-01` stays open.
+>
+> **Annotation (2026-09-29, slice 3 of `EXP-01`):** report snapshot
+> persistence (a new additive `reports` table) and the four report routes
+> (`docs/api-specification.md` §12) are implemented, with the OpenAPI
+> contract and generated client regenerated. Reports are rendered once and
+> stored; downloads never re-render. Still **not implemented**: a durable
+> per-analysis record of AI enrichment calls, the report screen (`UI-03`),
+> and deletion of reports with their analysis (`DEL-01`). `EXP-01` stays
+> open.
 
 ## DEL-01 — Analysis deletion
 
