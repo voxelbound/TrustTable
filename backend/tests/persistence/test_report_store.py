@@ -3,19 +3,27 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from sqlalchemy import inspect, text
+from sqlalchemy.engine import Engine
 
+from trusttable_backend.analysis.service import AnalysisStore, create_analysis
 from trusttable_backend.config import Settings
 from trusttable_backend.exports.report_snapshot import (
     REPORT_SCHEMA_VERSION,
     ReportOptions,
     ReportSnapshot,
 )
-from trusttable_backend.persistence import SqlReportStore, build_engine, run_migrations
+from trusttable_backend.persistence import (
+    SqlAnalysisStore,
+    SqlReportStore,
+    build_engine,
+    run_migrations,
+)
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -38,11 +46,21 @@ def _snapshot(report_id: str, analysis_id: str = "a1", body: str = "# Report\n")
     )
 
 
-def _store(tmp_path: Path) -> SqlReportStore:
+def _engine(tmp_path: Path) -> Engine:
+    """A migrated database that already holds analyses `a1` and `a2` (a
+    report is only stored for an analysis that exists, `DEL-01`)."""
     settings = _settings(tmp_path)
     engine = build_engine(settings)
     run_migrations(settings)
-    return SqlReportStore(engine)
+    analyses = SqlAnalysisStore(engine)
+    template = create_analysis(AnalysisStore())
+    for analysis_id in ("a1", "a2"):
+        analyses.add(replace(template, analysis_id=analysis_id))
+    return engine
+
+
+def _store(tmp_path: Path) -> SqlReportStore:
+    return SqlReportStore(_engine(tmp_path))
 
 
 def test_round_trip_preserves_every_field(tmp_path: Path) -> None:
@@ -84,9 +102,7 @@ def test_duplicate_report_id_is_rejected_not_overwritten(tmp_path: Path) -> None
 
 
 def test_a_corrupted_row_raises_instead_of_being_served(tmp_path: Path) -> None:
-    settings = _settings(tmp_path)
-    engine = build_engine(settings)
-    run_migrations(settings)
+    engine = _engine(tmp_path)
     store = SqlReportStore(engine)
     store.add(_snapshot("r1"))
 

@@ -66,6 +66,7 @@ from trusttable_backend.analysis import (
     create_analysis,
     create_analysis_from_upload,
     create_rule,
+    delete_analysis,
     delete_rule,
     execute_rule_now,
     finalize_ai_assisted_rule,
@@ -1547,6 +1548,30 @@ def post_analysis_cancel(analysis_id: str, request: Request) -> AnalysisResource
     if analysis.state in _NON_TERMINAL_STATES:
         get_job_pool(request).request_cancel(analysis_id)
     return _analysis_resource(analysis)
+
+
+@router.delete("/analyses/{analysis_id}", status_code=204)
+def delete_analysis_resource(analysis_id: str, request: Request) -> None:
+    """Permanently delete an analysis and everything stored with it
+    (`DEL-01`; `docs/api-specification.md` §6, `docs/product-requirements.md`
+    §8.8): the uploaded content, profile, context, questions, findings,
+    evidence, rules, reviews, the AI enrichment record and every report.
+
+    A queued or running analysis is asked to cancel first; deleting it
+    does not wait for the worker, and the worker's later writes cannot
+    bring the analysis back (`replace` never inserts). Irreversible: there
+    is no soft delete. A repeated call finds nothing and is
+    `ANALYSIS_NOT_FOUND` (404), like every other route for a deleted
+    analysis.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    if analysis.state in _NON_TERMINAL_STATES:
+        get_job_pool(request).request_cancel(analysis_id)
+    try:
+        delete_analysis(store, analysis_id)
+    except AnalysisNotFoundError as exc:
+        raise _not_found(analysis_id) from exc
 
 
 @router.post("/analyses/{analysis_id}/retry", response_model=RetryAnalysisResponse, status_code=202)

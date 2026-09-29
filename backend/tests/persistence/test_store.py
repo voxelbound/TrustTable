@@ -62,12 +62,14 @@ def test_add_then_get_round_trips_a_queued_analysis(store: SqlAnalysisStore) -> 
     assert round_tripped == analysis
 
 
-def test_replace_upserts_an_unknown_analysis_id(store: SqlAnalysisStore) -> None:
+def test_replace_never_inserts_an_unknown_analysis_id(store: SqlAnalysisStore) -> None:
+    """`DEL-01`: `replace` only updates. Inserting would let a worker that
+    finishes after its analysis was deleted bring the analysis back."""
     analysis = create_analysis(InMemoryStore())
 
     store.replace(analysis)  # never previously added
 
-    assert store.get(analysis.analysis_id) == analysis
+    assert store.get(analysis.analysis_id) is None
 
 
 def test_replace_overwrites_an_existing_row(store: SqlAnalysisStore) -> None:

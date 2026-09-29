@@ -224,6 +224,19 @@ Returns:
 
 Deletion of an active analysis first requests cancellation.
 
+**Implemented (`DEL-01`, `D-048`):** the route is real. It removes the
+analysis row (the uploaded content, profile, context, questions, findings,
+evidence, rules, reviews and the AI enrichment record) and every stored
+report in one transaction, and returns `204` with no body. It is permanent:
+there is no soft delete or undo. A queued or running analysis is asked to
+cancel and then deleted without waiting for its worker; the worker's later
+writes cannot bring the analysis back. Afterwards every route for that
+analysis, including the report routes and the rules export, is
+`404 ANALYSIS_NOT_FOUND`, and so is a repeated `DELETE`. The database is
+opened with SQLite `secure_delete` so the deleted bytes are overwritten and
+not left readable in the database file. This does not reach copies a
+filesystem or a backup keeps.
+
 ## 7. Worksheet discovery
 
 ### POST `/datasets/inspect`

@@ -12,12 +12,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import exists, insert, literal, select
 from sqlalchemy.engine import Engine
 
 from ..exports.report_snapshot import ReportOptions, ReportSnapshot
 from .database import build_session_factory
-from .models import ReportRecord
+from .models import AnalysisRecord, ReportRecord
 
 
 def _to_snapshot(row: ReportRecord) -> ReportSnapshot:
@@ -42,22 +42,31 @@ class SqlReportStore:
     def __init__(self, engine: Engine) -> None:
         self._session_factory = build_session_factory(engine)
 
-    def add(self, snapshot: ReportSnapshot) -> None:
+    def add(self, snapshot: ReportSnapshot) -> bool:
+        """Store the snapshot, but only while its analysis still exists.
+
+        One `INSERT ... SELECT ... WHERE EXISTS` statement, so a report can
+        never be stored for an analysis that was deleted at any point
+        before it ran (`DEL-01`). Returns whether it was stored.
+        """
+        values = {
+            "report_id": snapshot.report_id,
+            "analysis_id": snapshot.analysis_id,
+            "generated_at": snapshot.generated_at.isoformat(),
+            "include_dismissed": snapshot.options.include_dismissed,
+            "include_technical_appendix": snapshot.options.include_technical_appendix,
+            "include_bounded_examples": snapshot.options.include_bounded_examples,
+            "schema_version": snapshot.schema_version,
+            "markdown": snapshot.markdown,
+            "content_sha256": snapshot.content_sha256,
+        }
+        source = select(*(literal(value) for value in values.values())).where(
+            exists().where(AnalysisRecord.analysis_id == snapshot.analysis_id)
+        )
         with self._session_factory() as session:
-            session.add(
-                ReportRecord(
-                    report_id=snapshot.report_id,
-                    analysis_id=snapshot.analysis_id,
-                    generated_at=snapshot.generated_at.isoformat(),
-                    include_dismissed=snapshot.options.include_dismissed,
-                    include_technical_appendix=snapshot.options.include_technical_appendix,
-                    include_bounded_examples=snapshot.options.include_bounded_examples,
-                    schema_version=snapshot.schema_version,
-                    markdown=snapshot.markdown,
-                    content_sha256=snapshot.content_sha256,
-                )
-            )
+            result = session.execute(insert(ReportRecord).from_select(list(values), source))
             session.commit()
+            return bool(result.rowcount)  # type: ignore[attr-defined]
 
     def get(self, analysis_id: str, report_id: str) -> ReportSnapshot | None:
         """The report, or `None` if unknown or belonging to another analysis."""

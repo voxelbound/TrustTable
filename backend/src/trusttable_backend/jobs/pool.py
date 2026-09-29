@@ -31,7 +31,7 @@ import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 
-from ..analysis.service import AnalysisStoreProtocol, run_analysis
+from ..analysis.service import AnalysisNotFoundError, AnalysisStoreProtocol, run_analysis
 
 
 class JobPool:
@@ -84,6 +84,9 @@ class JobPool:
             run_analysis(
                 self._store, analysis_id, cancel_check=partial(self._cancel_check, analysis_id)
             )
+        except AnalysisNotFoundError:
+            # Deleted before the worker started (`DEL-01`): nothing to run.
+            pass
         finally:
             with self._lock:
                 self._cancel_requested.discard(analysis_id)
