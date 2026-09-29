@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   countBySeverity,
   filterFindings,
+  REVIEW_STATES,
+  reviewStateLabel,
   severityRank,
   sortFindingsByPriority,
   type FindingRecord,
@@ -145,5 +147,20 @@ describe('countBySeverity', () => {
 
   it('returns an empty object for an empty input', () => {
     expect(countBySeverity([])).toEqual({})
+  })
+})
+
+describe('reviewStateLabel', () => {
+  it('labels every selectable review state', () => {
+    expect(REVIEW_STATES.map(reviewStateLabel)).toEqual([
+      'Unreviewed',
+      'Confirmed',
+      'Needs investigation',
+      'Dismissed',
+    ])
+  })
+
+  it('returns an unrecognized state unchanged rather than hiding it', () => {
+    expect(reviewStateLabel('archived')).toBe('archived')
   })
 })
