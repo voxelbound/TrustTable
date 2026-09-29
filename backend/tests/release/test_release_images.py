@@ -28,10 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-# PyYAML is guaranteed by the declared `uvicorn[standard]` dependency and ships
-# no type stubs; this is test-only use.
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SOURCE_COMPOSE = REPO_ROOT / "docker-compose.yml"
