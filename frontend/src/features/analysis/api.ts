@@ -33,6 +33,7 @@ import {
   postAnalysisUploadApiV1AnalysesPost,
   postDemoSalesApiV1DemoSalesPost,
   putAnalysisContextApiV1AnalysesAnalysisIdContextPut,
+  putAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPut,
   type AnalysisResource,
   type AnalysisStatusResponse,
   type AnswerGuidedQuestionResponse,
@@ -48,6 +49,8 @@ import {
   type FindingDetailResponse,
   type FindingEvidenceListResponse,
   type FindingExplanationResponse,
+  type FindingReviewRequest,
+  type FindingReviewResponse,
   type FindingsListResponse,
   type RowContextResponse,
   type UploadAnalysisResponse,
@@ -235,6 +238,44 @@ export function useFindingDetail(
     },
     enabled: Boolean(analysisId) && Boolean(findingId),
   })
+}
+
+/** `PUT .../findings/{finding_id}/review` (`REV-01` route, `UI-03` slice 4).
+ * Replaces the finding's review record. On success the finding's detail and
+ * the findings list are refetched so the persisted state is what is shown. */
+export function useSaveFindingReview(
+  analysisId: string | undefined,
+  findingId: string | undefined,
+) {
+  const queryClient = useQueryClient()
+  return useMutation<FindingReviewResponse, ApiCallError, FindingReviewRequest>(
+    {
+      mutationFn: async (body) => {
+        const result =
+          await putAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPut(
+            {
+              path: {
+                analysis_id: analysisId as string,
+                finding_id: findingId as string,
+              },
+              body,
+            },
+          )
+        if (result.error) {
+          throw new ApiCallError(result.error)
+        }
+        return result.data
+      },
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: ['analysis-finding-detail', analysisId, findingId],
+        })
+        void queryClient.invalidateQueries({
+          queryKey: ['analysis-findings', analysisId],
+        })
+      },
+    },
+  )
 }
 
 /** `GET .../findings/{finding_id}/row-context` (`FIND-01`, `WP-038`).

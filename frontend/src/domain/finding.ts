@@ -104,3 +104,24 @@ export function countBySeverity<T extends { severity: string }>(
   }
   return counts
 }
+
+/** The review states a manager can choose (`REV-01`), in display order. */
+export const REVIEW_STATES = [
+  'unreviewed',
+  'confirmed',
+  'needs_investigation',
+  'dismissed',
+] as const
+
+const REVIEW_STATE_LABELS: Record<string, string> = {
+  unreviewed: 'Unreviewed',
+  confirmed: 'Confirmed',
+  needs_investigation: 'Needs investigation',
+  dismissed: 'Dismissed',
+}
+
+/** Human-readable label for a review state; an unrecognized value is
+ * returned unchanged rather than hidden. */
+export function reviewStateLabel(state: string): string {
+  return REVIEW_STATE_LABELS[state] ?? state
+}

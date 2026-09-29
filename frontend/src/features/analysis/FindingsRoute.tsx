@@ -1,5 +1,6 @@
 import { Link, useParams, useSearchParams } from 'react-router'
 import { FindingSeverityBadge } from '../../components/provenance/FindingSeverityBadge'
+import { reviewStateLabel } from '../../domain/finding'
 import { filterFindings, sortFindingsByPriority } from '../../domain/finding'
 import { useAnalysisFindings } from './api'
 
@@ -160,6 +161,9 @@ export function FindingsRoute() {
               <th scope="col" className="py-2 pr-4">
                 Affected rows
               </th>
+              <th scope="col" className="py-2 pr-4">
+                Review
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -181,6 +185,9 @@ export function FindingsRoute() {
                   </Link>
                 </td>
                 <td className="py-2 pr-4">{finding.affected_row_count}</td>
+                <td className="py-2 pr-4">
+                  {reviewStateLabel(finding.review_state)}
+                </td>
               </tr>
             ))}
           </tbody>

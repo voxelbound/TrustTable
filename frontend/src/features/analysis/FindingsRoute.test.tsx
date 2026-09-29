@@ -97,6 +97,31 @@ describe('FindingsRoute', () => {
     expect(table.textContent).toContain('Low')
   })
 
+  it("UI-03: shows each finding's persisted review state in a Review column", async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/findings', () =>
+        HttpResponse.json(
+          makeFindingsListResponse({
+            items: [
+              { ...FIXTURE_ITEMS[0], review_state: 'needs_investigation' },
+              { ...FIXTURE_ITEMS[1], review_state: 'dismissed' },
+            ],
+          }),
+        ),
+      ),
+    )
+
+    renderFindings()
+
+    const table = await screen.findByRole('table')
+    expect(
+      within(table).getByRole('columnheader', { name: 'Review' }),
+    ).toBeInTheDocument()
+    const rows = within(table).getAllByRole('row').slice(1)
+    expect(rows[0].textContent).toContain('Needs investigation')
+    expect(rows[1].textContent).toContain('Dismissed')
+  })
+
   it('AC-06: sorts rendered findings by priority_score descending', async () => {
     useFixtureFindings()
 
