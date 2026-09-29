@@ -16,6 +16,7 @@ from trusttable_backend.analysis import AnalysisState
 from trusttable_backend.api.v1.analyses import (
     _analysis_not_ready,
     _get_or_404,
+    _not_found,
     get_analysis_store,
 )
 from trusttable_backend.errors import AppError
@@ -94,7 +95,9 @@ def create_report(
         report_id=uuid.uuid4().hex,
         generated_at=datetime.now(UTC),
     )
-    get_report_store(request).add(snapshot)
+    if not get_report_store(request).add(snapshot):
+        # Deleted between the check above and the insert (`DEL-01`).
+        raise _not_found(analysis_id)
     return _response(snapshot)
 
 

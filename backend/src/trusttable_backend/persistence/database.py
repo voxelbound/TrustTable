@@ -19,8 +19,9 @@ separate migrate-then-serve deploy step (recorded assumption 4,
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -61,8 +62,25 @@ def build_engine(settings: Settings) -> Engine:
     never sharing a connection across threads concurrently).
     """
     ensure_data_directory(settings)
-    connect_args = {"check_same_thread": False} if _is_sqlite(settings.database_url) else {}
-    return create_engine(settings.database_url, connect_args=connect_args, future=True)
+    sqlite = _is_sqlite(settings.database_url)
+    connect_args = {"check_same_thread": False} if sqlite else {}
+    engine = create_engine(settings.database_url, connect_args=connect_args, future=True)
+    if sqlite:
+        event.listen(engine, "connect", _enable_secure_delete)
+    return engine
+
+
+def _enable_secure_delete(dbapi_connection: Any, _record: object) -> None:
+    """Have SQLite overwrite deleted content with zeros (`DEL-01`).
+
+    Without this a deleted upload's bytes stay readable in the database
+    file's free pages, so deleting an analysis would not actually remove
+    the uploaded file. This covers the database file; it cannot reach
+    copies the filesystem or backups keep.
+    """
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA secure_delete=ON")
+    cursor.close()
 
 
 def build_session_factory(engine: Engine) -> sessionmaker[Session]:

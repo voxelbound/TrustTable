@@ -1876,6 +1876,36 @@ export type PostAnalysisUploadApiV1AnalysesPostResponses = {
 
 export type PostAnalysisUploadApiV1AnalysesPostResponse = PostAnalysisUploadApiV1AnalysesPostResponses[keyof PostAnalysisUploadApiV1AnalysesPostResponses];
 
+export type DeleteAnalysisResourceApiV1AnalysesAnalysisIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}';
+};
+
+export type DeleteAnalysisResourceApiV1AnalysesAnalysisIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteAnalysisResourceApiV1AnalysesAnalysisIdDeleteError = DeleteAnalysisResourceApiV1AnalysesAnalysisIdDeleteErrors[keyof DeleteAnalysisResourceApiV1AnalysesAnalysisIdDeleteErrors];
+
+export type DeleteAnalysisResourceApiV1AnalysesAnalysisIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteAnalysisResourceApiV1AnalysesAnalysisIdDeleteResponse = DeleteAnalysisResourceApiV1AnalysesAnalysisIdDeleteResponses[keyof DeleteAnalysisResourceApiV1AnalysesAnalysisIdDeleteResponses];
+
 export type GetAnalysisApiV1AnalysesAnalysisIdGetData = {
     body?: never;
     path: {

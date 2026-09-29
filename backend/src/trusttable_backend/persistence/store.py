@@ -20,14 +20,15 @@ import threading
 from collections.abc import Callable
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm.exc import StaleDataError
 
 from ..analysis.service import Analysis, AnalysisState
 from ..domain.ai_enrichment import AiEnrichmentRecord
 from . import serializers
 from .database import build_session_factory
-from .models import AnalysisRecord
+from .models import AnalysisRecord, ReportRecord
 
 #: `AnalysisState` values `Analysis.__post_init__` never leaves pending
 #: further pipeline work — used by `reconciliation.py` to find every
@@ -133,22 +134,49 @@ class SqlAnalysisStore:
         self._enrichment_lock = threading.Lock()
 
     def add(self, analysis: Analysis) -> None:
-        self._upsert(analysis)
-
-    def replace(self, analysis: Analysis) -> None:
-        self._upsert(analysis)
-
-    def _upsert(self, analysis: Analysis) -> None:
         values = _analysis_to_row_values(analysis)
         with self._session_factory() as session:
             existing = session.get(AnalysisRecord, analysis.analysis_id)
             if existing is None:
                 session.add(AnalysisRecord(**values))
             else:
-                for key, value in values.items():
-                    if key not in _SEPARATELY_OWNED_COLUMNS:
-                        setattr(existing, key, value)
+                self._apply(existing, values)
             session.commit()
+
+    def replace(self, analysis: Analysis) -> None:
+        """Update an existing analysis. Never inserts: a write for an
+        analysis that no longer exists (a worker finishing after the
+        analysis was deleted, `DEL-01`) is dropped, so a deleted analysis
+        cannot be brought back by a late write."""
+        values = _analysis_to_row_values(analysis)
+        with self._session_factory() as session:
+            existing = session.get(AnalysisRecord, analysis.analysis_id)
+            if existing is None:
+                return
+            self._apply(existing, values)
+            try:
+                session.commit()
+            except StaleDataError:
+                # Deleted between the read and the write.
+                session.rollback()
+
+    @staticmethod
+    def _apply(existing: AnalysisRecord, values: dict[str, object]) -> None:
+        for key, value in values.items():
+            if key not in _SEPARATELY_OWNED_COLUMNS:
+                setattr(existing, key, value)
+
+    def delete(self, analysis_id: str) -> bool:
+        """Remove the analysis and all of its reports in one transaction
+        (`DEL-01`). Returns whether the analysis existed; either both
+        deletions commit or neither does."""
+        with self._session_factory() as session:
+            session.execute(delete(ReportRecord).where(ReportRecord.analysis_id == analysis_id))
+            result = session.execute(
+                delete(AnalysisRecord).where(AnalysisRecord.analysis_id == analysis_id)
+            )
+            session.commit()
+            return bool(result.rowcount)  # type: ignore[attr-defined]
 
     def update_ai_enrichment(
         self,

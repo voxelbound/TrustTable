@@ -548,6 +548,11 @@ class AnalysisStoreProtocol(Protocol):
         update: Callable[[AiEnrichmentRecord | None], AiEnrichmentRecord | None],
     ) -> None: ...
 
+    def delete(self, analysis_id: str) -> bool:
+        """Remove the analysis and everything stored with it; `False` when
+        it did not exist. `replace` never re-creates a deleted analysis."""
+        ...
+
 
 class AnalysisStore:
     """A minimal in-memory dict-backed store. Whole-analysis writes have no
@@ -572,11 +577,19 @@ class AnalysisStore:
         return self._analyses.get(analysis_id)
 
     def replace(self, analysis: Analysis) -> None:
+        """Update an existing analysis; never inserts (`DEL-01`), so a late
+        write for a deleted analysis is dropped."""
         with self._enrichment_lock:
             stored = self._analyses.get(analysis.analysis_id)
-            if stored is not None:
-                analysis = replace(analysis, ai_enrichment=stored.ai_enrichment)
-            self._analyses[analysis.analysis_id] = analysis
+            if stored is None:
+                return
+            self._analyses[analysis.analysis_id] = replace(
+                analysis, ai_enrichment=stored.ai_enrichment
+            )
+
+    def delete(self, analysis_id: str) -> bool:
+        with self._enrichment_lock:
+            return self._analyses.pop(analysis_id, None) is not None
 
     def update_ai_enrichment(
         self,
@@ -854,6 +867,22 @@ def run_analysis(
     )
     store.replace(completed)
     return completed
+
+
+def delete_analysis(store: AnalysisStoreProtocol, analysis_id: str) -> None:
+    """Delete an analysis and everything stored with it (`DEL-01`,
+    `docs/product-requirements.md` §8.8): the uploaded content, derived
+    profile, context, questions, findings, evidence, rules, reviews, the
+    AI enrichment record and every report.
+
+    Irreversible. The caller is responsible for asking a running analysis
+    to cancel first; a worker that is still running cannot bring the
+    analysis back, because `replace` never inserts.
+
+    Raises `AnalysisNotFoundError` for an unknown (or already deleted) ID.
+    """
+    if not store.delete(analysis_id):
+        raise AnalysisNotFoundError(analysis_id)
 
 
 def record_ai_enrichment_call(

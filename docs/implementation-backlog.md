@@ -636,6 +636,14 @@ Report includes AI-processing security:
 
 Delete file, derived artifacts, exports, and records.
 
+> **Annotation (2026-09-29):** `DELETE /analyses/{id}` is implemented
+> (`docs/api-specification.md` §6, `D-048`): the analysis and all of its
+> reports are removed in one transaction, a running analysis is cancelled
+> and cannot be brought back by its worker, and the stored bytes are
+> overwritten in the database file. The deletion control and its completion
+> message are part of `UI-03`; no `analysis_deleted` event is emitted
+> because no lifecycle event log exists yet.
+
 ## UI-03 — Complete manager UI
 
 Review, remediation, rules, report, deletion, retry.
