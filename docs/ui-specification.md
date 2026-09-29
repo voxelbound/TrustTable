@@ -235,6 +235,23 @@ Show:
 - expandable YAML or JSON
 - export action
 
+**Implemented (`UI-03` slice 3):** `/analyses/:analysisId/rules`, linked as
+*Rules* from the analysis layout of a completed analysis. *Validation
+rules* lists every stored rule with its business description, enabled
+state, severity, provenance and the latest pass, fail and skipped counts
+(or "Not run yet", or the reason the last run could not complete), with an
+honest empty state. *Show details* expands a rule to its type, scope,
+columns, null handling, the parameters its type uses, and the bounded
+example failures of the latest run, all read-only. *Run rule* re-executes
+the rule and refreshes the counts; *Delete rule* asks for confirmation in
+an accessible dialog and removes the rule. *Download JSON* and *Download
+YAML* save the served validated-rules export as a file (never inserted into
+the page). Rule and failure text comes from the dataset and is only
+rendered as escaped text. Failures show an inline error and the page stays
+put. Still **not implemented**: editing supported parameters and toggling
+the enabled state (the API has no update route), and the expandable
+YAML/JSON view of a single rule.
+
 ### 4.10 Report
 
 Show:
@@ -256,9 +273,9 @@ served, each with its generation time, chosen options and content hash,
 and an honest empty state. *Download Markdown* saves the stored Markdown of
 that report as a file (never re-rendered). Report text is only saved, never
 inserted into the page. Failures show an inline error and the page stays
-put. Still **not implemented**: an in-page report preview, included-section
-listing, generation-progress status (generation is a single request) and
-the JSON/YAML rule downloads, which belong with the rules screen.
+put. The JSON/YAML rule downloads are on the Rules screen (slice 3). Still
+**not implemented**: an in-page report preview, included-section listing
+and generation-progress status (generation is a single request).
 
 ### 4.11 Technical details
 
