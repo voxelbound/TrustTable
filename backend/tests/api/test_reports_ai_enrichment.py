@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -290,7 +290,7 @@ def test_an_older_analysis_without_a_record_reports_not_recorded_and_stays_so(
     ai_settings("mock")
     analysis_id = _completed(client)
     store = client.app.state.analysis_store  # type: ignore[attr-defined]
-    store.replace(replace(store.get(analysis_id), ai_enrichment=None))
+    store.update_ai_enrichment(analysis_id, lambda _: None)
     monkeypatch.setattr(
         analyses_module, "run_finding_explanation", lambda *a, **k: _Result(accepted=False)
     )

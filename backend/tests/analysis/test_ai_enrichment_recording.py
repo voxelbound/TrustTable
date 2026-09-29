@@ -9,7 +9,6 @@ from pathlib import Path
 from sqlalchemy import text
 
 from trusttable_backend.analysis.service import (
-    Analysis,
     AnalysisStore,
     create_analysis,
     record_ai_enrichment_call,
@@ -68,8 +67,11 @@ def test_recording_adds_one_attempt_and_leaves_the_rest_of_the_analysis_alone() 
 
 def test_an_analysis_without_a_record_is_never_started_counting() -> None:
     store = AnalysisStore()
-    legacy: Analysis = replace(create_analysis(store), ai_enrichment=None)
-    store.replace(legacy)
+    analysis = create_analysis(store)
+    store.update_ai_enrichment(analysis.analysis_id, lambda _: None)
+    legacy = store.get(analysis.analysis_id)
+    assert legacy is not None
+    assert legacy.ai_enrichment is None
 
     _record(store, legacy.analysis_id, EnrichmentOutcome.ACCEPTED)
 
@@ -97,6 +99,68 @@ def test_concurrent_recordings_do_not_lose_counts(tmp_path: Path) -> None:
     record = store.get(analysis.analysis_id).ai_enrichment  # type: ignore[union-attr]
     assert record is not None
     assert (record.accepted_count, record.rejected_count) == (20, 20)
+    engine.dispose()  # type: ignore[attr-defined]
+
+
+def test_a_stale_whole_analysis_write_cannot_revert_a_recorded_call_in_memory() -> None:
+    store = AnalysisStore()
+    analysis = create_analysis(store)
+    stale = store.get(analysis.analysis_id)
+    assert stale is not None and stale.ai_enrichment == AiEnrichmentRecord()
+
+    _record(store, analysis.analysis_id, EnrichmentOutcome.ACCEPTED)
+    store.replace(replace(stale, rules=()))
+
+    kept = store.get(analysis.analysis_id)
+    assert kept is not None and kept.ai_enrichment is not None
+    assert kept.ai_enrichment.accepted_count == 1
+
+
+def test_a_stale_whole_analysis_write_cannot_revert_a_recorded_call_in_sql(
+    tmp_path: Path,
+) -> None:
+    """The reviewed counterexample: a writer reads the analysis with a zero
+    record, another request records a call, then the first writer replaces
+    the whole row with its stale copy."""
+    store, engine = _sql_store(tmp_path)
+    analysis = create_analysis(store)
+    stale = store.get(analysis.analysis_id)
+    assert stale is not None and stale.ai_enrichment == AiEnrichmentRecord()
+
+    _record(store, analysis.analysis_id, EnrichmentOutcome.ACCEPTED)
+    store.replace(replace(stale, rules=()))
+
+    kept = store.get(analysis.analysis_id)
+    assert kept is not None and kept.ai_enrichment is not None
+    assert kept.ai_enrichment.accepted_count == 1
+    engine.dispose()  # type: ignore[attr-defined]
+
+
+def test_whole_analysis_writes_racing_recordings_lose_no_count(tmp_path: Path) -> None:
+    store, engine = _sql_store(tmp_path)
+    analysis = create_analysis(store)
+    stale = store.get(analysis.analysis_id)
+    assert stale is not None
+
+    def rewrite() -> None:
+        store.replace(replace(stale, rules=()))
+
+    threads = []
+    for _ in range(20):
+        threads.append(
+            threading.Thread(
+                target=_record, args=(store, analysis.analysis_id, EnrichmentOutcome.ACCEPTED)
+            )
+        )
+        threads.append(threading.Thread(target=rewrite))
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    record = store.get(analysis.analysis_id).ai_enrichment  # type: ignore[union-attr]
+    assert record is not None
+    assert record.accepted_count == 20
     engine.dispose()  # type: ignore[attr-defined]
 
 
