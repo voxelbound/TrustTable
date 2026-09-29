@@ -114,6 +114,12 @@ export function AnalysisLayoutRoute() {
           Overview
         </Link>
         <Link
+          to={`/analyses/${analysisId ?? ''}/rules`}
+          className="font-medium text-slate-900 underline dark:text-slate-100"
+        >
+          Rules
+        </Link>
+        <Link
           to={`/analyses/${analysisId ?? ''}/report`}
           className="font-medium text-slate-900 underline dark:text-slate-100"
         >
