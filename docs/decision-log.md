@@ -484,3 +484,19 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** changes no route, persistence, scoring, detector, review or AI-boundary behavior; does not reopen `D-037`/`D-038`.
 
 **Decided by:** delegated implementation authority under the active work package; both choices preserve the package's stated intent and are reversible.
+
+## D-047 — AI enrichment calls are recorded as counters on the analysis, and a report states only what was recorded
+
+**Decision (2026-09-29, `EXP-01` slice 4; fulfils `D-046` point 4):**
+
+1. **Counters, not a call log.** `Analysis.ai_enrichment` holds the number of attempted enrichment calls by outcome (accepted, rejected, provider error), whether bounded finding evidence or confirmed context may have been sent, and the model location. It stores no prompt, output, model name, URL, timestamp, finding reference or dataset value. It sits in a new additive nullable `ai_enrichment_json` column. A per-call log remains a possible later extension.
+2. **Every call site records itself.** The finding explanation, the first-call context inference and the AI rule generation each record exactly one outcome per attempt; a deployment with AI disabled records nothing. A failure before a request is built records a provider error with nothing sent. The context inference never counts as sending confirmed context, because it sends the inferred context.
+3. **Zero is a claim, `NULL` is not.** A new analysis starts with a zero record, which a report states as "no call is recorded as attempted". An analysis persisted before recording existed keeps `NULL`, which a report states as "not recorded" with no statement about use, and it is never started counting later, so an older analysis is not turned into a false "no other calls".
+4. **Location is conservative.** `local` only for the mock provider and for `llama_cpp` when its base URL names this machine (loopback, `localhost` or the documented `host.docker.internal`); everything else is `unknown`. Calls that disagree on location merge to `unknown`. There is no `remote` value, because a non-local address is not proof of a remote one.
+5. **Protections are attested only when true.** A report lists two protections when at least one call is recorded: dataset-derived content goes inside an untrusted-data prompt envelope, and model output is validated before use. All three call sites build a `PromptEnvelope` and validate with a role-specific validator.
+
+**Basis:** the human owner chose the counters option (2026-09-29) over a per-call log or closing `EXP-01` with the "not recorded" wording.
+
+**Explicit non-scope:** reports created before this change keep their stored wording; no backfill; the offline benchmark harness is not a per-analysis path and records nothing; `D-037`/`D-038` are not reopened.
+
+**Decided by:** the human owner (option A, 2026-09-29); implementation details under delegated authority.
