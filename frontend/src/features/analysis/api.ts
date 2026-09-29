@@ -8,6 +8,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  deleteAnalysisResourceApiV1AnalysesAnalysisIdDelete,
   getAnalysisApiV1AnalysesAnalysisIdGet,
   getAnalysisContextApiV1AnalysesAnalysisIdContextGet,
   getAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGet,
@@ -17,8 +18,10 @@ import {
   getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet,
   getAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGet,
   getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet,
+  postAnalysisCancelApiV1AnalysesAnalysisIdCancelPost,
   postAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePost,
   postAnalysisQuestionAnswerApiV1AnalysesAnalysisIdQuestionsQuestionIdAnswerPost,
+  postAnalysisRetryApiV1AnalysesAnalysisIdRetryPost,
   postAnalysisUploadApiV1AnalysesPost,
   postDemoSalesApiV1DemoSalesPost,
   putAnalysisContextApiV1AnalysesAnalysisIdContextPut,
@@ -28,6 +31,7 @@ import {
   type ClarificationQuestionListResponse,
   type ContextResponse,
   type DemoAnalysisResponse,
+  type RetryAnalysisResponse,
   type FindingDetailResponse,
   type FindingEvidenceListResponse,
   type FindingExplanationResponse,
@@ -446,6 +450,72 @@ export function useFinalizeContext(analysisId: string | undefined) {
         throw new ApiCallError(result.error)
       }
       return result.data
+    },
+  })
+}
+
+/** `POST .../cancel` (`UI-03` slice 1). Refreshes the status and resource
+ * queries so the layout shows the cancelled state. */
+export function useCancelAnalysis(analysisId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation<AnalysisResource, ApiCallError, void>({
+    mutationFn: async () => {
+      const result = await postAnalysisCancelApiV1AnalysesAnalysisIdCancelPost({
+        path: { analysis_id: analysisId as string },
+      })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['analysis-status', analysisId],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['analysis-resource', analysisId],
+      })
+    },
+  })
+}
+
+/** `POST .../retry` (`UI-03` slice 1). Creates a new, independent analysis
+ * (`docs/api-specification.md` §6); the caller navigates to
+ * `response.analysis.analysis_id`. The original analysis is not touched. */
+export function useRetryAnalysis(analysisId: string | undefined) {
+  return useMutation<RetryAnalysisResponse, ApiCallError, void>({
+    mutationFn: async () => {
+      const result = await postAnalysisRetryApiV1AnalysesAnalysisIdRetryPost({
+        path: { analysis_id: analysisId as string },
+      })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+  })
+}
+
+/** `DELETE /analyses/{id}` (`UI-03` slice 1, `DEL-01`). `204` has no body,
+ * so success is `result.error === undefined`. Permanent: on success every
+ * cached query for the analysis is removed (not invalidated — refetching a
+ * deleted analysis would only 404). */
+export function useDeleteAnalysis(analysisId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation<void, ApiCallError, void>({
+    mutationFn: async () => {
+      const result = await deleteAnalysisResourceApiV1AnalysesAnalysisIdDelete({
+        path: { analysis_id: analysisId as string },
+      })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+    },
+    onSuccess: () => {
+      queryClient.removeQueries({
+        predicate: (query) =>
+          query.queryKey.length > 1 && query.queryKey[1] === analysisId,
+      })
     },
   })
 }

@@ -3,6 +3,7 @@ import { AppShell } from '../../components/layout/AppShell'
 import { AnalysisStageProgress } from '../../components/provenance/AnalysisStageProgress'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
+import { AnalysisActions } from './AnalysisActions'
 import { useAnalysisResource, useAnalysisStatus } from './api'
 
 const RESOURCE_STATES = new Set(['completed', 'failed', 'cancelled'])
@@ -26,6 +27,14 @@ export function AnalysisLayoutRoute() {
   const handleReturnToStart = () => {
     void navigate('/analyses/new')
   }
+
+  const actions = analysisId ? (
+    <AnalysisActions
+      analysisId={analysisId}
+      cancellable={statusQuery.data?.cancellable ?? false}
+      retryable={statusQuery.data?.retryable ?? false}
+    />
+  ) : null
 
   if (statusQuery.isLoading) {
     return (
@@ -66,6 +75,7 @@ export function AnalysisLayoutRoute() {
         <Button className="mt-4" onClick={handleReturnToStart}>
           Return to start
         </Button>
+        {actions}
       </AppShell>
     )
   }
@@ -79,6 +89,7 @@ export function AnalysisLayoutRoute() {
         <Button className="mt-4" onClick={handleReturnToStart}>
           Return to start
         </Button>
+        {actions}
       </AppShell>
     )
   }
@@ -87,12 +98,14 @@ export function AnalysisLayoutRoute() {
     return (
       <AppShell statusText="In progress">
         <AnalysisStageProgress state={state ?? 'queued'} />
+        {actions}
       </AppShell>
     )
   }
 
   return (
     <AppShell datasetName={datasetName} statusText="Completed">
+      {actions}
       <Outlet />
     </AppShell>
   )
