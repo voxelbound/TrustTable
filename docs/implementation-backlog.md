@@ -648,6 +648,13 @@ Delete file, derived artifacts, exports, and records.
 
 Review, remediation, rules, report, deletion, retry.
 
+> **Annotation (2026-09-29, slice 1 of `UI-03`):** the analysis lifecycle
+> controls are implemented in the analysis layout: cancel, retry (opens the
+> new attempt) and delete with an accessible permanent-removal
+> confirmation (`docs/ui-specification.md` §3). Still **not implemented**:
+> the rules screen, the report screen, finding review controls and the
+> technical details screen. `UI-03` stays open.
+
 ## REL-03 — v0.3 package
 
 Persistence and complete CSV workflow.
