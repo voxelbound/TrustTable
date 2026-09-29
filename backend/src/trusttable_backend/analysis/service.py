@@ -76,6 +76,7 @@ otherwise (`dataclasses`, `enum`, `datetime`, `uuid`, `hashlib`). No
 from __future__ import annotations
 
 import hashlib
+import threading
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
@@ -90,6 +91,11 @@ from ..demo_data import SEED, generate
 from ..detectors.catalogue import DETECTORS
 from ..detectors.contract import FindingCandidate, SecurityExposureState
 from ..detectors.engine import run_detectors
+from ..domain.ai_enrichment import (
+    AiEnrichmentRecord,
+    EnrichmentModelLocation,
+    EnrichmentOutcome,
+)
 from ..domain.clarification import (
     ClarificationAnswer,
     ClarificationQuestion,
@@ -290,6 +296,11 @@ class Analysis:
     `create_analysis_from_upload`/this dataclass's own constructor is
     unaffected (defaults to `None`). Set exactly once, at construction,
     by `retry_analysis` below; never mutated afterward."""
+    ai_enrichment: AiEnrichmentRecord | None = AiEnrichmentRecord()
+    """Counters of optional AI enrichment calls (`EXP-01` slice 4). A new
+    analysis starts with the zero record; `None` means the analysis was
+    persisted before recording existed, i.e. *not recorded* (never *no
+    calls*). Updated only by `record_ai_enrichment_call`."""
 
     def __post_init__(self) -> None:
         if not self.analysis_id:
@@ -815,6 +826,44 @@ def run_analysis(
     )
     store.replace(completed)
     return completed
+
+
+_ENRICHMENT_LOCK = threading.Lock()
+
+
+def record_ai_enrichment_call(
+    store: AnalysisStoreProtocol,
+    analysis_id: str,
+    *,
+    outcome: EnrichmentOutcome,
+    evidence_sent: bool,
+    confirmed_context_sent: bool,
+    location: EnrichmentModelLocation,
+) -> None:
+    """Add one attempted AI enrichment call to the analysis's record
+    (`EXP-01` slice 4). Every route that can reach a model calls this.
+
+    An analysis whose record is `None` (persisted before recording
+    existed) is left as is: starting to count now would turn *not
+    recorded* into a false *no other calls*. An unknown analysis is
+    ignored. The read-modify-write is serialized so concurrent calls
+    cannot lose a count.
+    """
+    with _ENRICHMENT_LOCK:
+        analysis = store.get(analysis_id)
+        if analysis is None or analysis.ai_enrichment is None:
+            return
+        store.replace(
+            replace(
+                analysis,
+                ai_enrichment=analysis.ai_enrichment.with_call(
+                    outcome,
+                    evidence_sent=evidence_sent,
+                    confirmed_context_sent=confirmed_context_sent,
+                    location=location,
+                ),
+            )
+        )
 
 
 def get_status(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:

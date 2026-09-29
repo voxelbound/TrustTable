@@ -624,6 +624,13 @@ Report includes AI-processing security:
 > per-analysis record of AI enrichment calls, the report screen (`UI-03`),
 > and deletion of reports with their analysis (`DEL-01`). `EXP-01` stays
 > open.
+>
+> **Annotation (2026-09-29, slice 4 of `EXP-01`):** the per-analysis record
+> of AI enrichment calls (`D-047`) is implemented and new reports state
+> counts, what may have been sent, the model location and the protections.
+> The `EXP-01` backend scope is complete: Markdown report, JSON/YAML rules
+> and the AI-processing section. The report screen (`UI-03`) and report
+> deletion with the analysis (`DEL-01`) remain separate items.
 
 ## DEL-01 — Analysis deletion
 

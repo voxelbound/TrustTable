@@ -65,6 +65,7 @@ def _analysis_to_row_values(analysis: Analysis) -> dict[str, object]:
         "guided_questions_json": serializers.encode(analysis.guided_questions),
         "rules_json": serializers.encode(analysis.rules),
         "finding_reviews_json": serializers.encode(analysis.finding_reviews),
+        "ai_enrichment_json": serializers.encode(analysis.ai_enrichment),
         "context_version": analysis.context_version,
         "context_finalized": analysis.context_finalized,
         "retry_source_analysis_id": analysis.retry_source_analysis_id,
@@ -99,6 +100,10 @@ def _row_to_analysis(row: AnalysisRecord) -> Analysis:
         finding_reviews=serializers.decode(row.finding_reviews_json)
         if row.finding_reviews_json is not None
         else {},
+        # NULL is *not recorded*, never a zero record (`EXP-01` slice 4).
+        ai_enrichment=serializers.decode(row.ai_enrichment_json)
+        if row.ai_enrichment_json is not None
+        else None,
         context_version=row.context_version,
         context_finalized=row.context_finalized,
         retry_source_analysis_id=row.retry_source_analysis_id,
