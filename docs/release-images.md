@@ -12,11 +12,14 @@ person with only GitHub and the GitHub Container Registry (GHCR) runs.
 > and have not been container-scanned. `docker compose up --build` from a
 > checkout remains the source-build install.
 
-> **`v0.3.0` is prepared in the repository but not published.** The backend
-> version is `0.3.0`, so the tag `v0.3.0` would pass the version check, but no
-> tag has been pushed, no `0.3.0` image exists on GHCR and no clean-host install
-> has been run for it. Until that is done and recorded here, `v0.2.0` is the
-> latest published and verified release.
+> **Status: published and verified for `v0.3.0`.** The owner pushed the annotated
+> tag `v0.3.0`, which peels to commit `5053249adacca3c46276daa91f8ea1ff0ccc945d`
+> (read back from the remote). The owner reports that the workflow passed and
+> that a clean Linux host with no GHCR credentials pulled both `0.3.0` images,
+> started them with AI off, and saw a healthy backend, `application_version`
+> `0.3.0` and the frontend answering `HTTP 200`. `v0.3.0` is the latest published
+> and verified release; the same limits as for `v0.2.0` apply (see "Outcome of the
+> `v0.3.0` publish" below).
 
 ## What is published
 
@@ -45,8 +48,8 @@ TRUSTTABLE_VERSION=<version> docker compose -f docker-compose.release.yml pull
 TRUSTTABLE_VERSION=<version> docker compose -f docker-compose.release.yml up -d --no-build
 ```
 
-For `v0.2.0` (`<version>` = `0.2.0`) this is the sequence that was verified on a
-clean host.
+For `v0.2.0` (`<version>` = `0.2.0`) and for `v0.3.0` (`<version>` = `0.3.0`)
+this is the sequence that was verified on a clean host.
 
 `docker-compose.release.yml` is the pull-only twin of `docker-compose.yml`:
 the same two services, ports, restart policy, health checks and host-gateway
@@ -131,6 +134,28 @@ performed by any workflow or automation, and each needs explicit authority:
   containers and network cleanly.
 - What that run did not cover is listed in
   [`installation-linux.md`](installation-linux.md#restricted-network-installs).
+
+## Outcome of the `v0.3.0` publish
+
+- The annotated tag `v0.3.0` exists on the remote and peels to commit
+  `5053249adacca3c46276daa91f8ea1ff0ccc945d`, the merge commit of the `v0.3`
+  release-candidate change (read back from the remote).
+- The owner reports, having observed the run, that the `Release images` workflow
+  passed: version check, build and publish of
+  `ghcr.io/voxelbound/trusttable-backend:0.3.0` and
+  `ghcr.io/voxelbound/trusttable-frontend:0.3.0`, and the job with no registry
+  login that pulls and starts them. The image publication itself was not
+  independently read back from the registry for this record.
+- The owner reports a clean-host check: logged out of `ghcr.io`, both images
+  pulled, the backend became healthy, `GET /api/v1/version` returned
+  `application_version` `0.3.0`, and the frontend answered `HTTP 200` on port
+  `8080`. No steps were skipped. These are the owner's observations; no
+  automation ran on that host.
+- **Not covered, as for `v0.2.0`:** the local-AI setup (`llama-server`, a
+  provisioned model, the model connectivity check), the demo analysis and any UI
+  flow beyond the frontend answering, and any host other than Linux x86-64. The
+  images are unsigned, carry no provenance or SBOM attestation and have not been
+  container-scanned. Nothing about local-AI reliability or speed was measured.
 
 ## See also
 

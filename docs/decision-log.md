@@ -518,3 +518,20 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** no bulk delete, no undo, no change to cancellation semantics.
 
 **Decided by:** delegated implementation authority under the active work package; every choice serves the stated requirement and none adds a product behavior.
+
+## D-049 — `REL-03` is complete: `v0.3.0` is published and verified on a clean host with AI off
+
+**Decision (2026-09-30):**
+
+1. **Published.** The project owner pushed the annotated tag `v0.3.0`; it was read back from the remote and peels to commit `5053249adacca3c46276daa91f8ea1ff0ccc945d`, the merge commit of the release-candidate change. The owner reports, having observed the run, that the `Release images` workflow passed, including its job with no registry login that pulls and starts the images. The registry contents themselves were not independently read back for this record.
+2. **Verified on a clean host.** The owner reports a clean Linux host with no GHCR credentials: logged out of `ghcr.io`, both `0.3.0` images pulled, the backend became healthy, `GET /api/v1/version` returned `application_version` `0.3.0`, and the frontend answered `HTTP 200` on port `8080`. No steps were skipped. These are the owner's observations; no automation ran on that host.
+3. **Stated limits.** As in `D-045`: the check is one AI-off pull, start and health check; `llama-server`, a provisioned model and the model connectivity check were not exercised. The images are unsigned, carry no provenance or SBOM attestation and have not been container-scanned. Only `linux/amd64` is published. Nothing about local-AI reliability, latency or hardware was measured.
+4. **`REL-03` is complete on that basis.** Whether the `v0.3` milestone is complete is the owner's decision and is not made here.
+
+**Basis:** the tag-gated publish path and its credential-free verification (`D-041`) are what make a release usable by a host with only GitHub and GHCR access; the owner ran them for `v0.3.0` exactly as for `v0.2.0`.
+
+**Alternatives considered:** extend the clean-host check to the local-AI setup (more evidence, but it re-enters the local-AI work `D-044` scoped out); read the registry back independently (not available to the documentation change).
+
+**Explicit non-scope:** changes no code, workflow, dependency or default; does not reopen `D-041`, `D-044` or `D-045`.
+
+**Decided by:** the human owner pushed the tag and ran and observed the workflow and the clean-host check; the documentation mapping was completed under delegated implementation authority.
