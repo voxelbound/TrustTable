@@ -676,6 +676,15 @@ Review, remediation, rules, report, deletion, retry.
 > findings list shows each review state. Still **not implemented**: the
 > technical details screen, and filtering findings by review state.
 > `UI-03` stays open.
+>
+> **Annotation (2026-09-30, slice 5 of `UI-03`, item complete):** the
+> technical details screen is implemented (`docs/ui-specification.md`
+> §4.11) from existing routes only. `UI-03`'s named screens (lifecycle
+> controls, rules, report, finding review, technical details) are now all
+> delivered. Backend-dependent gaps remain outside this item: editing rule
+> parameters and the enabled toggle (no update route), filtering findings
+> by review state (no filter), and exposing detector thresholds and
+> analysis-level prompt/model metadata.
 
 ## REL-03 — v0.3 package
 
