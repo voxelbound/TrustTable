@@ -69,12 +69,17 @@ function FactList({ children }: { children: React.ReactNode }) {
 
 function describeScope(profile: AnalysisProfileResponse): string {
   const { scope, sample_size, population_size, method } = profile.sampling
-  const full = sample_size === population_size
-  if (full) {
-    return `Full data: all ${population_size} rows were profiled (scope: ${scope}).`
-  }
+  // The API's scope is authoritative: a profile the backend labels
+  // `sampled` stays sampled even when the sample happens to equal the
+  // population. Sizes only supply the numbers, never the label.
   const how = method ? `, method: ${method}` : ''
-  return `Sampled: ${sample_size} of ${population_size} rows were profiled (scope: ${scope}${how}).`
+  if (scope === 'full') {
+    return `Full data: all ${population_size} rows were profiled.`
+  }
+  if (scope === 'sampled') {
+    return `Sampled: ${sample_size} of ${population_size} rows were profiled${how}.`
+  }
+  return `Profile scope "${scope}": ${sample_size} of ${population_size} rows were profiled${how}.`
 }
 
 interface DetectorRow {
