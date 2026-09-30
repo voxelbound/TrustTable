@@ -135,9 +135,14 @@ Deliver:
 
 > **Annotation (2026-09-30, `REL-03` slice 1):** every `v0.3` feature above is
 > implemented, and the repository is prepared for the release: version `0.3.0`
-> and an end-to-end acceptance test of the persisted CSV workflow. `v0.3.0` is
-> **not published or verified on a clean host**; that remains a protected
-> release action, after which `REL-03` is complete.
+> and an end-to-end acceptance test of the persisted CSV workflow.
+>
+> **Annotation (2026-09-30, `docs/decision-log.md` D-049):** `v0.3.0` is
+> published and was verified on a clean host with AI off (one pull, start and
+> health check), and `REL-03` is complete. The images are unsigned,
+> unattested and not container-scanned, and the local-AI setup was not
+> exercised there. Whether the `v0.3` milestone is complete is the owner's
+> decision and is not made here.
 
 ## v1.0 — Production-quality local release
 

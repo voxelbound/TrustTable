@@ -695,9 +695,18 @@ Persistence and complete CSV workflow.
 > (`backend/tests/api/test_v03_complete_workflow.py`) drives a CSV through the
 > whole persisted workflow — analysis, findings, a finding review, a rule
 > created and run, the rules export, a stored Markdown report, a restart and
-> permanent deletion. Still **not done**: pushing the `v0.3.0` tag, publishing
-> the images and a clean-host install check (protected release actions), so
-> `REL-03` stays open.
+> permanent deletion. Still **not done** at that point: pushing the `v0.3.0`
+> tag, publishing the images and a clean-host install check (protected release
+> actions), so `REL-03` stayed open.
+>
+> **Annotation (2026-09-30, slice 2 of `REL-03`, item complete):** the owner
+> pushed the tag `v0.3.0` (peels to `5053249adacca3c46276daa91f8ea1ff0ccc945d`),
+> the release workflow passed, and a clean Linux host with no GHCR credentials
+> pulled and started the release with AI off (`docs/decision-log.md` D-049).
+> As for `REL-02`, the clean-host check is one AI-off pull, start and health
+> check; the local-AI setup was not exercised. Images remain unsigned,
+> unattested and not container-scanned. `REL-03` is complete; the `v0.3`
+> milestone decision is the owner's.
 
 # Production completion
 
