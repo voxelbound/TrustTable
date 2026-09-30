@@ -125,6 +125,12 @@ export function AnalysisLayoutRoute() {
         >
           Report
         </Link>
+        <Link
+          to={`/analyses/${analysisId ?? ''}/technical`}
+          className="font-medium text-slate-900 underline dark:text-slate-100"
+        >
+          Technical
+        </Link>
       </nav>
       <div className="mt-6">
         <Outlet />

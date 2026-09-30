@@ -23,6 +23,7 @@ import {
   getAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGet,
   getAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGet,
   getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet,
+  getAnalysisProfileApiV1AnalysesAnalysisIdProfileGet,
   getAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGet,
   getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet,
   listReportsApiV1AnalysesAnalysisIdReportsGet,
@@ -34,6 +35,7 @@ import {
   postDemoSalesApiV1DemoSalesPost,
   putAnalysisContextApiV1AnalysesAnalysisIdContextPut,
   putAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPut,
+  type AnalysisProfileResponse,
   type AnalysisResource,
   type AnalysisStatusResponse,
   type AnswerGuidedQuestionResponse,
@@ -213,6 +215,24 @@ export function useAnalysisFindings(
       return result.data
     },
     enabled: Boolean(analysisId) && (options?.enabled ?? true),
+  })
+}
+
+/** `GET .../profile` (`PROF-03` route, `UI-03` slice 5): the versioned
+ * dataset and column profile, read-only, for the technical details screen. */
+export function useAnalysisProfile(analysisId: string | undefined) {
+  return useQuery<AnalysisProfileResponse, ApiCallError>({
+    queryKey: ['analysis-profile', analysisId],
+    queryFn: async () => {
+      const result = await getAnalysisProfileApiV1AnalysesAnalysisIdProfileGet({
+        path: { analysis_id: analysisId as string },
+      })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled: Boolean(analysisId),
   })
 }
 
