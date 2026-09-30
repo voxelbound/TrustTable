@@ -133,6 +133,12 @@ Deliver:
 - analysis deletion
 - security section in reports
 
+> **Annotation (2026-09-30, `REL-03` slice 1):** every `v0.3` feature above is
+> implemented, and the repository is prepared for the release: version `0.3.0`
+> and an end-to-end acceptance test of the persisted CSV workflow. `v0.3.0` is
+> **not published or verified on a clean host**; that remains a protected
+> release action, after which `REL-03` is complete.
+
 ## v1.0 — Production-quality local release
 
 Deliver:
