@@ -31,7 +31,8 @@ Optionally add a **local AI model** (`llama.cpp`, no account or API key, no Hugg
 **Current milestone: v0.3 — Complete manager workflow (in progress).**
 
 - **Delivered so far:** `DB-01` — durable SQLAlchemy 2 + Alembic persistence for the Analysis aggregate, replacing the in-memory store; `JOB-01` (complete) — a bounded in-process background worker pool with real cooperative cancellation and a retry endpoint, replacing synchronous in-request pipeline execution; `REM-01` (complete) — structured remediation recommendations with risk warnings, replacing the earlier bare-string advisory steps; `RULE-01` (complete) — a real, persisted validation-rule engine for all 11 rule types; `RULE-02` (complete) — rule generation from findings: 10 of 13 detector categories deterministic (slices 1 and 3), 1 AI-assisted (slice 2, `consistency.inconsistent_capitalization`), and 2 permanently excluded for a stated structural reason; `REV-01` (complete) — persisted per-finding review state, note, and dismissal reason (see "Delivered work" below).
-- **Remaining for `v0.3`:** `EXP-01` (report export), `DEL-01` (analysis deletion), `UI-03`, and `REL-03` — none of these are implemented yet.
+- **Manager UI (`UI-03`, complete):** analysis lifecycle controls (cancel, retry, delete), report generation and download, the rules screen with JSON/YAML export downloads, finding review controls, and a read-only Technical page (profile, sampled or full-data label, timing, detectors and versions). Rule parameter editing and findings filtering by review state need backend routes that do not exist yet.
+- **Remaining for `v0.3`:** `REL-03` (persistence and complete CSV workflow release package).
 
 **v0.2 — Local AI beta (released as `v0.2.0`).**
 
