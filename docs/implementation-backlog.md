@@ -690,6 +690,15 @@ Review, remediation, rules, report, deletion, retry.
 
 Persistence and complete CSV workflow.
 
+> **Annotation (2026-09-30, slice 1 of `REL-03`):** the repository side is
+> prepared: the backend version is `0.3.0` and one acceptance test
+> (`backend/tests/api/test_v03_complete_workflow.py`) drives a CSV through the
+> whole persisted workflow — analysis, findings, a finding review, a rule
+> created and run, the rules export, a stored Markdown report, a restart and
+> permanent deletion. Still **not done**: pushing the `v0.3.0` tag, publishing
+> the images and a clean-host install check (protected release actions), so
+> `REL-03` stays open.
+
 # Production completion
 
 ## ING-03 — Secure XLSX support
