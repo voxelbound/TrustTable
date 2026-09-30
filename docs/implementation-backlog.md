@@ -669,6 +669,13 @@ Review, remediation, rules, report, deletion, retry.
 > editing rule parameters and the enabled toggle (no update route exists),
 > finding review controls and the technical details screen. `UI-03` stays
 > open.
+>
+> **Annotation (2026-09-29, slice 4 of `UI-03`):** the finding review
+> controls are implemented on the finding detail screen
+> (`docs/ui-specification.md` §4.7) over the existing review route, and the
+> findings list shows each review state. Still **not implemented**: the
+> technical details screen, and filtering findings by review state.
+> `UI-03` stays open.
 
 ## REL-03 — v0.3 package
 

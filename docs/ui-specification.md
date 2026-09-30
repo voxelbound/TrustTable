@@ -205,8 +205,20 @@ deterministic evidence:
   TrustTable does not run or enforce it and nothing is activated
   automatically;
 - an empty section shows an honest empty state, not a "not yet
-  available" placeholder. *Review controls* (persistent review) remains
-  the one not-yet-available section.
+  available" placeholder.
+
+**Implemented (`UI-03` slice 4): review controls.** The section shows the
+current persisted review (state and save time) and a form with the four
+states (*Unreviewed*, *Confirmed*, *Needs investigation*, *Dismissed*), an
+optional note, and a dismissal reason that appears and is required only
+when *Dismissed* is chosen; saving is blocked until the reason is given.
+Saving calls `PUT .../findings/{finding_id}/review` and the screen then
+shows the state the server returned; a server rejection appears as an
+inline alert. The section states that a review records the manager's
+decision only and does not change the finding, its evidence or the data.
+The findings list shows each finding's review state in a *Review* column.
+**Not implemented:** filtering the list by review state (the list route has
+no filters yet).
 
 ### 4.8 Prompt-injection warning
 
