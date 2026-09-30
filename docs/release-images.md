@@ -12,6 +12,12 @@ person with only GitHub and the GitHub Container Registry (GHCR) runs.
 > and have not been container-scanned. `docker compose up --build` from a
 > checkout remains the source-build install.
 
+> **`v0.3.0` is prepared in the repository but not published.** The backend
+> version is `0.3.0`, so the tag `v0.3.0` would pass the version check, but no
+> tag has been pushed, no `0.3.0` image exists on GHCR and no clean-host install
+> has been run for it. Until that is done and recorded here, `v0.2.0` is the
+> latest published and verified release.
+
 ## What is published
 
 | Image | Built from |
