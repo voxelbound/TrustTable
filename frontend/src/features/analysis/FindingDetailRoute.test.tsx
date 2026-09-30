@@ -105,18 +105,14 @@ describe('FindingDetailRoute', () => {
     ).toBeInTheDocument()
   })
 
-  it('AI-08: the business impact, remediation and validation rule placeholders are gone; only review controls remains not yet available', async () => {
+  it('AI-08 / UI-03: no section is a not-yet-available placeholder any more; review controls are real', async () => {
     renderDetail()
 
     await screen.findByRole('heading', { name: 'Observation' })
-    expect(await screen.findByText(/Not yet available/)).toBeInTheDocument()
-    // Exactly one "Not yet available" remains: persistent finding review.
-    expect(screen.getAllByText(/Not yet available/)).toHaveLength(1)
     expect(
-      screen.getByText(
-        'Not yet available — persistent finding review is a later backlog item.',
-      ),
+      await screen.findByRole('button', { name: 'Save review' }),
     ).toBeInTheDocument()
+    expect(screen.queryByText(/Not yet available/)).toBeNull()
     expect(screen.queryByText(/business-impact analysis is a later/)).toBeNull()
     expect(
       screen.queryByText(/remediation recommendations are a later/),

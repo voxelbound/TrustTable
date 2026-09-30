@@ -8,6 +8,7 @@ import {
   RemediationSection,
   ValidationRuleSection,
 } from './FindingGuidanceSections'
+import { FindingReviewControls } from './FindingReviewControls'
 import { RowContext } from './RowContext'
 import {
   useFindingDetail,
@@ -32,9 +33,8 @@ const REPRESENTATIVE_SAMPLE_TYPE = 'representative_sample'
  * interpretation (labelled with a human-readable identity, never a
  * filesystem path), conditional vs. context-informed potential impact (never
  * "evidence-backed"), and a
- * *proposed* rule that is explicitly not active. "Review controls" is
- * still the disclosed not-yet-available section (`REV-01`, a later
- * backlog item).
+ * *proposed* rule that is explicitly not active. "Review controls" record
+ * the manager's persistent review decision (`REV-01`, `UI-03` slice 4).
  *
  * **`WP-065` (defect fix):** Technical metadata's former generic "AI
  * model enabled" row (sourced from `finding.security_exposure`) was
@@ -289,17 +289,16 @@ export function FindingDetailRoute() {
         </>
       )}
 
-      <section aria-labelledby="review-heading">
-        <h2
-          id="review-heading"
-          className="text-xl font-semibold text-slate-900 dark:text-slate-100"
-        >
-          Review controls
-        </h2>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Not yet available — persistent finding review is a later backlog item.
-        </p>
-      </section>
+      {analysisId && (
+        <FindingReviewControls
+          analysisId={analysisId}
+          findingId={finding.finding_id}
+          reviewState={finding.review_state}
+          note={finding.note}
+          dismissalReason={finding.dismissal_reason}
+          reviewedAt={finding.reviewed_at}
+        />
+      )}
 
       <section aria-labelledby="technical-heading">
         <h2

@@ -426,6 +426,23 @@ export const handlers = [
       return HttpResponse.json(makeFindingExplanationResponse())
     },
   ),
+  http.put(
+    `${BASE}/analyses/:analysisId/findings/:findingId/review`,
+    async ({ request, params }) => {
+      const body = (await request.json()) as {
+        state: string
+        note?: string | null
+        dismissal_reason?: string | null
+      }
+      return HttpResponse.json({
+        finding_id: String(params.findingId),
+        review_state: body.state,
+        note: body.note ?? null,
+        dismissal_reason: body.dismissal_reason ?? null,
+        reviewed_at: '2026-09-29T10:00:00Z',
+      })
+    },
+  ),
   http.get(`${BASE}/analyses/:analysisId/context`, () => {
     return HttpResponse.json(makeContextResponse())
   }),
