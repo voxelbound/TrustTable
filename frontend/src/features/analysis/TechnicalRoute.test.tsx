@@ -58,7 +58,7 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
       method: null,
       population_size: 100,
       sample_size: 100,
-      scope: 'all_rows',
+      scope: 'full',
     },
     schema_version: 'profile-v1',
     timing: {
@@ -151,7 +151,7 @@ describe('TechnicalRoute', () => {
           method: 'random',
           population_size: 5000,
           sample_size: 500,
-          scope: 'sample',
+          scope: 'sampled',
         },
       }),
     })
@@ -159,9 +159,47 @@ describe('TechnicalRoute', () => {
 
     expect(
       await screen.findByText(
-        /Sampled: 500 of 5000 rows were profiled \(scope: sample, method: random\)/,
+        'Sampled: 500 of 5000 rows were profiled, method: random.',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('keeps a sampled scope labelled sampled even when the sample equals the population', async () => {
+    useApi({
+      profile: makeProfile({
+        sampling: {
+          method: 'random',
+          population_size: 100,
+          sample_size: 100,
+          scope: 'sampled',
+        },
+      }),
+    })
+    renderTechnical()
+
+    expect(
+      await screen.findByText(/^Sampled: 100 of 100 rows were profiled/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Full data/)).not.toBeInTheDocument()
+  })
+
+  it('does not claim full or sampled for an unknown scope value', async () => {
+    useApi({
+      profile: makeProfile({
+        sampling: {
+          method: null,
+          population_size: 100,
+          sample_size: 100,
+          scope: 'other',
+        },
+      }),
+    })
+    renderTechnical()
+
+    expect(
+      await screen.findByText(/Profile scope "other": 100 of 100 rows/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Full data|Sampled:/)).not.toBeInTheDocument()
   })
 
   it('keeps column metrics collapsed until expanded', async () => {
