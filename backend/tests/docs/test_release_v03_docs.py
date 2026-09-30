@@ -1,14 +1,10 @@
 """Pin what the documentation says about the `v0.3` release status (`REL-03`).
 
-The repository is prepared for `v0.3.0` (version, acceptance test), but the tag
-has not been pushed, no image is published and no clean host has installed it.
-These tests keep the docs from over-claiming that, and keep the version the
+`v0.3.0` is published and was verified on a clean host with AI off (`D-049`).
+These tests keep the docs from over-claiming beyond that (local-AI setup,
+scanning, signing and SBOM stay stated as not covered), and keep the version the
 release workflow checks equal to the version the docs describe. They do not
-prove a release exists; they prove the docs do not say one does.
-
-When `v0.3.0` is actually published and verified, these pins are rewritten
-one-for-one with the release-closeout package, as `test_linux_installation_docs`
-was for `v0.2.0`.
+prove a release exists; they prove the docs say what was reported and no more.
 """
 
 from __future__ import annotations
@@ -46,33 +42,41 @@ def test_the_running_application_reports_the_v03_release_version() -> None:
     assert reported == "0.3.0"
 
 
-def test_release_images_doc_says_v03_is_not_published_and_v02_is_latest() -> None:
+def test_release_images_doc_says_v03_is_published_and_states_its_limits() -> None:
     doc = _flat("docs/release-images.md")
-    assert "`v0.3.0` is prepared in the repository but not published" in doc
-    assert "no `0.3.0` image exists on GHCR" in doc
-    assert "no clean-host install has been run for it" in doc
-    assert "`v0.2.0` is the latest published and verified release" in doc
+    assert "Status: published and verified for `v0.3.0`" in doc
+    assert "5053249adacca3c46276daa91f8ea1ff0ccc945d" in doc
+    assert "`v0.3.0` is the latest published and verified release" in doc
+    # What the clean-host check did not cover stays stated.
+    assert "The image publication itself was not independently read back" in doc
+    assert "the local-AI setup" in doc
+    assert "unsigned, carry no provenance or SBOM attestation" in doc
+    assert "prepared in the repository but not published" not in doc
 
 
-def test_readme_says_v03_is_a_release_candidate_not_a_release() -> None:
+def test_readme_says_v03_is_published_with_its_verification_limits() -> None:
     readme = _flat("README.md")
-    assert "`v0.3.0` is **not yet published**" in readme
-    assert "no tag has been pushed" in readme
-    assert "no images are on GHCR" in readme
-    assert "no clean-host install has been run for it" in readme
-    assert "The latest published and verified release remains `v0.2.0`" in readme
-    # The published-and-verified wording belongs to v0.2.0 only.
-    assert "released as `v0.3.0`" not in readme
-    assert "published `v0.3.0` images" not in readme
-    assert "verified on a clean Linux host for `v0.3.0`" not in readme
+    assert "**`v0.3.0` is published**" in readme
+    assert "pull, start and health check with AI off" in readme
+    assert "unsigned, unattested and not container-scanned" in readme
+    assert "the local-AI setup was not exercised on that host" in readme
+    assert "not yet published" not in readme
+    assert "no tag has been pushed" not in readme
+    # The milestone decision is the owner's; the README does not make it.
+    assert "recording the `v0.3` milestone as complete is the repository owner's decision" in readme
 
 
-def test_planning_docs_keep_rel_03_open_until_the_release_is_published() -> None:
+def test_planning_docs_record_rel_03_complete_with_the_ai_off_narrowing() -> None:
     backlog = _flat("docs/implementation-backlog.md")
     plan = _flat("docs/release-plan.md")
-    assert "so `REL-03` stays open" in backlog
-    assert "not published or verified on a clean host" in plan
-    assert "`REL-03` is complete" not in backlog
+    log = _flat("docs/decision-log.md")
+    assert "`REL-03` is complete" in backlog
+    assert "the local-AI setup was not exercised" in backlog
+    assert "so `REL-03` stays open" not in backlog
+    assert "`REL-03` is complete" in plan
+    assert "not published or verified on a clean host" not in plan
+    assert "D-049 — `REL-03` is complete" in log
+    assert "Whether the `v0.3` milestone is complete is the owner's decision" in log
 
 
 def test_the_workflow_acceptance_test_named_in_the_docs_exists() -> None:

@@ -225,7 +225,7 @@ def test_the_readme_states_the_release_install_beside_the_quick_start() -> None:
         read(README).split("## Quick start (Linux)", 1)[1].split("## Project status", 1)[0]
     )
     assert "GitHub-and-GHCR-only" in quick_start
-    assert "published `v0.2.0` images" in quick_start
+    assert "published `v0.3.0` images" in quick_start
     assert "builds the images from source" in quick_start
     assert "not supported yet" not in quick_start
     assert "no image has been published yet" not in quick_start

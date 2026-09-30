@@ -11,8 +11,9 @@ Formally supported Linux target: **Linux x86-64** with Docker Engine
 > **What has and has not been verified.** Every port, setting, file and
 > endpoint named below is checked against the repository by an automated
 > documentation test, and the model-facing behavior is proven with a stub
-> `llama-server`. The published `v0.2.0` release was also installed on a clean
-> Linux host with no GHCR credentials and started with AI off. A run with a real
+> `llama-server`. The published `v0.2.0` and `v0.3.0` releases were also each
+> installed on a clean Linux host with no GHCR credentials and started with AI
+> off. A run with a real
 > model on a clean host is **not** part of this guide's evidence; see
 > [Restricted-network installs](#restricted-network-installs) for exactly what
 > was and was not covered.
@@ -307,6 +308,16 @@ every tag publish.
 
 `TRUSTTABLE_VERSION` is required (there is no `latest`), and the version the
 backend reports equals it. For a later release, substitute its version.
+
+**`v0.3.0` (latest published release).** The same sequence, with `v0.3.0` and
+`TRUSTTABLE_VERSION=0.3.0`, was run on a clean Linux host logged out of
+`ghcr.io`, as reported by the repository owner. Both
+`ghcr.io/voxelbound/trusttable-backend:0.3.0` and
+`ghcr.io/voxelbound/trusttable-frontend:0.3.0` pulled, the backend became
+healthy, `version` reported `"application_version":"0.3.0"` and the frontend
+answered `HTTP 200` on port `8080`. No steps were skipped. The run covered the
+same AI-off pull, start and health check as `v0.2.0` and has the same limits,
+listed next; the `v0.3.0` run did not exercise the local-AI setup either.
 
 **What that run did not cover**
 
