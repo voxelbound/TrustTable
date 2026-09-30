@@ -300,6 +300,18 @@ Expandable technical information:
 - timings
 - sampled/full-data labels
 
+**Current behavior (`UI-03` slice 5).** The Technical link opens a read-only
+page for a completed analysis, built only from existing routes: dataset and
+analysis facts (format, size, content hash, timestamps) and the AI exposure
+posture; the profile with schema version, a sampled or full-data label,
+profiling timing, dataset metrics, warnings, and per-column type, empty and
+distinct counts with collapsed, expandable metrics; and the detectors that
+produced findings with their versions, finding counts and confidence range
+(derived from the findings list). Dataset-derived text is rendered as plain
+text. Still **not implemented**, because no route exposes them: detector
+thresholds and analysis-level prompt and model metadata; the page says so.
+Detectors that found nothing are not listed.
+
 ## 5. Component architecture
 
 ### UI primitives
