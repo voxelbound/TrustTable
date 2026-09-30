@@ -16,6 +16,10 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
+from trusttable_backend.main import create_app
+
 _ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -34,6 +38,12 @@ def test_backend_version_is_the_v03_release_version() -> None:
     assert project["version"] == "0.3.0"
     lock = _text("backend/uv.lock")
     assert 'name = "trusttable-backend"\nversion = "0.3.0"' in lock
+
+
+def test_the_running_application_reports_the_v03_release_version() -> None:
+    with TestClient(create_app()) as client:
+        reported = client.get("/api/v1/version").json()["application_version"]
+    assert reported == "0.3.0"
 
 
 def test_release_images_doc_says_v03_is_not_published_and_v02_is_latest() -> None:
