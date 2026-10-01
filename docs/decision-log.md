@@ -572,3 +572,21 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** the Start screen still offers `.csv` only and has no worksheet picker; `POST /datasets/inspect` is not built; no database change (the dataset, with its format and worksheet, is already stored as JSON); no change to CSV behavior.
 
 **Decided by:** delegated implementation authority under the active work package, implementing the documented API contract.
+
+## D-052 — Excel upload works from the UI through an inline worksheet chooser; `ING-03` stays open for the configurable limits
+
+**Decision (2026-10-01):**
+
+1. **The chooser is driven by the API's refusal.** The Start screen uploads the file; if the API answers `WORKSHEET_REQUIRED` with the worksheet names, the screen shows them as a labelled choice and uploads the same file again with the picked worksheet. No endpoint beyond the documented ones is needed.
+2. **The UI never guesses.** Nothing is pre-selected and nothing is uploaded until a worksheet is picked; the chooser can be cancelled. A refusal for the picked worksheet is shown with the API's message and leaves the chooser available.
+3. **Untrusted names are text.** Worksheet names come from the file; they are validated as a non-empty list of strings and rendered only as plain text.
+4. **The analyzed worksheet is visible.** The Overview and Technical details screens show `selected_worksheet` for an Excel dataset and nothing extra for CSV.
+5. **`ING-03` is not complete.** Worksheet selection, stored values, macro rejection and the expansion limits themselves are delivered through parser, API and UI (`D-050`, `D-051`). A review against the authoritative documents found one gap that belongs to the item: `docs/configuration.md` ties `MAX_WORKSHEETS` and `MAX_UNCOMPRESSED_WORKBOOK_MB` to "once Excel support exists (`ING-03`)", and `docs/product-requirements.md` §7 calls the limits configurable, but no code reads those settings (nor `MAX_ROWS`, `MAX_COLUMNS` or `MAX_CELL_COUNT`, which the CSV parser also never read). Both parsers use built-in limits equal to the documented defaults, so changing a setting has no effect on parsing. `MAX_FILE_SIZE_MB` is honored. Reading the settings is the remaining slice and needs a backend change.
+
+**Checked and outside `ING-03`:** `POST /datasets/inspect` is marked "Optional" in `docs/api-specification.md` §7 and no backlog item or release-plan line requires it, so there is no separate File review screen; date interpretation is asked for by no authoritative document, and `docs/product-requirements.md` §7 says formatting is ignored, so a date stored as a serial number is shown as that number; and the end-to-end scenario "Excel worksheet selection" in `docs/testing-strategy.md` §2.4 belongs to the `REL-04` test gates (the Playwright suite holds a smoke check and the demo flow today, so the other scenarios are equally open). `D-028`'s retention of formula metadata is optional ("only where cheap and useful") and is not done: formula text is discarded and only the stored result is read.
+
+**Alternatives considered:** a separate pre-upload File review screen backed by `POST /datasets/inspect` (the documented design, but a new endpoint and screen for what the existing refusal already provides); defaulting to the first worksheet (silent wrong-sheet analysis); a dropdown pre-selected on the first sheet (the same guess, one click removed).
+
+**Explicit non-scope:** no backend, API contract or dependency change; no change to CSV upload behavior.
+
+**Decided by:** delegated implementation authority under the active work package, implementing the documented UI and API contracts.

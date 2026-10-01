@@ -61,6 +61,43 @@ function findingFixture(
 }
 
 describe('OverviewRoute', () => {
+  it('ING-03: names the analyzed worksheet for an Excel dataset', async () => {
+    const base = makeAnalysisResource()
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId', () =>
+        HttpResponse.json({
+          ...base,
+          dataset: {
+            ...base.dataset,
+            format: 'xlsx',
+            original_filename: 'book.xlsx',
+            selected_worksheet: 'Costs',
+          },
+        }),
+      ),
+    )
+    renderOverview()
+
+    const summary = (await screen.findByText('Dataset summary')).closest(
+      'section',
+    ) as HTMLElement
+    expect(await within(summary).findByText('Worksheet analyzed')).toBeVisible()
+    expect(within(summary).getByText('Costs')).toBeVisible()
+    expect(within(summary).getByText('XLSX')).toBeVisible()
+  })
+
+  it('ING-03: shows no worksheet row for a CSV dataset', async () => {
+    renderOverview()
+
+    const summary = (await screen.findByText('Dataset summary')).closest(
+      'section',
+    ) as HTMLElement
+    await within(summary).findByText('File name')
+    expect(
+      within(summary).queryByText('Worksheet analyzed'),
+    ).not.toBeInTheDocument()
+  })
+
   it('AC-05: renders sections in the documented order', async () => {
     renderOverview()
 

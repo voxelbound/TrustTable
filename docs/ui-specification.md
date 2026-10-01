@@ -99,6 +99,16 @@ Show:
 - warnings
 - analyze action
 
+**Implemented subset (`ING-03`, `D-052`):** there is no separate File review
+screen yet. The Start screen accepts `.csv` and `.xlsx`; when a workbook has
+several worksheets the API refuses it with `WORKSHEET_REQUIRED` and the
+names, and the Start screen then shows an inline worksheet chooser (nothing
+is pre-selected, so the user always chooses) and uploads the same file with
+the picked worksheet. Worksheet names come from the file and are shown as
+plain text. The estimated shape and per-file warnings need the not-yet-built
+`POST /datasets/inspect` (`docs/api-specification.md` §7). The Overview and
+Technical details screens name the worksheet that was analyzed.
+
 ### 4.3 Progress
 
 Show named stages, not only a spinner.

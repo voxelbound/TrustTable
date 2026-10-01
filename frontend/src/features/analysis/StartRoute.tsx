@@ -1,19 +1,32 @@
-import { useRef, type ChangeEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { AIPrivacyStatus } from '../../components/provenance/AIPrivacyStatus'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
+import { getWorksheetChoices } from '../../lib/apiError'
 import { useCreateAnalysisUpload, useCreateDemoAnalysis } from './api'
 
-/** The Start screen (`docs/ui-specification.md` §4.1). Upload is now
- * enabled (`WP-029`, `API-01`/`UI-01` extending) — CSV only, matching
- * the backend's own current `POST /analyses` scope; `.xlsx` (`ING-03`)
- * remains a later, separate package. */
+/** A workbook the API could not analyze without a worksheet choice: the
+ * file is kept so the same file is sent again with the picked worksheet. */
+interface PendingWorkbook {
+  file: File
+  worksheets: string[]
+}
+
+/** The Start screen (`docs/ui-specification.md` §4.1). Upload accepts CSV
+ * (`WP-029`) and Excel `.xlsx` (`ING-03`). A workbook with several
+ * worksheets is refused by the API with `WORKSHEET_REQUIRED` and the
+ * worksheet names; the screen then asks which one to analyze and uploads
+ * the same file again with that worksheet. The UI never guesses between
+ * worksheets, and the names (which come from an untrusted file) are shown
+ * only as plain text. */
 export function StartRoute() {
   const navigate = useNavigate()
   const createDemo = useCreateDemoAnalysis()
   const createUpload = useCreateAnalysisUpload()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [pending, setPending] = useState<PendingWorkbook | null>(null)
+  const [chosenWorksheet, setChosenWorksheet] = useState<string | null>(null)
 
   const handleRunDemo = () => {
     createDemo.mutate(undefined, {
@@ -23,25 +36,63 @@ export function StartRoute() {
     })
   }
 
+  const upload = (file: File, worksheet?: string) => {
+    createUpload.mutate(
+      worksheet === undefined ? { file } : { file, worksheet },
+      {
+        onSuccess: (response) => {
+          setPending(null)
+          setChosenWorksheet(null)
+          void navigate(`/analyses/${response.analysis.analysis_id}/overview`)
+        },
+        onError: (error) => {
+          const worksheets = getWorksheetChoices(error.body)
+          if (worksheets !== null && worksheet === undefined) {
+            setPending({ file, worksheets })
+            setChosenWorksheet(null)
+          }
+        },
+        onSettled: () => {
+          // Allow re-selecting the same file after an error without a
+          // page reload (browsers do not fire `change` for an unchanged
+          // selection otherwise).
+          if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+          }
+        },
+      },
+    )
+  }
+
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) {
       return
     }
-    createUpload.mutate(file, {
-      onSuccess: (response) => {
-        void navigate(`/analyses/${response.analysis.analysis_id}/overview`)
-      },
-      onSettled: () => {
-        // Allow re-selecting the same file after an error without a
-        // page reload (browsers do not fire `change` for an unchanged
-        // selection otherwise).
-        if (fileInputRef.current) {
-          fileInputRef.current.value = ''
-        }
-      },
-    })
+    setPending(null)
+    setChosenWorksheet(null)
+    upload(file)
   }
+
+  const handleWorksheetSubmit = (event: FormEvent) => {
+    event.preventDefault()
+    if (pending && chosenWorksheet !== null) {
+      upload(pending.file, chosenWorksheet)
+    }
+  }
+
+  const handleWorksheetCancel = () => {
+    setPending(null)
+    setChosenWorksheet(null)
+    createUpload.reset()
+  }
+
+  // The worksheet chooser replaces the generic error for the one refusal it
+  // resolves; every other refusal is shown as the API's own message, and
+  // the chooser stays available so another worksheet can be tried.
+  const showUploadError =
+    createUpload.isError &&
+    getWorksheetChoices(createUpload.error.body) === null
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-16">
@@ -72,7 +123,7 @@ export function StartRoute() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx"
             aria-label="Choose a file to upload"
             disabled={createUpload.isPending}
             onChange={handleFileSelected}
@@ -81,10 +132,57 @@ export function StartRoute() {
           <p className="text-xs text-slate-500 dark:text-slate-400">
             {createUpload.isPending
               ? 'Uploading and analyzing…'
-              : 'CSV files only for now. Excel (.xlsx) support is not available yet.'}
+              : 'CSV and Excel (.xlsx) files. If a workbook has several worksheets you will choose which one to analyze. Macro-enabled workbooks (.xlsm) are not supported.'}
           </p>
         </div>
-        {createUpload.isError && (
+        {pending && (
+          <form
+            onSubmit={handleWorksheetSubmit}
+            className="mt-6 text-left"
+            aria-label="Choose a worksheet"
+          >
+            <fieldset className="rounded border border-slate-200 p-4 dark:border-slate-700">
+              <legend className="px-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                This workbook has several worksheets. Which one should be
+                analyzed?
+              </legend>
+              <div className="mt-2 flex flex-col gap-2">
+                {pending.worksheets.map((name) => (
+                  <label
+                    key={name}
+                    className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"
+                  >
+                    <input
+                      type="radio"
+                      name="worksheet"
+                      value={name}
+                      checked={chosenWorksheet === name}
+                      onChange={() => setChosenWorksheet(name)}
+                      disabled={createUpload.isPending}
+                    />
+                    <span>{name}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <div className="mt-3 flex gap-2">
+              <Button
+                type="submit"
+                disabled={chosenWorksheet === null || createUpload.isPending}
+              >
+                Analyze this worksheet
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleWorksheetCancel}
+                disabled={createUpload.isPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
+        {showUploadError && (
           <div className="mt-4">
             <Alert variant="error" title="Could not analyze the uploaded file">
               {createUpload.error.message}

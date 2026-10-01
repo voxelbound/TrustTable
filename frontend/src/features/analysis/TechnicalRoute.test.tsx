@@ -144,6 +144,35 @@ describe('TechnicalRoute', () => {
     ).toBeVisible()
   })
 
+  it('shows the analyzed worksheet for an Excel dataset and none for CSV', async () => {
+    useApi()
+    server.use(
+      http.get(BASE, () =>
+        HttpResponse.json({
+          ...makeResource(),
+          dataset: {
+            ...makeResource().dataset,
+            format: 'xlsx',
+            original_filename: 'book.xlsx',
+            selected_worksheet: '<b>Costs</b>',
+          },
+        }),
+      ),
+    )
+    renderTechnical()
+
+    expect(await screen.findByText('Worksheet analyzed')).toBeInTheDocument()
+    expect(screen.getByText('<b>Costs</b>')).toBeInTheDocument()
+  })
+
+  it('does not show a worksheet row for a CSV dataset', async () => {
+    useApi()
+    renderTechnical()
+
+    await screen.findByText('sales.csv')
+    expect(screen.queryByText('Worksheet analyzed')).not.toBeInTheDocument()
+  })
+
   it('labels a sampled profile with its sample and population sizes', async () => {
     useApi({
       profile: makeProfile({

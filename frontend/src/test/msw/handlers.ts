@@ -387,9 +387,13 @@ export function makeUploadAnalysisResponse(
   }
 }
 
-export function apiErrorBody(code: string, message: string) {
+export function apiErrorBody(
+  code: string,
+  message: string,
+  details: Record<string, unknown> = {},
+) {
   return {
-    error: { code, message, details: {}, request_id: 'req-test' },
+    error: { code, message, details, request_id: 'req-test' },
   }
 }
 

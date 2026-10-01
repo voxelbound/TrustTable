@@ -140,8 +140,10 @@ rejected; XML is read with expat directly and any DOCTYPE or entity
 declaration is rejected before expansion, with element nesting capped; and
 expansion is bounded by counting decompressed bytes against one shared
 budget as they are read, in addition to an early check of the sizes the
-zip headers declare. Entry, worksheet, row, column and cell limits mirror
-the documented defaults (`docs/product-requirements.md` §7). A worksheet is
+zip headers declare. Entry, worksheet, row, column and cell limits are
+built in and equal the documented defaults (`docs/product-requirements.md`
+§7); they are not yet read from `Settings` (`docs/configuration.md`; the
+remaining `ING-03` slice). A worksheet is
 selected by exact name, or the first visible worksheet is used; every
 worksheet is scanned within the same limits so its row and column counts
 are real. Values are returned as the text stored in the file, so dates
@@ -804,8 +806,9 @@ filesystem path. Only persistent review controls remain an honestly
 disclosed not-yet-available placeholder (`REV-01`, not yet built); the
 rule engine, rule execution and remediation workflow (`RULE-01`/`REM-01`)
 remain later items. The Start screen's upload control is
-now enabled (`WP-029`, CSV only in the UI; the API also accepts `.xlsx`,
-`ING-03`, and the UI will follow) — see "Analysis API routes" above for
+now enabled (`WP-029`; it accepts `.csv` and, with `ING-03`, `.xlsx`,
+asking which worksheet to analyze when a workbook has several, and the
+Overview and Technical details screens name the worksheet analyzed) — see "Analysis API routes" above for
 `POST /analyses`.
 
 ## 5. API contracts

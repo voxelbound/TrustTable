@@ -136,14 +136,27 @@ export function useCreateDemoAnalysis() {
   })
 }
 
+/** What to upload: the file and, for an Excel workbook with several
+ * worksheets, the one the user picked (`ING-03`). */
+export interface AnalysisUploadRequest {
+  file: File
+  worksheet?: string
+}
+
 /** `POST /analyses` (`API-01`/`UI-01`, extending — `WP-029`, generic
- * CSV upload). Mirrors `useCreateDemoAnalysis`'s error-handling pattern
- * exactly; the only difference is the multipart `file` body. */
+ * upload; `ING-03`, Excel with an optional `worksheet`). Mirrors
+ * `useCreateDemoAnalysis`'s error-handling pattern exactly; the only
+ * difference is the multipart body. `worksheet` is sent only when given,
+ * so a CSV upload's request is unchanged. */
 export function useCreateAnalysisUpload() {
-  return useMutation<UploadAnalysisResponse, ApiCallError, File>({
-    mutationFn: async (file: File) => {
+  return useMutation<
+    UploadAnalysisResponse,
+    ApiCallError,
+    AnalysisUploadRequest
+  >({
+    mutationFn: async ({ file, worksheet }: AnalysisUploadRequest) => {
       const result = await postAnalysisUploadApiV1AnalysesPost({
-        body: { file },
+        body: worksheet === undefined ? { file } : { file, worksheet },
       })
       if (result.data === undefined) {
         throw new ApiCallError(result.error)
