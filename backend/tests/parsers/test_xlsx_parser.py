@@ -18,7 +18,7 @@ from xml.sax.saxutils import escape
 import pytest
 
 from trusttable_backend.domain.parsing import DatasetFormat, SamplingScope
-from trusttable_backend.parsers import parse_csv, parse_xlsx
+from trusttable_backend.parsers import inspect_xlsx_worksheets, parse_csv, parse_xlsx
 from trusttable_backend.parsers.xlsx_parser import (
     XlsxParseError,
     XlsxParseLimits,
@@ -763,3 +763,61 @@ def test_namespace_prefixes_and_stored_compression_are_accepted() -> None:
     )
     content = build_xlsx({"S": []}, raw_sheet_xml={"S": sheet}, compress=zipfile.ZIP_STORED)
     assert parse_xlsx(content).rows == (("7",),)
+
+
+# ---------------------------------------------------------------------------
+# Failure classification and worksheet inspection (used by the upload route)
+# ---------------------------------------------------------------------------
+
+
+def _code_of(content: bytes, **kwargs: Any) -> str:
+    with pytest.raises(XlsxParseError) as info:
+        parse_xlsx(content, **kwargs)
+    return info.value.code
+
+
+def test_failures_carry_the_documented_error_code() -> None:
+    assert _code_of(build_xlsx(extra_parts={"xl/vbaProject.bin": b"\x00"})) == "MACRO_ENABLED_FILE"
+    assert _code_of(b"not a zip") == "MALFORMED_FILE"
+    assert (
+        _code_of(build_xlsx(), limits=XlsxParseLimits(max_entries=1)) == "WORKBOOK_EXPANSION_LIMIT"
+    )
+    assert (
+        _code_of(build_xlsx({"S": [["a"], [1], [2]]}), limits=XlsxParseLimits(max_rows=1))
+        == "CELL_LIMIT_EXCEEDED"
+    )
+    assert _code_of(build_xlsx(), worksheet="Nope") == "WORKSHEET_NOT_FOUND"
+    assert _code_of(b"") == "MALFORMED_FILE"
+
+
+def test_inspect_lists_worksheets_with_visibility_in_order() -> None:
+    content = build_xlsx(
+        {"A": [["a"], [1]], "B": [["b"], [2]], "C": [["c"], [3]]}, states={"B": "hidden"}
+    )
+
+    worksheets = inspect_xlsx_worksheets(content)
+
+    assert [(w.name, w.visible) for w in worksheets] == [("A", True), ("B", False), ("C", True)]
+
+
+def test_inspect_does_not_read_worksheet_cells() -> None:
+    # The worksheet part is not well-formed XML: parsing the workbook fails,
+    # but inspection only reads the package structure, never the cells.
+    content = build_xlsx({"S": []}, raw_sheet_xml={"S": "<worksheet><sheetData>"})
+
+    assert [w.name for w in inspect_xlsx_worksheets(content)] == ["S"]
+    with pytest.raises(XlsxParseError, match="not well-formed"):
+        parse_xlsx(content)
+
+
+def test_inspect_applies_the_same_package_validation() -> None:
+    macro = build_xlsx(extra_parts={"xl/vbaProject.bin": b"\x00"})
+    with pytest.raises(XlsxParseError, match="macro"):
+        inspect_xlsx_worksheets(macro)
+    with pytest.raises(XlsxParseError, match="not a valid zip"):
+        inspect_xlsx_worksheets(b"plain text")
+    doctype = build_xlsx(
+        extra_parts={"xl/workbook.xml": '<!DOCTYPE x [<!ENTITY a "b">]><workbook/>'}
+    )
+    with pytest.raises(XlsxParseError, match="DOCTYPE"):
+        inspect_xlsx_worksheets(doctype)

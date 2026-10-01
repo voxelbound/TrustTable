@@ -115,7 +115,8 @@ from ..domain.rules import (
     ValidationRule,
 )
 from ..domain.value_objects import ColumnReference, Provenance, RowReference, Severity
-from ..parsers.csv_parser import parse_csv
+from ..parsers.csv_parser import CsvParseResult, parse_csv
+from ..parsers.xlsx_parser import XlsxParseResult, parse_xlsx
 from ..profiling.metrics import compute_dataset_profile
 from ..profiling.schemas import DatasetProfile
 from ..risk.scoring import (
@@ -658,12 +659,37 @@ def create_analysis(store: AnalysisStoreProtocol) -> Analysis:
     return analysis
 
 
+def _parse_analysis_content(analysis: Analysis) -> CsvParseResult | XlsxParseResult:
+    """Parse `analysis.content` according to its dataset's format.
+
+    The single place every pipeline stage reads the stored file bytes, so
+    no stage can parse a workbook as CSV or read a different worksheet
+    than the one recorded on the dataset (`ING-03`). An XLSX dataset is
+    always read from its recorded `selected_worksheet`; a missing one is
+    refused rather than defaulted, because the upload step records it.
+    """
+    if analysis.dataset.format is DatasetFormat.XLSX:
+        worksheet = analysis.dataset.selected_worksheet
+        if worksheet is None:
+            raise ValueError("XLSX analysis has no selected worksheet")
+        return parse_xlsx(analysis.content, worksheet=worksheet)
+    return parse_csv(analysis.content)
+
+
 def create_analysis_from_upload(
-    store: AnalysisStoreProtocol, *, content: bytes, original_filename: str
+    store: AnalysisStoreProtocol,
+    *,
+    content: bytes,
+    original_filename: str,
+    dataset_format: DatasetFormat = DatasetFormat.CSV,
+    selected_worksheet: str | None = None,
 ) -> Analysis:
-    """Create a new `QUEUED` analysis over an uploaded CSV file's raw
-    bytes and store it (`UI-01`/`API-01`, extending, `WP-029`). Does not
-    run the pipeline — see `run_analysis`.
+    """Create a new `QUEUED` analysis over an uploaded CSV or XLSX file's
+    raw bytes and store it (`UI-01`/`API-01`, extending, `WP-029`;
+    `ING-03`). Does not run the pipeline — see `run_analysis`.
+
+    An XLSX upload must name the worksheet to analyze
+    (`selected_worksheet`); a CSV upload must not.
 
     `content` must already have passed the caller's own extension/
     content-type/size validation (`api/v1/analyses.py`'s `POST
@@ -685,16 +711,18 @@ def create_analysis_from_upload(
     byte_size = len(content)
     now = datetime.now(UTC)
     dataset_id = str(uuid.uuid4())
-    stored_filename = f"{dataset_id}.csv"
+    if (dataset_format is DatasetFormat.XLSX) != (selected_worksheet is not None):
+        raise ValueError("selected_worksheet is required for XLSX and not allowed for CSV")
+    stored_filename = f"{dataset_id}.{dataset_format.value}"
 
     dataset = Dataset(
         dataset_id=dataset_id,
         original_filename=original_filename,
         stored_filename=stored_filename,
-        format=DatasetFormat.CSV,
+        format=dataset_format,
         byte_size=byte_size,
         content_hash=content_hash,
-        selected_worksheet=None,
+        selected_worksheet=selected_worksheet,
         created_at=now,
         deleted_at=None,
         storage_location=f"uploads/{dataset_id}/{stored_filename}",
@@ -790,7 +818,7 @@ def run_analysis(
     try:
         analysis = replace(analysis, state=AnalysisState.PARSING, started_at=started_at)
         store.replace(analysis)
-        parsed = parse_csv(analysis.content)
+        parsed = _parse_analysis_content(analysis)
         columns = parsed.parsed_dataset.columns
 
         maybe_cancelled = _cancelled_if_requested(analysis)
@@ -1072,7 +1100,7 @@ def get_finding_row_context(
     if anchor_row not in affected_row_numbers:
         raise RowNotInFindingError(analysis_id, finding_id, anchor_row)
 
-    parsed = parse_csv(analysis.content)
+    parsed = _parse_analysis_content(analysis)
     columns = parsed.parsed_dataset.columns
     rows = parsed.rows
     row_count = parsed.parsed_dataset.row_count
@@ -1156,7 +1184,7 @@ def retry_analysis(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
 
     now = datetime.now(UTC)
     dataset_id = str(uuid.uuid4())
-    stored_filename = f"{dataset_id}.csv"
+    stored_filename = f"{dataset_id}.{original.dataset.format.value}"
     storage_location = (
         _DEMO_STORAGE_LOCATION
         if original.dataset.source_type is DatasetSourceType.BUNDLED_DEMO
@@ -1280,7 +1308,7 @@ def create_rule(
         # Raises FindingNotFoundError if absent; also resolved to decide
         # DETECTOR_GENERATED vs AI_ASSISTED provenance below.
         source_finding = get_finding(store, analysis_id, source_finding_id)
-    parsed = parse_csv(analysis.content)
+    parsed = _parse_analysis_content(analysis)
     columns_by_name: dict[str, ColumnReference] = {
         column.original_name: column for column in parsed.parsed_dataset.columns
     }
@@ -1387,7 +1415,7 @@ def generate_rule_proposal(
     analysis = _require_completed(store, analysis_id)
     finding = get_finding(store, analysis_id, finding_id)
     evidence = get_finding_evidence(store, analysis_id, finding_id)
-    parsed = parse_csv(analysis.content)
+    parsed = _parse_analysis_content(analysis)
 
     proposal, reason = rule_generation.generate_rule_proposal(
         finding, evidence, parsed.parsed_dataset.columns
@@ -1509,7 +1537,7 @@ def finalize_ai_assisted_rule(
             analysis_id,
             f"canonical_value {canonical_value!r} is not one of this finding's own observed values",
         )
-    parsed = parse_csv(analysis.content)
+    parsed = _parse_analysis_content(analysis)
 
     try:
         rule = ValidationRule(
@@ -1553,7 +1581,7 @@ def execute_rule_now(
     """
     analysis = _require_completed(store, analysis_id)
     rule = _find_rule(analysis, rule_id)
-    parsed = parse_csv(analysis.content)
+    parsed = _parse_analysis_content(analysis)
     executed = _execute_rule(rule, parsed.rows, analysis_id=analysis_id, now=datetime.now(UTC))
     updated_rule = replace(rule, last_result=executed)
     updated_rules = tuple(

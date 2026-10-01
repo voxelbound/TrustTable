@@ -723,6 +723,17 @@ Worksheet selection, stored values, macro rejection, expansion limits.
 > **not done**, so `ING-03` stays open: wiring XLSX into the upload route,
 > storage and analysis pipeline (the API still returns `415` for `.xlsx`), a
 > worksheet picker in the UI, and date-aware rendering of date cells.
+>
+> **Annotation (2026-10-01, slice 2 of `ING-03`):** the API now accepts
+> `.xlsx` (`POST /analyses` with the optional `worksheet` field): worksheet
+> selection or `WORKSHEET_REQUIRED`, upload-time refusal of macro-enabled,
+> malformed and over-limit workbooks, a format-aware pipeline that reads the
+> chosen worksheet at every stage, `selected_worksheet` in the dataset
+> summary, and retry that keeps the format (`docs/decision-log.md` D-051).
+> Still **not done**, so `ING-03` stays open: the Start screen still offers
+> `.csv` only (no `.xlsx` in the file picker and no worksheet picker),
+> `POST /datasets/inspect` is not built, and date cells are shown as the
+> numbers stored in the file.
 
 ## DET-03 — Complete detector catalogue
 

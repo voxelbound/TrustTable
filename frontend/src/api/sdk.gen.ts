@@ -21,14 +21,19 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 /**
  * Post Analysis Upload
  *
- * Create an analysis from an uploaded CSV file and submit it to the
- * background worker pool (`docs/api-specification.md` §6, disclosed
- * CSV-only subset — `WP-029`; async submission, `JOB-01` `WP-075`).
+ * Create an analysis from an uploaded CSV or XLSX file and submit it
+ * to the background worker pool (`docs/api-specification.md` §6;
+ * async submission, `JOB-01` `WP-075`; XLSX, `ING-03`).
  *
  * Follows `docs/product-requirements.md` §8.2's ordered validation
- * steps: filename required, `.csv` extension required, size bounded
- * before full content is read, then filename sanitized before the
- * analysis is created. `file: UploadFile` takes no `= File(...)`
+ * steps: filename required, `.csv` or `.xlsx` extension required, size
+ * bounded before full content is read, then filename sanitized before
+ * the analysis is created. For `.xlsx` the optional `worksheet` form
+ * field selects the worksheet; a workbook is also inspected here, before
+ * any analysis exists, so a macro-enabled, malformed or over-limit
+ * workbook, or an ambiguous worksheet choice, is refused with a
+ * documented error rather than becoming a failed analysis.
+ * `file: UploadFile` takes no `= File(...)`
  * default — FastAPI already treats a required `UploadFile` annotation
  * as a file-upload parameter, avoiding the `ruff` `B008`
  * function-call-in-default-argument pattern `WP-024` already found and

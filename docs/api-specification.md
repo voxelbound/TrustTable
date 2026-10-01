@@ -155,6 +155,31 @@ Response:
 - initial state
 - status URL
 
+**Implemented for `.csv` and `.xlsx` (`ING-03`).** `.xlsm` and any other
+extension is `415 UNSUPPORTED_FILE_TYPE`. For `.xlsx` the optional
+`worksheet` form field names the worksheet to analyze:
+
+- a workbook with exactly one visible worksheet uses it when no
+  `worksheet` is given; with several and no choice the request is
+  `400 WORKSHEET_REQUIRED` and `error.details.worksheets` lists every
+  worksheet name;
+- a `worksheet` that does not exist is `400 INVALID_REQUEST` with the same
+  `details.worksheets` list; a `worksheet` sent with a `.csv` is
+  `400 INVALID_REQUEST`;
+- the workbook is inspected before any analysis is created and refused with
+  `415 MACRO_ENABLED_FILE` (macro content), `413 WORKBOOK_EXPANSION_LIMIT`
+  (size, entry-count, worksheet-count or decompression limits) or
+  `400 MALFORMED_FILE` (not a zip package, an OLE/encrypted file, unsafe
+  entry names, DOCTYPE or entity declarations, or unreadable XML). The
+  messages are fixed text; nothing from the workbook is echoed back except
+  worksheet names for selection;
+- row, column and cell limits (`CELL_LIMIT_EXCEEDED`) are enforced when the
+  pipeline reads the chosen worksheet, so an over-limit worksheet ends as a
+  `failed` analysis, as an over-limit CSV does.
+
+The analysis's dataset summary carries `selected_worksheet` (the name read,
+`null` for CSV). `POST /datasets/inspect` (§7) is not implemented yet.
+
 ### GET `/analyses/{analysis_id}`
 
 Returns:

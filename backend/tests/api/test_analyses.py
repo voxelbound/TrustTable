@@ -1638,17 +1638,26 @@ def test_post_analyses_upload_wrong_extension_returns_structured_415(
     assert body["error"]["details"]["filename"] == "sample.txt"
 
 
-def test_post_analyses_upload_xlsx_extension_returns_structured_415(
+def test_post_analyses_upload_macro_enabled_extension_returns_structured_415(
     client: TestClient,
 ) -> None:
-    """`.xlsx` is a real, documented future format (`ING-03`) — still
-    rejected today, same structured code as any other unsupported
-    extension, no silent partial handling.
+    """`.xlsx` is supported (`ING-03`); the macro-enabled `.xlsm` is not —
+    same structured code as any other unsupported extension, no silent
+    partial handling. (`.xlsx` upload behavior: `test_xlsx_upload.py`.)
     """
-    response = _upload_csv(client, filename="sample.xlsx")
+    response = _upload_csv(client, filename="sample.xlsm")
 
     assert response.status_code == 415
     assert response.json()["error"]["code"] == "UNSUPPORTED_FILE_TYPE"
+
+
+def test_post_analyses_upload_csv_bytes_named_xlsx_returns_structured_400(
+    client: TestClient,
+) -> None:
+    response = _upload_csv(client, filename="sample.xlsx")
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "MALFORMED_FILE"
 
 
 def test_post_analyses_upload_empty_file_returns_structured_400(client: TestClient) -> None:

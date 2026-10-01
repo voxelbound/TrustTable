@@ -89,7 +89,39 @@ class XlsxParseError(ValueError):
     condition (empty/duplicate/over-long headers, cells beyond the header,
     over-long values, formulas without a cached value) is recorded as a
     `ParsingWarning` on the returned `ParsedDataset`.
+
+    `code` classifies the failure using the API's documented error codes
+    (`docs/api-specification.md` §14) so a caller can map it without
+    parsing message text: `MALFORMED_FILE` (the default),
+    `MACRO_ENABLED_FILE`, `WORKBOOK_EXPANSION_LIMIT`,
+    `CELL_LIMIT_EXCEEDED`, or `WORKSHEET_NOT_FOUND`.
     """
+
+    code: str = "MALFORMED_FILE"
+
+
+class XlsxMacroError(XlsxParseError):
+    """The workbook carries macro content and is never read as data."""
+
+    code = "MACRO_ENABLED_FILE"
+
+
+class XlsxExpansionError(XlsxParseError):
+    """A size, entry-count, worksheet-count or decompression limit was hit."""
+
+    code = "WORKBOOK_EXPANSION_LIMIT"
+
+
+class XlsxCellLimitError(XlsxParseError):
+    """A row, column or cell limit was hit."""
+
+    code = "CELL_LIMIT_EXCEEDED"
+
+
+class XlsxWorksheetError(XlsxParseError):
+    """The requested worksheet does not exist (or none can be defaulted)."""
+
+    code = "WORKSHEET_NOT_FOUND"
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +163,53 @@ class XlsxParseResult:
     selected_worksheet: str
 
 
+@dataclass(frozen=True, slots=True)
+class XlsxWorksheetInfo:
+    """One worksheet of a workbook: its name and whether it is visible."""
+
+    name: str
+    visible: bool
+
+
+def inspect_xlsx_worksheets(
+    content: bytes, *, limits: XlsxParseLimits | None = None
+) -> tuple[XlsxWorksheetInfo, ...]:
+    """List a workbook's worksheets without reading any worksheet's cells.
+
+    Applies the same package validation as `parse_xlsx` (size, entry,
+    macro, encryption, traversal, DOCTYPE and decompression-budget checks)
+    but reads only the content-types, workbook and relationship parts, so
+    its cost is bounded by the package structure and not by the amount of
+    data in any worksheet. Raises `XlsxParseError` like `parse_xlsx`.
+    """
+    if limits is None:
+        limits = XlsxParseLimits()
+    with _open_package(content, limits) as archive:
+        names = _validate_entries(archive.infolist(), limits)
+        budget = _Budget(limits.max_uncompressed_bytes)
+        _check_content_types(archive, names, budget)
+        entries = _read_worksheet_entries(archive, names, limits, budget, [])
+    return tuple(XlsxWorksheetInfo(name=entry.name, visible=entry.visible) for entry in entries)
+
+
+def _open_package(content: bytes, limits: XlsxParseLimits) -> zipfile.ZipFile:
+    if not content:
+        raise XlsxParseError("XLSX content is empty")
+    if len(content) > limits.max_bytes:
+        raise XlsxExpansionError(
+            f"XLSX content size ({len(content)} bytes) exceeds the {limits.max_bytes}-byte limit"
+        )
+    if content.startswith(_OLE_MAGIC):
+        raise XlsxParseError(
+            "XLSX content is an OLE compound file (an encrypted or legacy binary "
+            "workbook), which is not supported"
+        )
+    try:
+        return zipfile.ZipFile(io.BytesIO(content))
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, EOFError, OSError) as exc:
+        raise XlsxParseError("XLSX content is not a valid zip package") from exc
+
+
 def parse_xlsx(
     content: bytes,
     *,
@@ -146,25 +225,9 @@ def parse_xlsx(
     if limits is None:
         limits = XlsxParseLimits()
 
-    if not content:
-        raise XlsxParseError("XLSX content is empty")
-    if len(content) > limits.max_bytes:
-        raise XlsxParseError(
-            f"XLSX content size ({len(content)} bytes) exceeds the {limits.max_bytes}-byte limit"
-        )
-    if content.startswith(_OLE_MAGIC):
-        raise XlsxParseError(
-            "XLSX content is an OLE compound file (an encrypted or legacy binary "
-            "workbook), which is not supported"
-        )
-
+    archive = _open_package(content, limits)
     content_hash = hashlib.sha256(content).hexdigest()
     byte_size = len(content)
-
-    try:
-        archive = zipfile.ZipFile(io.BytesIO(content))
-    except (zipfile.BadZipFile, zipfile.LargeZipFile, EOFError, OSError) as exc:
-        raise XlsxParseError("XLSX content is not a valid zip package") from exc
 
     with archive:
         names = _validate_entries(archive.infolist(), limits)
@@ -258,12 +321,14 @@ class _Budget:
     def consume(self, count: int) -> None:
         self.remaining -= count
         if self.remaining < 0:
-            raise XlsxParseError(f"XLSX decompressed content exceeds the {self._total}-byte limit")
+            raise XlsxExpansionError(
+                f"XLSX decompressed content exceeds the {self._total}-byte limit"
+            )
 
 
 def _validate_entries(infos: list[zipfile.ZipInfo], limits: XlsxParseLimits) -> set[str]:
     if len(infos) > limits.max_entries:
-        raise XlsxParseError(
+        raise XlsxExpansionError(
             f"XLSX package has {len(infos)} entries, exceeding the {limits.max_entries}-entry limit"
         )
 
@@ -286,13 +351,13 @@ def _validate_entries(infos: list[zipfile.ZipInfo], limits: XlsxParseLimits) -> 
 
         lowered = name.lower()
         if "vbaproject" in lowered or "/macrosheets/" in lowered:
-            raise XlsxParseError(
+            raise XlsxMacroError(
                 "XLSX package contains macro content; macro-enabled workbooks are rejected"
             )
 
         declared_total += info.file_size
         if declared_total > limits.max_uncompressed_bytes:
-            raise XlsxParseError(
+            raise XlsxExpansionError(
                 f"XLSX package declares more than {limits.max_uncompressed_bytes} "
                 "uncompressed bytes"
             )
@@ -340,7 +405,7 @@ def _read_worksheet_entries(
             raise XlsxParseError(f"XLSX worksheet '{name}' has no matching relationship")
         kind, target, external = relationship
         if kind in {"macrosheet", "intlmacrosheet"}:
-            raise XlsxParseError("XLSX workbook contains a macro sheet; it is rejected")
+            raise XlsxMacroError("XLSX workbook contains a macro sheet; it is rejected")
         if kind != "worksheet":
             ignored += 1
             continue
@@ -354,7 +419,9 @@ def _read_worksheet_entries(
             raise XlsxParseError(f"XLSX worksheet '{name}' refers to a missing part")
         entries.append(_SheetEntry(name=name, path=path, visible=state in {"", "visible"}))
         if len(entries) > limits.max_worksheets:
-            raise XlsxParseError(f"XLSX workbook has more than {limits.max_worksheets} worksheets")
+            raise XlsxExpansionError(
+                f"XLSX workbook has more than {limits.max_worksheets} worksheets"
+            )
 
     if not entries:
         raise XlsxParseError("XLSX workbook has no worksheets")
@@ -417,11 +484,13 @@ def _select_worksheet(entries: list[_SheetEntry], requested: str | None) -> _She
             if entry.name == requested:
                 return entry
         available = ", ".join(repr(entry.name) for entry in entries)
-        raise XlsxParseError(f"XLSX worksheet {requested!r} was not found; available: {available}")
+        raise XlsxWorksheetError(
+            f"XLSX worksheet {requested!r} was not found; available: {available}"
+        )
     for entry in entries:
         if entry.visible:
             return entry
-    raise XlsxParseError("XLSX workbook has no visible worksheet; select one by name")
+    raise XlsxWorksheetError("XLSX workbook has no visible worksheet; select one by name")
 
 
 # ---------------------------------------------------------------------------
@@ -502,7 +571,7 @@ class _ContentTypesHandler(_XmlHandler):
         if name in {"Default", "Override"}:
             content_type = attrs.get("ContentType", "").lower()
             if "macroenabled" in content_type or "vbaproject" in content_type:
-                raise XlsxParseError(
+                raise XlsxMacroError(
                     "XLSX content types declare macro content; macro-enabled workbooks are rejected"
                 )
 
@@ -575,7 +644,7 @@ class _SharedStringsHandler(_XmlHandler):
             self._in_si = False
             self.strings.append("".join(self._parts)[: self._cap])
             if len(self.strings) > self._limits.max_cells:
-                raise XlsxParseError(
+                raise XlsxCellLimitError(
                     f"XLSX shared strings exceed the {self._limits.max_cells}-entry limit"
                 )
 
@@ -732,7 +801,7 @@ class _SheetHandler(_XmlHandler):
     def _start_cell(self, attrs: dict[str, str]) -> None:
         self._cells_seen += 1
         if self._cells_seen > self._limits.max_cells:
-            raise XlsxParseError(f"XLSX worksheet has more than {self._limits.max_cells} cells")
+            raise XlsxCellLimitError(f"XLSX worksheet has more than {self._limits.max_cells} cells")
         reference = attrs.get("r")
         self._col = _column_index(reference) if reference is not None else self._next_col
         self._next_col = self._col + 1
@@ -760,7 +829,9 @@ class _SheetHandler(_XmlHandler):
         if value is None or value == "":
             return
         if self._col >= self._limits.max_columns:
-            raise XlsxParseError(f"XLSX worksheet has more than {self._limits.max_columns} columns")
+            raise XlsxCellLimitError(
+                f"XLSX worksheet has more than {self._limits.max_columns} columns"
+            )
         self._row_cells[self._col] = value
 
     def _decode_value(self, raw: str) -> str | None:
@@ -845,9 +916,11 @@ class _SheetHandler(_XmlHandler):
     def _add_rows(self, count: int) -> None:
         total = self._row_total + count
         if total > self._limits.max_rows:
-            raise XlsxParseError(f"XLSX worksheet has more than {self._limits.max_rows} data rows")
+            raise XlsxCellLimitError(
+                f"XLSX worksheet has more than {self._limits.max_rows} data rows"
+            )
         if total * max(self._ncols, 1) > self._limits.max_cells:
-            raise XlsxParseError(
+            raise XlsxCellLimitError(
                 f"XLSX worksheet grid exceeds the {self._limits.max_cells}-cell limit"
             )
         self._row_total = total
