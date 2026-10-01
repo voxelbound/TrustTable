@@ -62,8 +62,21 @@ def test_readme_says_v03_is_published_with_its_verification_limits() -> None:
     assert "the local-AI setup was not exercised on that host" in readme
     assert "not yet published" not in readme
     assert "no tag has been pushed" not in readme
-    # The milestone decision is the owner's; the README does not make it.
-    assert "recording the `v0.3` milestone as complete is the repository owner's decision" in readme
+    # The owner has recorded the v0.2 and v0.3 milestones complete (at the
+    # agreed scoped qualification level), and v1.0 is the active milestone.
+    # The README states that and no longer calls the decision pending or
+    # v0.3 the current milestone.
+    assert "**v0.2 — Local AI beta: complete, released as `v0.2.0`.**" in readme
+    assert "**v0.3 — Complete manager workflow: complete, released as `v0.3.0`.**" in readme
+    assert "**Current milestone: v1.0 — Production-quality local release (active).**" in readme
+    assert "recorded the milestone complete at the agreed scoped qualification level" in readme
+    assert (
+        "recording the `v0.3` milestone as complete is the repository owner's decision"
+        not in readme
+    )
+    assert "Current milestone: v0.3" not in readme
+    assert "(v0.3 — begun)" not in readme
+    assert "(v0.2 — begun)" not in readme
 
 
 def test_planning_docs_record_rel_03_complete_with_the_ai_off_narrowing() -> None:
