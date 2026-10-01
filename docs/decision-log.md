@@ -535,3 +535,22 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** changes no code, workflow, dependency or default; does not reopen `D-041`, `D-044` or `D-045`.
 
 **Decided by:** the human owner pushed the tag and ran and observed the workflow and the clean-host check; the documentation mapping was completed under delegated implementation authority.
+
+## D-050 — `ING-03` slice 1: the secure XLSX parser is standard-library only and bounds expansion by counting
+
+**Decision (2026-10-01):**
+
+1. **No new dependency.** `parse_xlsx` is built on `zipfile` and `xml.parsers.expat`. A third-party spreadsheet library would add a large parsing surface to the most hostile input the product accepts, and `docs/architecture.md` keeps the parsing layer stdlib-only.
+2. **XML is read with expat directly**, and any DOCTYPE or entity declaration is rejected before it is expanded. This removes entity-expansion and external-entity attacks rather than limiting them. Element nesting is capped.
+3. **Expansion is bounded by counting.** Declared zip sizes are checked early, but every byte actually decompressed is counted against one shared budget, so falsified headers cannot bypass the limit.
+4. **Macro and encrypted workbooks are rejected by content, not extension**: a VBA project part, macro sheets, macro-enabled content types, OLE compound files and zip-level encryption.
+5. **Limits mirror `docs/product-requirements.md` §7** and apply to every worksheet, so worksheet metadata reports real row and column counts. A workbook over a limit is rejected, not sampled.
+6. **Values are the stored text.** Formulas are never evaluated and formatting is ignored, so dates stored as serial numbers are returned as numbers.
+
+**Basis:** the product requirements state that formulas are never executed, macro workbooks are rejected and the application must defend against compressed-file expansion; the CSV parser (`ING-02`) set the shape and conventions this follows.
+
+**Alternatives considered:** `openpyxl` in read-only mode (less code, but a new dependency and a larger attack surface, and it does not by itself bound decompression); `xml.etree` or `defusedxml` (the former cannot reject entity declarations before expansion, the latter is a dependency); rejecting by the `.xlsm` extension only (does not stop a macro-bearing file named `.xlsx`).
+
+**Explicit non-scope:** no upload route, storage, analysis-pipeline or UI change (the API still returns `415` for `.xlsx`); no date-format interpretation; no change to the CSV parser. The `ING-03` item stays open until XLSX is reachable by a user.
+
+**Decided by:** delegated implementation authority under the active work package; every choice serves a stated requirement and none adds a user-visible behavior.

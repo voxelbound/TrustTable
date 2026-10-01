@@ -714,6 +714,16 @@ Persistence and complete CSV workflow.
 
 Worksheet selection, stored values, macro rejection, expansion limits.
 
+> **Annotation (2026-10-01, slice 1 of `ING-03`):** the secure XLSX parser
+> (`parsers/xlsx_parser.py`, `parse_xlsx`) is implemented and tested in
+> isolation: worksheet selection by name or the first visible sheet, stored
+> values read as literal text with formulas never evaluated, rejection of
+> macro-enabled, encrypted, malformed and path-traversal workbooks, and
+> expansion, entity and resource limits (`docs/decision-log.md` D-050). Still
+> **not done**, so `ING-03` stays open: wiring XLSX into the upload route,
+> storage and analysis pipeline (the API still returns `415` for `.xlsx`), a
+> worksheet picker in the UI, and date-aware rendering of date cells.
+
 ## DET-03 — Complete detector catalogue
 
 Add remaining structural, completeness, consistency, validity, statistical, and cross-field detectors.
