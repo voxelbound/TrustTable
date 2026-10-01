@@ -734,6 +734,18 @@ Worksheet selection, stored values, macro rejection, expansion limits.
 > `.csv` only (no `.xlsx` in the file picker and no worksheet picker),
 > `POST /datasets/inspect` is not built, and date cells are shown as the
 > numbers stored in the file.
+>
+> **Annotation (2026-10-01, slice 3 of `ING-03`, item complete):** the Start
+> screen accepts `.xlsx`, asks which worksheet to analyze when the API
+> answers `WORKSHEET_REQUIRED`, uploads the same file with the picked
+> worksheet, shows the API's refusal messages, and the Overview and Technical
+> details screens name the worksheet analyzed (`docs/decision-log.md`
+> D-052). `ING-03` — worksheet selection, stored values, macro rejection and
+> expansion limits — is complete. Two items stay open as disclosed limits
+> and are not part of the item: `POST /datasets/inspect` (the optional
+> pre-analysis preview with an estimated shape) and date-aware rendering
+> (formatting is ignored by design, so a date stored as a serial number is
+> shown as that number).
 
 ## DET-03 — Complete detector catalogue
 

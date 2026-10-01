@@ -166,6 +166,9 @@ function AnalysisSection({ analysis }: { analysis: AnalysisResource }) {
       <FactList>
         <Fact label="File name" value={dataset.original_filename} />
         <Fact label="Format" value={dataset.format} />
+        {dataset.selected_worksheet && (
+          <Fact label="Worksheet analyzed" value={dataset.selected_worksheet} />
+        )}
         <Fact label="Size (bytes)" value={String(dataset.byte_size)} />
         <Fact label="Content hash" value={dataset.content_hash} />
         <Fact label="Source" value={dataset.source_type} />

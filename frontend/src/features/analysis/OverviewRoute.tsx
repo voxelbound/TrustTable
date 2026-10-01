@@ -147,6 +147,12 @@ export function OverviewRoute() {
             <dd>{dataset.original_filename}</dd>
             <dt className="font-medium">Format</dt>
             <dd>{dataset.format.toUpperCase()}</dd>
+            {dataset.selected_worksheet && (
+              <>
+                <dt className="font-medium">Worksheet analyzed</dt>
+                <dd>{dataset.selected_worksheet}</dd>
+              </>
+            )}
             <dt className="font-medium">Size</dt>
             <dd>{dataset.byte_size.toLocaleString()} bytes</dd>
           </dl>

@@ -156,12 +156,14 @@ section around any of its own affected rows (row-anchored findings only), or, fo
 prompt-injection detector's own finding, a dedicated warning
 presentation explaining what was detected, whether it was sent to a
 model, and what protections apply.
-Excel (`.xlsx`) files are accepted by the API (`POST /api/v1/analyses`,
-with an optional `worksheet` field; **ING-03** is still in progress) but
-the Start screen's file picker does not offer them yet — use the API, or
-`.csv` in the UI, today. A workbook with several worksheets must name the
-one to analyze; macro-enabled (`.xlsm`) and malformed workbooks are
-refused.
+Excel (`.xlsx`) files work from the Start screen and the API
+(`POST /api/v1/analyses`, with an optional `worksheet` field; **ING-03**).
+A workbook with several worksheets asks which one to analyze, and the
+Overview names the worksheet that was analyzed. Formulas are never
+evaluated (the stored result is read), macro-enabled (`.xlsm`), encrypted
+and malformed workbooks are refused, and limits on size, rows, columns and
+cells apply. Formatting is ignored, so a date stored as a serial number is
+shown as that number.
 [Local development](docs/local-development.md#exercising-the-deterministic-profiling-pipeline-directly)
 still has a reproducible way to exercise the pipeline directly in
 Python, without the API, if preferred.

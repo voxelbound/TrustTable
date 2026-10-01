@@ -62,6 +62,26 @@ export function getApiErrorMessage(body: unknown): string {
   return FALLBACK_ERROR_MESSAGE
 }
 
+/** The worksheet names a `WORKSHEET_REQUIRED` upload refusal asks the
+ * caller to choose between (`ING-03`; `docs/api-specification.md` §6), or
+ * `null` for any other body. The names come from an untrusted workbook, so
+ * they are validated as a non-empty list of strings and must only ever be
+ * shown as text. */
+export function getWorksheetChoices(body: unknown): string[] | null {
+  if (!isApiErrorEnvelope(body) || body.error.code !== 'WORKSHEET_REQUIRED') {
+    return null
+  }
+  const worksheets: unknown = body.error.details?.worksheets
+  if (
+    !Array.isArray(worksheets) ||
+    worksheets.length === 0 ||
+    !worksheets.every((name): name is string => typeof name === 'string')
+  ) {
+    return null
+  }
+  return worksheets
+}
+
 /** The structured error code (e.g. `ANALYSIS_NOT_FOUND`) when the body
  * conforms to the envelope, otherwise `null`. */
 export function getApiErrorCode(body: unknown): string | null {

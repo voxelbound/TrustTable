@@ -101,8 +101,9 @@ native" above):
 
 1. The Start screen (`/analyses/new`) offers two actions: **"Try the
    sales demo"** (runs the bundled synthetic dataset immediately, no
-   file needed) or **upload your own `.csv` file** (drag-and-drop/file
-   picker, `.csv` only — `.xlsx` is not yet supported, `ING-03`).
+   file needed) or **upload your own `.csv` or `.xlsx` file** (drag-and-drop/file
+   picker; a workbook with several worksheets asks which one to analyze,
+   and macro-enabled `.xlsm` workbooks are refused, `ING-03`).
 2. Either action navigates to `/analyses/{id}/overview` — a trust
    assessment, the top findings, and a dataset summary (filename,
    format, size).

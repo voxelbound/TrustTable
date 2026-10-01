@@ -3,8 +3,48 @@ import {
   FALLBACK_ERROR_MESSAGE,
   getApiErrorCode,
   getApiErrorMessage,
+  getWorksheetChoices,
   isApiErrorEnvelope,
 } from './apiError'
+
+const worksheetEnvelope = (code: string, details: unknown) => ({
+  error: { code, message: 'm', details, request_id: 'r' },
+})
+
+describe('getWorksheetChoices (ING-03)', () => {
+  it('returns the names of a WORKSHEET_REQUIRED refusal in order', () => {
+    expect(
+      getWorksheetChoices(
+        worksheetEnvelope('WORKSHEET_REQUIRED', { worksheets: ['B', 'A'] }),
+      ),
+    ).toEqual(['B', 'A'])
+  })
+
+  it.each([
+    [
+      'another error code',
+      worksheetEnvelope('INVALID_REQUEST', { worksheets: ['A'] }),
+    ],
+    ['a missing list', worksheetEnvelope('WORKSHEET_REQUIRED', {})],
+    [
+      'an empty list',
+      worksheetEnvelope('WORKSHEET_REQUIRED', { worksheets: [] }),
+    ],
+    [
+      'a non-list',
+      worksheetEnvelope('WORKSHEET_REQUIRED', { worksheets: 'A' }),
+    ],
+    [
+      'a list with a non-string',
+      worksheetEnvelope('WORKSHEET_REQUIRED', { worksheets: ['A', 2] }),
+    ],
+    ['no details', worksheetEnvelope('WORKSHEET_REQUIRED', undefined)],
+    ['a non-envelope body', { worksheets: ['A'] }],
+    ['undefined', undefined],
+  ])('returns null for %s', (_label, body) => {
+    expect(getWorksheetChoices(body)).toBeNull()
+  })
+})
 
 const CONFORMING_ENVELOPE = {
   error: {

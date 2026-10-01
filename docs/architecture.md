@@ -804,8 +804,9 @@ filesystem path. Only persistent review controls remain an honestly
 disclosed not-yet-available placeholder (`REV-01`, not yet built); the
 rule engine, rule execution and remediation workflow (`RULE-01`/`REM-01`)
 remain later items. The Start screen's upload control is
-now enabled (`WP-029`, CSV only in the UI; the API also accepts `.xlsx`,
-`ING-03`, and the UI will follow) — see "Analysis API routes" above for
+now enabled (`WP-029`; it accepts `.csv` and, with `ING-03`, `.xlsx`,
+asking which worksheet to analyze when a workbook has several, and the
+Overview and Technical details screens name the worksheet analyzed) — see "Analysis API routes" above for
 `POST /analyses`.
 
 ## 5. API contracts
