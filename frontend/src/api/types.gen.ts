@@ -231,6 +231,10 @@ export type BodyPostAnalysisUploadApiV1AnalysesPost = {
      * File
      */
     file: Blob | File;
+    /**
+     * Worksheet
+     */
+    worksheet?: string | null;
 };
 
 /**
@@ -615,10 +619,9 @@ export type CreateValidationRuleRequest = {
  * DatasetSummaryResponse
  *
  * A bounded summary of `domain.parsing.Dataset` — omits
- * `stored_filename`/`storage_location`/`selected_worksheet`/
- * `deleted_at`, none of which are meaningful yet for an in-memory,
- * demo-only, never-deleted dataset (`API-01` non-goals: no generic
- * upload, no deletion).
+ * `stored_filename`/`storage_location`/`deleted_at`, which are
+ * internal storage facts. `selected_worksheet` (`ING-03`) is the name of
+ * the worksheet an `xlsx` analysis was run over, and is `None` for CSV.
  */
 export type DatasetSummaryResponse = {
     /**
@@ -645,6 +648,10 @@ export type DatasetSummaryResponse = {
      * Original Filename
      */
     original_filename: string;
+    /**
+     * Selected Worksheet
+     */
+    selected_worksheet?: string | null;
     /**
      * Source Type
      */

@@ -554,3 +554,21 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** no upload route, storage, analysis-pipeline or UI change (the API still returns `415` for `.xlsx`); no date-format interpretation; no change to the CSV parser. The `ING-03` item stays open until XLSX is reachable by a user.
 
 **Decided by:** delegated implementation authority under the active work package; every choice serves a stated requirement and none adds a user-visible behavior.
+
+## D-051 — `ING-03` slice 2: XLSX uploads follow the documented API contract; the service never guesses a worksheet
+
+**Decision (2026-10-01):**
+
+1. **The contract is the one already documented** (`docs/api-specification.md` §6/§14): `POST /analyses` takes an optional `worksheet` field, an ambiguous workbook is `WORKSHEET_REQUIRED`, and macro, malformed and over-limit workbooks use `MACRO_ENABLED_FILE`, `MALFORMED_FILE` and `WORKBOOK_EXPANSION_LIMIT`. No new field, endpoint or error code is introduced beyond `selected_worksheet`, an additive optional field on the dataset summary that reports which worksheet was analyzed.
+2. **No guessing between worksheets.** With several visible worksheets and no choice the request is refused and the names are returned. A workbook with exactly one visible worksheet uses it, so a hidden helper sheet does not force a choice.
+3. **Refuse before queuing.** The workbook is inspected at upload (package validation only, no cell reading, on a worker thread) so an unsafe or ambiguous workbook never becomes an analysis. Error messages are fixed text; only worksheet names are returned.
+4. **One dispatcher.** Every pipeline stage that reads the file bytes goes through `_parse_analysis_content`, which reads by the dataset's format and recorded worksheet. A test pins that no other call site of the CSV or XLSX parser exists in the analysis package, so a later stage cannot parse a workbook as CSV.
+5. **Row, column and cell limits apply when the pipeline reads the chosen worksheet**, so an over-limit worksheet becomes a failed analysis, the same outcome as an over-limit CSV.
+
+**Basis:** the API specification already fixes the request shape and error codes; the product requirement is that XLSX works within the documented limits and that formulas and macros are never executed.
+
+**Alternatives considered:** defaulting to the first worksheet (silent wrong-sheet analysis for multi-sheet workbooks); a separate inspect-then-upload flow only (needs the UI picker first and leaves the upload route unsafe by default); scanning every worksheet at upload (cost proportional to workbook data inside the request).
+
+**Explicit non-scope:** the Start screen still offers `.csv` only and has no worksheet picker; `POST /datasets/inspect` is not built; no database change (the dataset, with its format and worksheet, is already stored as JSON); no change to CSV behavior.
+
+**Decided by:** delegated implementation authority under the active work package, implementing the documented API contract.

@@ -146,8 +146,12 @@ selected by exact name, or the first visible worksheet is used; every
 worksheet is scanned within the same limits so its row and column counts
 are real. Values are returned as the text stored in the file, so dates
 stored as serial numbers are not interpreted (formatting is ignored by
-design). The parser is not yet wired into the upload route, storage or
-analysis pipeline.
+design). The parser is wired into the upload route and the analysis
+pipeline (`ING-03`, upload slice): see "Analysis API routes" below. Its
+failures carry the documented API error code (`MALFORMED_FILE`,
+`MACRO_ENABLED_FILE`, `WORKBOOK_EXPANSION_LIMIT`, `CELL_LIMIT_EXCEEDED`),
+and `inspect_xlsx_worksheets` lists a workbook's worksheets after the same
+package validation without reading any worksheet's cells.
 
 ### Profiling package
 
@@ -646,8 +650,8 @@ deletion (`DEL-01`). `cancel_analysis()` is effective only while
 `QUEUED`; true mid-pipeline cancellation needs real bounded background
 execution (`JOB-01`, not yet built). Every `Analysis.security_exposure`
 is fixed to the disabled/no-transmission state — no AI/LLM provider
-exists yet. No persistence (`DB-01`) exists yet; XLSX upload support
-(`ING-03`) remains a later, separate package.
+exists yet. No persistence (`DB-01`) exists yet. (XLSX upload support
+arrived later with `ING-03`.)
 
 ### Analysis API routes
 
@@ -676,9 +680,24 @@ later, separate backlog items own. Persistence (`DB-01`) and true
 background execution (`JOB-01`) remain later, separate packages.
 
 `POST /analyses` (`WP-029`, `API-01`/`UI-01` extending) accepts a
-multipart `file` field, CSV only (`.xlsx` returns `415
-UNSUPPORTED_FILE_TYPE` — the XLSX parser (`ING-03`) exists but is not yet
-wired into upload; that wiring is a later, separate package). It
+multipart `file` field, `.csv` or (`ING-03`) `.xlsx` (`.xlsm` and every
+other extension return `415 UNSUPPORTED_FILE_TYPE`), plus an optional
+`worksheet` form field. For `.xlsx` the route inspects the workbook
+before any analysis exists (`parsers.inspect_xlsx_worksheets`, on a worker
+thread) and refuses it with the documented fixed-text error —
+`415 MACRO_ENABLED_FILE`, `413 WORKBOOK_EXPANSION_LIMIT`, `400
+MALFORMED_FILE` — or, when the worksheet is ambiguous, `400
+WORKSHEET_REQUIRED` listing the worksheet names; a workbook with exactly
+one visible worksheet uses it, and an unknown `worksheet` is `400
+INVALID_REQUEST`. The chosen name is stored as `Dataset.selected_worksheet`
+and shown in the dataset summary. Every pipeline stage then reads the file
+through the single `analysis.service._parse_analysis_content`, which
+dispatches on the dataset's format and always reads the recorded
+worksheet, so no stage can parse a workbook as CSV or read a different
+sheet (a test pins that no other call site of `parse_csv`/`parse_xlsx`
+exists in the analysis package). Row, column and cell limits are enforced
+when the pipeline parses the chosen worksheet, so an over-limit worksheet
+becomes a failed analysis, as an over-limit CSV does. It
 validates the extension, bounds the read to `Settings.max_file_size_mb`
 before acting on the content (`413 FILE_TOO_LARGE` otherwise), sanitizes
 the filename (`trusttable_backend.uploads.filename.sanitize_filename` —
@@ -785,7 +804,8 @@ filesystem path. Only persistent review controls remain an honestly
 disclosed not-yet-available placeholder (`REV-01`, not yet built); the
 rule engine, rule execution and remediation workflow (`RULE-01`/`REM-01`)
 remain later items. The Start screen's upload control is
-now enabled (`WP-029`, CSV only) — see "Analysis API routes" above for
+now enabled (`WP-029`, CSV only in the UI; the API also accepts `.xlsx`,
+`ING-03`, and the UI will follow) — see "Analysis API routes" above for
 `POST /analyses`.
 
 ## 5. API contracts

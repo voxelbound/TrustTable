@@ -51,10 +51,9 @@ class WarningResponse(BaseModel):
 
 class DatasetSummaryResponse(BaseModel):
     """A bounded summary of `domain.parsing.Dataset` — omits
-    `stored_filename`/`storage_location`/`selected_worksheet`/
-    `deleted_at`, none of which are meaningful yet for an in-memory,
-    demo-only, never-deleted dataset (`API-01` non-goals: no generic
-    upload, no deletion).
+    `stored_filename`/`storage_location`/`deleted_at`, which are
+    internal storage facts. `selected_worksheet` (`ING-03`) is the name of
+    the worksheet an `xlsx` analysis was run over, and is `None` for CSV.
     """
 
     dataset_id: str
@@ -64,6 +63,7 @@ class DatasetSummaryResponse(BaseModel):
     content_hash: str
     source_type: str
     created_at: datetime
+    selected_worksheet: str | None = None
 
 
 class SecurityExposureResponse(BaseModel):
