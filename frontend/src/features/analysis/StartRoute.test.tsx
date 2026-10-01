@@ -132,11 +132,15 @@ describe('StartRoute', () => {
       // Only the `worksheet` field is recorded: the jsdom `File` is not
       // carried faithfully by the test HTTP layer, so which *file* was sent
       // is proven separately, on the SDK call (`StartRouteWorksheet.test`).
-      const seen: Array<{ worksheet: FormDataEntryValue | null }> = []
+      // The multipart text is searched for the field rather than parsed
+      // with `request.formData()`, which behaves differently across Node
+      // versions when the body holds a jsdom `File`.
+      const seen: Array<{ worksheet: string | null }> = []
       server.use(
         http.post('http://localhost/api/v1/analyses', async ({ request }) => {
-          const form = await request.formData()
-          seen.push({ worksheet: form.get('worksheet') })
+          const raw = await request.text()
+          const match = /name="worksheet"\r?\n\r?\n([^\r\n]*)/.exec(raw)
+          seen.push({ worksheet: match ? match[1] : null })
           const next = responses[seen.length - 1]
           return next
             ? next()
