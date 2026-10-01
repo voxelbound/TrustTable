@@ -143,6 +143,11 @@ Deliver:
 > unattested and not container-scanned, and the local-AI setup was not
 > exercised there. Whether the `v0.3` milestone is complete is the owner's
 > decision and is not made here.
+>
+> **Annotation (2026-10-01):** the project owner has since recorded the `v0.2`
+> and `v0.3` milestones complete, each at the agreed scoped qualification
+> level, and `v0.2.0` and `v0.3.0` are the published releases. `v1.0` below is
+> the current active milestone.
 
 ## v1.0 — Production-quality local release
 
@@ -159,6 +164,13 @@ Deliver:
 - SBOM and license checks
 - production documentation
 - release artifacts
+
+> **Annotation (2026-10-01, `docs/decision-log.md` D-052):** `v1.0` is the
+> current milestone and has begun with XLSX support (`ING-03`), which is in
+> progress: Excel upload works from the API and the Start screen, and the
+> remaining gap is that the documented worksheet and uncompressed-size
+> settings are not yet read by the parser. The rest of the list above is
+> planned or has a `v0.1`-scoped baseline only.
 
 Production definition:
 

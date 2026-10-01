@@ -46,11 +46,11 @@ are present, correctly typed, and bounded from day one.
 | Variable | Type | Default | Effect |
 |---|---|---|---|
 | `MAX_FILE_SIZE_MB` | positive integer | `100` | Maximum accepted compressed upload size, once upload handling exists. |
-| `MAX_ROWS` | positive integer | `1000000` | Maximum accepted dataset row count, once parsing exists. |
-| `MAX_COLUMNS` | positive integer | `500` | Maximum accepted column count, once parsing exists. |
-| `MAX_WORKSHEETS` | positive integer | `20` | Maximum accepted worksheet count, once Excel support exists (`ING-03`). |
-| `MAX_UNCOMPRESSED_WORKBOOK_MB` | positive integer | `500` | Maximum accepted uncompressed workbook size (expansion-bomb defense), once Excel support exists. |
-| `MAX_CELL_COUNT` | positive integer | `50000000` | Maximum accepted total cell count, once parsing exists. |
+| `MAX_ROWS` | positive integer | `1000000` | Maximum accepted dataset row count, once parsing exists. **Not yet consumed:** the CSV and Excel parsers enforce a built-in limit equal to this default, so changing the setting has no effect. |
+| `MAX_COLUMNS` | positive integer | `500` | Maximum accepted column count, once parsing exists. **Not yet consumed** (as `MAX_ROWS`). |
+| `MAX_WORKSHEETS` | positive integer | `20` | Maximum accepted worksheet count, once Excel support exists (`ING-03`). **Not yet consumed:** the Excel parser enforces a built-in limit of 20 (`ING-03` is open for this). |
+| `MAX_UNCOMPRESSED_WORKBOOK_MB` | positive integer | `500` | Maximum accepted uncompressed workbook size (expansion-bomb defense), once Excel support exists. **Not yet consumed:** the Excel parser enforces a built-in limit of 500 MB (`ING-03` is open for this). |
+| `MAX_CELL_COUNT` | positive integer | `50000000` | Maximum accepted total cell count, once parsing exists. **Not yet consumed:** the Excel parser enforces a built-in limit equal to this default; the CSV parser has no cell-count limit beyond its row and column limits. |
 | `ANALYSIS_RETENTION_HOURS` | non-negative integer (`0` = unlimited) | `0` | Will control automatic analysis retention once persistence exists (`DB-01`). |
 | `BACKGROUND_WORKER_COUNT` | positive integer | `2` | Will size the bounded in-process worker pool once background jobs exist (`JOB-01`). |
 

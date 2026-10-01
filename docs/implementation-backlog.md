@@ -735,17 +735,23 @@ Worksheet selection, stored values, macro rejection, expansion limits.
 > `POST /datasets/inspect` is not built, and date cells are shown as the
 > numbers stored in the file.
 >
-> **Annotation (2026-10-01, slice 3 of `ING-03`, item complete):** the Start
-> screen accepts `.xlsx`, asks which worksheet to analyze when the API
-> answers `WORKSHEET_REQUIRED`, uploads the same file with the picked
+> **Annotation (2026-10-01, slice 3 of `ING-03`, item still in progress):**
+> the Start screen accepts `.xlsx`, asks which worksheet to analyze when the
+> API answers `WORKSHEET_REQUIRED`, uploads the same file with the picked
 > worksheet, shows the API's refusal messages, and the Overview and Technical
 > details screens name the worksheet analyzed (`docs/decision-log.md`
-> D-052). `ING-03` — worksheet selection, stored values, macro rejection and
-> expansion limits — is complete. Two items stay open as disclosed limits
-> and are not part of the item: `POST /datasets/inspect` (the optional
-> pre-analysis preview with an estimated shape) and date-aware rendering
-> (formatting is ignored by design, so a date stored as a serial number is
-> shown as that number).
+> D-052). Worksheet selection, stored values and macro rejection are done.
+> **Still open and part of the item:** the "expansion limits" are built in
+> but not configurable — `docs/configuration.md` ties `MAX_WORKSHEETS` and
+> `MAX_UNCOMPRESSED_WORKBOOK_MB` to Excel support, and no parser reads them
+> (nor `MAX_ROWS`, `MAX_COLUMNS` or `MAX_CELL_COUNT`); reading the settings
+> is the remaining slice. **Checked and outside the item:**
+> `POST /datasets/inspect` (marked optional in the API specification and
+> assigned to no backlog item), date interpretation (no authoritative
+> document asks for it; formatting is ignored by design, so a date stored as
+> a serial number is shown as that number), and the end-to-end scenario
+> "Excel worksheet selection" (a `REL-04` test-gate item under
+> `docs/testing-strategy.md` §2.4).
 
 ## DET-03 — Complete detector catalogue
 
