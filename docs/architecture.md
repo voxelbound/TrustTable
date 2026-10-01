@@ -122,8 +122,32 @@ read as literal text, never executed or evaluated. Malformed-but-
 recoverable input (ragged rows, duplicate/empty column names, over-long
 values) degrades gracefully via `ParsingWarning`; only unrecoverable
 input (empty/undecodable content, a zero-column header, or a limit being
-exceeded) is rejected outright. `ING-03` (secure XLSX support) is the
-future package that extends this layer to the XLSX format.
+exceeded) is rejected outright.
+
+`parsers.xlsx_parser.parse_xlsx` (`ING-03`, parser slice) extends the
+layer to XLSX with the same shape and conventions: it returns a
+`ParsedDataset` (`format=xlsx`, one `WorksheetMetadata` per worksheet with
+exactly one selected) plus the selected worksheet's row values, and
+reuses the CSV parser's column naming and warning codes. It is standard
+library only (`zipfile`, `xml.parsers.expat`), with no new dependency. Its
+security properties are: formulas are never evaluated (only the stored
+result is read, as literal text); macro-enabled workbooks are rejected by
+package content (VBA project, macro sheets, macro content types) rather
+than by file extension; encrypted workbooks (OLE compound files, or
+zip-level encryption) are rejected; zip entries are never extracted, and
+unsafe entry names and relationship targets that escape the package are
+rejected; XML is read with expat directly and any DOCTYPE or entity
+declaration is rejected before expansion, with element nesting capped; and
+expansion is bounded by counting decompressed bytes against one shared
+budget as they are read, in addition to an early check of the sizes the
+zip headers declare. Entry, worksheet, row, column and cell limits mirror
+the documented defaults (`docs/product-requirements.md` §7). A worksheet is
+selected by exact name, or the first visible worksheet is used; every
+worksheet is scanned within the same limits so its row and column counts
+are real. Values are returned as the text stored in the file, so dates
+stored as serial numbers are not interpreted (formatting is ignored by
+design). The parser is not yet wired into the upload route, storage or
+analysis pipeline.
 
 ### Profiling package
 
@@ -653,7 +677,8 @@ background execution (`JOB-01`) remain later, separate packages.
 
 `POST /analyses` (`WP-029`, `API-01`/`UI-01` extending) accepts a
 multipart `file` field, CSV only (`.xlsx` returns `415
-UNSUPPORTED_FILE_TYPE` — `ING-03` is a later, separate package). It
+UNSUPPORTED_FILE_TYPE` — the XLSX parser (`ING-03`) exists but is not yet
+wired into upload; that wiring is a later, separate package). It
 validates the extension, bounds the read to `Settings.max_file_size_mb`
 before acting on the content (`413 FILE_TOO_LARGE` otherwise), sanitizes
 the filename (`trusttable_backend.uploads.filename.sanitize_filename` —
