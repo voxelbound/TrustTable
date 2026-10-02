@@ -84,6 +84,7 @@ from trusttable_backend.analysis import (
     retry_analysis,
     set_finding_review,
 )
+from trusttable_backend.analysis.parse_limits import xlsx_parse_limits
 from trusttable_backend.config import get_settings
 from trusttable_backend.context_inference.ai_context import (
     ContextInferenceResult,
@@ -121,7 +122,6 @@ from trusttable_backend.explanation.deterministic import build_deterministic_exp
 from trusttable_backend.jobs import JobPool
 from trusttable_backend.parsers import (
     XlsxParseError,
-    XlsxParseLimits,
     XlsxWorksheetInfo,
     inspect_xlsx_worksheets,
 )
@@ -1163,7 +1163,7 @@ def _upload_extension(filename: str) -> str | None:
     return None
 
 
-def _inspect_workbook(content: bytes, max_bytes: int) -> tuple[XlsxWorksheetInfo, ...]:
+def _inspect_workbook(content: bytes) -> tuple[XlsxWorksheetInfo, ...]:
     """List a workbook's worksheets, refusing unsafe or unreadable ones.
 
     Runs the parser's package validation (macros, encryption, traversal,
@@ -1172,7 +1172,7 @@ def _inspect_workbook(content: bytes, max_bytes: int) -> tuple[XlsxWorksheetInfo
     the documented fixed-text error for its class.
     """
     try:
-        return inspect_xlsx_worksheets(content, limits=XlsxParseLimits(max_bytes=max_bytes))
+        return inspect_xlsx_worksheets(content, limits=xlsx_parse_limits())
     except XlsxParseError as exc:
         status_code, message = _WORKBOOK_REJECTIONS.get(
             exc.code, _WORKBOOK_REJECTIONS["MALFORMED_FILE"]
@@ -1292,7 +1292,7 @@ async def post_analysis_upload(
     selected_worksheet: str | None = None
     if extension == _XLSX_EXTENSION:
         dataset_format = DatasetFormat.XLSX
-        worksheets = await run_in_threadpool(_inspect_workbook, content, max_bytes)
+        worksheets = await run_in_threadpool(_inspect_workbook, content)
         selected_worksheet = _choose_worksheet(worksheets, requested_worksheet)
 
     store = get_analysis_store(request)

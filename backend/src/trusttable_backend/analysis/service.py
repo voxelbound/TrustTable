@@ -126,6 +126,7 @@ from ..risk.scoring import (
 )
 from ..rules import generation as rule_generation
 from ..rules.engine import execute_rule as _execute_rule
+from .parse_limits import csv_parse_limits, xlsx_parse_limits
 
 #: Schema version stamped on every newly created `ValidationRule`
 #: (`RULE-01` slice 1) — mirrors `ai_boundary.finding_analysis`'s own
@@ -672,8 +673,8 @@ def _parse_analysis_content(analysis: Analysis) -> CsvParseResult | XlsxParseRes
         worksheet = analysis.dataset.selected_worksheet
         if worksheet is None:
             raise ValueError("XLSX analysis has no selected worksheet")
-        return parse_xlsx(analysis.content, worksheet=worksheet)
-    return parse_csv(analysis.content)
+        return parse_xlsx(analysis.content, worksheet=worksheet, limits=xlsx_parse_limits())
+    return parse_csv(analysis.content, limits=csv_parse_limits())
 
 
 def create_analysis_from_upload(

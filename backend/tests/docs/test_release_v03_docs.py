@@ -92,6 +92,27 @@ def test_planning_docs_record_rel_03_complete_with_the_ai_off_narrowing() -> Non
     assert "Whether the `v0.3` milestone is complete is the owner's decision" in log
 
 
+def test_docs_say_the_configured_limits_are_consumed_and_ing_03_is_complete() -> None:
+    readme = _flat("README.md")
+    configuration = _flat("docs/configuration.md")
+    backlog = _flat("docs/implementation-backlog.md")
+    plan = _flat("docs/release-plan.md")
+    log = _flat("docs/decision-log.md")
+    assert "**Done — secure Excel support (`ING-03`):**" in readme
+    assert "are read from the settings on every CSV and Excel parse" in readme
+    assert "are not read by the parsers" not in readme
+    assert "so changing those settings has no effect" not in readme
+    assert "Not yet consumed:" not in configuration.split("## LLM provider")[0].split(
+        "## Local limits"
+    )[1].replace("**", "")
+    assert "These limits are read from the settings on every parse" in configuration
+    assert "the item is complete" in backlog
+    assert "`ING-03` is complete" in plan
+    assert "D-053 — `ING-03` is complete" in log
+    # The deterministic parse-limit factory the docs name exists.
+    assert (_ROOT / "backend/src/trusttable_backend/analysis/parse_limits.py").is_file()
+
+
 def test_the_workflow_acceptance_test_named_in_the_docs_exists() -> None:
     backlog = _text("docs/implementation-backlog.md")
     assert "backend/tests/api/test_v03_complete_workflow.py" in backlog
