@@ -22,7 +22,9 @@ Optionally add a **local AI model** (`llama.cpp`, no account or API key, no Hugg
 
 ## Project status
 
-**Current milestone: v1.0 — Production-quality local release (active).** The latest published release is `v0.3.0`; `v1.0` is not released.
+**Current milestone: v1.0 — Production-quality local release (active).**
+
+`v1.0` is not released. The latest published release is `v0.3.0`, from the completed `v0.3` milestone.
 
 - **Done — secure Excel support (`ING-03`):** Excel (`.xlsx`) upload works from the Start screen and the API — a secure standard-library parser, worksheet choice, and refusal of macro-enabled, encrypted and malformed workbooks. The documented limits (`MAX_FILE_SIZE_MB`, `MAX_ROWS`, `MAX_COLUMNS`, `MAX_WORKSHEETS`, `MAX_UNCOMPRESSED_WORKBOOK_MB`, `MAX_CELL_COUNT`) are read from the settings on every CSV and Excel parse; with no variables set the defaults apply. Lowering a limit also applies to analyses created earlier, and a later step that re-reads such a file reports a server error rather than a documented message.
 - **Partly done, baselines only:** security hardening (`SEC-01`), performance benchmarks (`PERF-01`), accessibility (`A11Y-01`) and the browser matrix (`BROWSER-01`) each have a `v0.1`-scoped baseline; their full scope is open.
