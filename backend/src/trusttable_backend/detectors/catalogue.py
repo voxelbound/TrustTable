@@ -19,12 +19,25 @@ full. `DET-SEC-01`'s `PossiblePromptInjectionDetector` (`WP-021`) extends
 this list additively to 13/13, the required
 `security.possible_llm_prompt_injection` security detector
 (`docs/detector-framework.md` §14).
+
+`DET-03` slice 1 (`WP-100`) adds `FullyEmptyRowsDetector` and
+`InconsistentBooleansDetector`, bringing the list to 15. `DET-03` is
+delivered in slices; the rest of `docs/detector-framework.md` §16 is not
+built yet.
 """
 
 from __future__ import annotations
 
-from .completeness import ExcessiveMissingValuesDetector, MissingLikelyIdentifierDetector
-from .consistency import InconsistentCapitalizationDetector, LeadingTrailingWhitespaceDetector
+from .completeness import (
+    ExcessiveMissingValuesDetector,
+    FullyEmptyRowsDetector,
+    MissingLikelyIdentifierDetector,
+)
+from .consistency import (
+    InconsistentBooleansDetector,
+    InconsistentCapitalizationDetector,
+    LeadingTrailingWhitespaceDetector,
+)
 from .cross_field import LineTotalMismatchDetector
 from .registry import register_detectors
 from .security import PossiblePromptInjectionDetector
@@ -51,5 +64,7 @@ DETECTORS = register_detectors(
         SuspiciouslyConstantColumnDetector(),
         ExtremeOutliersDetector(),
         PossiblePromptInjectionDetector(),
+        FullyEmptyRowsDetector(),
+        InconsistentBooleansDetector(),
     ]
 )

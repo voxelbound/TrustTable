@@ -329,6 +329,41 @@ def test_possible_llm_prompt_injection_not_available() -> None:
     assert reason is not None
 
 
+def test_fully_empty_rows_not_available() -> None:
+    """`DET-03` slice 1: "blank in every column" is a property of a whole
+    row, and no `RULE-01` rule type expresses it (`not_null` checks one
+    named column), so no rule is offered rather than a weaker one."""
+    finding = make_finding("completeness.fully_empty_rows", category=DetectorCategory.COMPLETENESS)
+    evidence = make_evidence({"empty_row_count": 2, "column_count": 3, "total_row_count": 10})
+    proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
+    assert proposal is None
+    assert reason is not None and "completeness.fully_empty_rows" in reason
+
+
+def test_inconsistent_booleans_not_available_and_never_ai_assisted() -> None:
+    """`DET-03` slice 1: which spelling is canonical is a judgment about
+    the owner's data standard, not a calculation, and a deterministic list
+    cannot guess it. It is also not on the AI-assisted list, so the choice
+    stays with the person."""
+    finding = make_finding(
+        "consistency.inconsistent_booleans",
+        category=DetectorCategory.CONSISTENCY,
+        columns=(col("active", 3),),
+    )
+    evidence = make_evidence(
+        {
+            "spelling_families": ["y/n", "yes/no"],
+            "distinct_spellings": ["Y", "yes"],
+            "affected_row_count": 2,
+        }
+    )
+    proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
+    assert proposal is None
+    assert reason is not None and "consistency.inconsistent_booleans" in reason
+    assert "consistency.inconsistent_booleans" not in AI_ASSISTABLE_DETECTOR_IDS
+    assert extract_ai_assist_candidates(finding, evidence) is None
+
+
 def test_unmapped_generic_detector_not_available() -> None:
     """A detector id with no dedicated guidance template (the generic
     CONDITIONAL_RULE fallback) has no real WHEN/THEN semantics to derive."""

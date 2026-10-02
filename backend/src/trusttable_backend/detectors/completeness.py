@@ -61,6 +61,117 @@ def _is_missing(value: object) -> bool:
     return value is None or value == ""
 
 
+def _is_blank(value: object) -> bool:
+    """A cell with no content: `None`, `""` or whitespace only. Wider than
+    `_is_missing` on purpose: a row of spaces carries no record either."""
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+class FullyEmptyRowsDetector:
+    """`completeness.fully_empty_rows` — flags rows that are blank in every
+    column (`DET-03` slice 1).
+
+    Such rows usually come from stray blank lines or padded exports. They
+    add nothing to the analysis, inflate row counts and missing-value
+    ratios, and can hide a truncated or merged export. One finding covers
+    every blank row, with each as an affected row reference.
+
+    A row counts only when it is blank in *every* column; a row with even
+    one value is a different problem (`completeness.excessive_missing_values`).
+    """
+
+    metadata = DetectorMetadata(
+        detector_id="completeness.fully_empty_rows",
+        version="1",
+        name="Fully empty rows",
+        category=DetectorCategory.COMPLETENESS,
+        description="Flags rows that are blank in every column.",
+        applicable_inferred_types=(),
+        required_profile_fields=("column_profiles[].column",),
+        requires_raw_rows=True,
+        requires_confirmed_context=False,
+        default_configuration={},
+        performance_class=PerformanceClass.LINEAR_BY_ROW,
+        documented_limitations=(
+            "A cell holding only whitespace counts as blank; a placeholder such as "
+            "'N/A' or '-' does not.",
+        ),
+    )
+    config_schema: type[BaseModel] = _EmptyConfig
+
+    def supports(self, request: DetectorSupportRequest) -> bool:
+        del request  # Dataset-level, structurally always applicable.
+        return True
+
+    def run(self, request: DetectorRunRequest) -> DetectorRunResult:
+        keys = tuple(
+            profile.column.internal_key for profile in request.dataset_profile.column_profiles
+        )
+        empty_indices = (
+            [
+                index
+                for index, row in enumerate(request.rows)
+                if all(_is_blank(row.get(key)) for key in keys)
+            ]
+            if keys
+            else []
+        )
+
+        if not empty_indices:
+            return DetectorRunResult(
+                detector_id=self.metadata.detector_id,
+                detector_version=self.metadata.version,
+                status=DetectorRunStatus.SUCCESS,
+                findings=(),
+                evidence=(),
+                warnings=(),
+                execution_metrics=ExecutionMetrics(duration_ms=0),
+            )
+
+        affected_row_references = tuple(request.row_references[index] for index in empty_indices)
+        evidence_id = "completeness.fully_empty_rows.evidence.1"
+        evidence = Evidence(
+            evidence_id=evidence_id,
+            evidence_type=EvidenceType.ROW_SET,
+            calculation_version="1",
+            structured_payload={
+                "empty_row_count": len(empty_indices),
+                "column_count": len(keys),
+                "total_row_count": len(request.rows),
+            },
+            affected_columns=(),
+            affected_row_references=affected_row_references,
+            scope=SamplingScope.FULL,
+            display_safe_summary=(
+                f"Found {len(empty_indices)} row(s) that are blank in all {len(keys)} column(s)."
+            ),
+        )
+        finding = FindingCandidate(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            category=self.metadata.category,
+            severity=Severity.LOW,
+            confidence=1.0,
+            calculated_observation=(
+                f"{len(empty_indices)} of {len(request.rows)} row(s) are blank in every column."
+            ),
+            affected_columns=(),
+            affected_row_references=affected_row_references,
+            evidence_ids=(evidence_id,),
+            default_remediation_template_key=None,
+            default_validation_rule_template_key=None,
+        )
+        return DetectorRunResult(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            status=DetectorRunStatus.SUCCESS,
+            findings=(finding,),
+            evidence=(evidence,),
+            warnings=(),
+            execution_metrics=ExecutionMetrics(duration_ms=0),
+        )
+
+
 class ExcessiveMissingValuesDetector:
     """`completeness.excessive_missing_values` — flags columns whose
     fraction of missing (`None`/`""`) values reaches

@@ -113,6 +113,26 @@ def test_docs_say_the_configured_limits_are_consumed_and_ing_03_is_complete() ->
     assert (_ROOT / "backend/src/trusttable_backend/analysis/parse_limits.py").is_file()
 
 
+def test_no_readme_line_contradicts_the_completed_ing_03_or_the_open_det_03() -> None:
+    """Every README mention is checked, not only the status block: a stale
+    "ING-03 (in progress)" in the delivered-work list contradicted the status
+    block after `ING-03` completed. `DET-03` must stay in progress until the
+    whole catalogue is built."""
+    lines = _text("README.md").splitlines()
+    for line in lines:
+        if "ING-03" in line:
+            assert "in progress" not in line.lower(), line
+            assert "not complete" not in line.lower(), line
+        if "DET-03" in line:
+            assert "DET-03` is complete" not in line and "DET-03 (complete)" not in line, line
+    readme = _flat("README.md")
+    assert "**ING-03 (complete)**" in readme
+    assert "**DET-03 (in progress)**" in readme
+    assert "**In progress — detector catalogue (`DET-03`):**" in readme
+    assert "the catalogue is not complete" in readme
+    assert "bringing the catalogue to 15 detectors" in readme
+
+
 def test_the_workflow_acceptance_test_named_in_the_docs_exists() -> None:
     backlog = _text("docs/implementation-backlog.md")
     assert "backend/tests/api/test_v03_complete_workflow.py" in backlog
