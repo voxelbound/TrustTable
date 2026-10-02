@@ -794,6 +794,91 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > cross-field (discount, tax, start date after end date, status/date conflict,
 > missing currency) and the second and third AI-processing security checks.
 
+> **Annotation (2026-10-02, design materialization; `docs/decision-log.md`
+> D-057; documentation only, `DET-03` still in progress):** the confirmed design
+> changes the shape of the remaining work. Nothing here is built.
+>
+> - **Moved out of `DET-03`, not dropped and never counted as completed:**
+>   "invalid country/region values" (carried by the proposed *standards policy*
+>   and *semantic category harmonization* capabilities below) and "status/date
+>   conflict" (carried by a named business-rule follow-up, tracked as a working
+>   title only). `docs/detector-framework.md` §16 carries the per-entry status.
+> - **Closable context-free part:** the structural, ingest-fact and
+>   value-evidence detectors that need no confirmed context can close
+>   independently. The context-bound detectors (start date after end date,
+>   discount, tax, missing currency, conflicting stable attributes, probable
+>   duplicate identifier, identifier-like measure, completeness change over time,
+>   distribution shift) depend on the confirmed-context foundation, so `DET-03`
+>   stays open while they remain. Until a confirmation path ships they stay
+>   inactive and their tests are contract-level, not end-to-end.
+> - **Name-based shipped detectors:** `cross_field.line_total_mismatch` and
+>   `validity.invalid_percentages` must migrate to confirmed roles, and
+>   `validity.invalid_email_shape` is a compatibility exception to review, with a
+>   compatibility window and a measurable owner-visible exit condition (open).
+>
+> **Working titles (identifiers and milestone placement are open and pending
+> owner approval; these are not committed backlog items):**
+>
+> | Working title | Kind |
+> |---|---|
+> | Observation type | prerequisite item |
+> | Ingest-facts record | prerequisite item |
+> | Confirmed-context foundation (roles, expectation capture, shared applicability gate, context-version identity) | prerequisite item |
+> | Standards policy | proposed capability, no implementation commitment |
+> | Semantic category harmonization | proposed capability, no implementation commitment |
+> | Business-rule follow-up (status/date conflict) | named follow-up |
+>
+> **Dependency graph.** An edge `A -> B` means `A` must exist before `B` starts.
+> The block below is the machine-readable form; automation must not propose a
+> slice with an unmet edge. Names in `needs`/`blocks` that are working titles
+> carry `id: pending` and are matched by title until identifiers are assigned.
+>
+> ```yaml
+> dependency_graph:
+>   schema: 1
+>   status: design-recorded-not-implemented
+>   nodes:
+>     observation_type:        {title: "Observation type", id: pending}
+>     ingest_facts:            {title: "Ingest-facts record", id: pending}
+>     confirmed_context:       {title: "Confirmed-context foundation", id: pending}
+>     standards_policy:        {title: "Standards policy", id: pending}
+>     category_harmonization:  {title: "Semantic category harmonization", id: pending}
+>     ui_ux_design:            {title: "Upcoming UI/UX design", id: pending}
+>     verify_zero_row:         {title: "Verify zero-row and header-only handling", id: pending}
+>     verify_date_patterns:    {title: "Verify date-pattern vocabulary", id: pending}
+>     security_review:         {title: "Security review and adversarial suite extension", id: pending}
+>   edges:
+>     - {id: E1, from: observation_type, to: "every observation-emitting detector (high-cardinality categories, unexpected rarity, concentrated missingness, mixed types, inconsistent date formats) and every NOT_CHECKED observation"}
+>     - {id: E2, from: ingest_facts, to: "unnamed column detector and any parser-fact detector"}
+>     - {id: E3, from: confirmed_context, to: "every context-bound DET-03 slice (four cross-field detectors, probable duplicate identifier, identifier-like measure, conflicting stable attributes, completeness change over time, distribution shift)"}
+>     - {id: E4, from: confirmed_context, to: "migration of line_total_mismatch and invalid_percentages and review of invalid_email_shape"}
+>     - {id: E5, from: [observation_type, confirmed_context, ui_ux_design], to: [standards_policy, category_harmonization]}
+>     - {id: E6, from: verify_zero_row, to: "empty dataset detector"}
+>     - {id: E7, from: verify_date_patterns, to: "inconsistent date formats"}
+>     - {id: E8, from: security_review, to: "possible data-exfiltration instruction and suspicious secret-request text"}
+>   no_edge:
+>     - "duplicate normalized column name needs no new type and can deliver first"
+>   notes:
+>     - "E3 includes the expectation-capture mechanism, the shared applicability gate, and stale and conflicting fixtures and the context-version identity scheme defined first."
+>     - "Harmonization's durable business context reuses the confirmed-context store."
+>     - "DET-03 completion counts only implemented entries; moved entries are never counted as completed."
+> ```
+>
+> **Conditions carried by the follow-on items** (specified here, built there):
+> an executable catalogue check that every entry is implemented or carries a
+> traceable moved or deferred note; a machine-readable dependency-edge validator
+> that tolerates pending identifiers; per-detector negative tests asserting zero
+> findings, unchanged score and a NOT EVALUATED record; a scoring-boundary
+> regression test over the observation-kind registry; reproducibility tests for
+> context versions with stale and conflicting fixtures first; and a migration
+> plan for demo and benchmark fixtures. The open items (identifiers and
+> milestone placement; role vocabulary, storage and versioning schema, stable
+> column identity and expectation capture; starter standards; local-AI scope; the
+> observation-kind vocabulary and its persistence and API; zero-row, date-pattern
+> and type-inference verifications; migration exit condition; relationship of
+> ingest facts to parsing-warning codes; durable dataset identity) are **open**
+> and are not decided here.
+
 ## PRIV-01 — Sensitive sample redaction
 
 Redact before prompt construction.

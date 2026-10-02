@@ -286,6 +286,38 @@ Each field contains:
 - context does not alter historic deterministic profile facts
 - context-dependent detectors record the context version used
 
+### Target design: confirmed context (proposed, not built; `docs/decision-log.md` D-057)
+
+This subsection states approved target direction, not current behavior. The
+current context model has only all-date-columns, all-numeric-columns and one
+dataset-level currency value. A named prerequisite item (the confirmed-context
+foundation) is to specify, at its own design: a fine-grained semantic role
+vocabulary; how confirmed roles are stored and versioned per dataset or analysis
+context, with the context version recorded by each detector run; provenance of
+every confirmation or correction (who, when, from which suggestion); detector
+applicability and gating; fail-closed behavior when context is stale or
+conflicting; and an explicit separation of *suggestion*, *confirmed role* and
+*detector applicability*. Roles must use a stable column identity, not a name.
+Whether the foundation extends or replaces `DatasetContext`, and how its tests
+and documents migrate, is open.
+
+Layers, kept distinct:
+
+- **Authoritative confirmed context** is never created from a name, heuristic,
+  AI output or silence.
+- **Suggestions** (names, types, value shape, relationships, deterministic
+  heuristics, optional local AI, earlier confirmations reused as suggestions)
+  stay non-authoritative until accepted. `ContextHypothesis` and the inferred
+  state are the natural suggestion layer, so an inferred value never reaches a
+  detector gate.
+- **A future reusable configuration layer** (terminology memory, schema mappings,
+  organization-level configuration) is considered, not adopted; the model must
+  stay extensible to it without changing detector contracts.
+
+Open: the role vocabulary, storage and versioning schema, stable column identity,
+conflict and stale-context rules, the expectation-capture mechanism and the
+detector interface.
+
 ## 9. ContextHypothesis
 
 ### Purpose
@@ -391,6 +423,42 @@ object (`Invariants` above: "deterministic observation remains
 immutable" — a review decision is not part of that deterministic
 observation). A finding with no recorded review is implicitly
 `unreviewed` with no note/reason.
+
+### Target design: Observation (proposed, not built; `docs/decision-log.md` D-057)
+
+An *Observation* is a first-class, typed, immutable object, separate from
+`Finding` by construction. It states only facts observable in the data, makes no
+claim that a business role is true, never affects trust scoring, may suggest a
+possible interpretation or role, and can be dismissed or suppressed (dismissal
+and suppression never delete provenance or history). Scoring sees only findings;
+reports and APIs keep the two types separate. An observation is never promoted,
+mutated or converted into a finding; a later finding is a new object with its
+own identity, provenance and evidence, and the observation stays unchanged.
+
+The kind vocabulary is small, explicit and closed, with no miscellaneous kind.
+The initial kinds to define are processing-limit, value-evidence, not-checked,
+standards-advisory and equivalence-suggestion. Each producer declares its kind,
+source and provenance, scope, whether evidence is complete-file or sampled,
+dismissal and suppression behavior, whether it may suggest a role or action, and
+whether it is purely informational. Processing-limit observations are analysis
+provenance, not problems with the user's data. Open: the final vocabulary and
+its persistence and API surface; only kinds that have a producer ship, and
+persistence stays open until two producers exist.
+
+### Target design: ingest-facts record (proposed, not built)
+
+A typed, parser-neutral, immutable record with a fixed vocabulary and consistent
+meaning across CSV and XLSX: no cell values, only counts and bounded row or
+column references; each fact states its scope and whether evidence is
+complete-file or sampled; "not applicable", "zero observed" and "not evaluated"
+stay distinct. Categories: source-structure facts, spreadsheet or source-cell
+facts, TrustTable processing-limit facts (never ordinary findings) and
+value-level interpretation facts. "Parse failure" is not an umbrella concept.
+An originally blank header stays an explicit fact after the parser assigns
+`column_<n>`. The ingest layer owns the source fact; a detector owns whether it
+becomes a finding. Open: its relationship to existing parsing-warning codes, the
+per-format fatal-versus-partial limit table, row and ordinal base conventions,
+and exact schemas.
 
 ## 13. Evidence
 
