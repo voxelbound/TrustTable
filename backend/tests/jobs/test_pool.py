@@ -77,10 +77,10 @@ def test_request_cancel_before_pickup_cancels_without_running_the_pipeline(
     release = threading.Event()
     first_call_seen = threading.Event()
 
-    def _blocking_parse_csv(content: bytes):  # type: ignore[no-untyped-def]
+    def _blocking_parse_csv(content: bytes, **kwargs):  # type: ignore[no-untyped-def]
         first_call_seen.set()
         release.wait(timeout=_TIMEOUT)
-        return real_parse_csv(content)
+        return real_parse_csv(content, **kwargs)
 
     monkeypatch.setattr(service_module, "parse_csv", _blocking_parse_csv)
 
@@ -121,10 +121,10 @@ def test_request_cancel_while_running_stops_before_the_next_stage_sibling_unaffe
     entered = threading.Event()
     release = threading.Event()
 
-    def _blocking_parse_csv(content: bytes):  # type: ignore[no-untyped-def]
+    def _blocking_parse_csv(content: bytes, **kwargs):  # type: ignore[no-untyped-def]
         entered.set()
         release.wait(timeout=_TIMEOUT)
-        return real_parse_csv(content)
+        return real_parse_csv(content, **kwargs)
 
     monkeypatch.setattr(service_module, "parse_csv", _blocking_parse_csv)
 
@@ -167,7 +167,7 @@ def test_at_most_max_workers_run_concurrently(monkeypatch: pytest.MonkeyPatch) -
     lock = threading.Lock()
     release = threading.Event()
 
-    def _blocking_parse_csv(content: bytes):  # type: ignore[no-untyped-def]
+    def _blocking_parse_csv(content: bytes, **kwargs):  # type: ignore[no-untyped-def]
         nonlocal active, peak
         with lock:
             active += 1
@@ -175,7 +175,7 @@ def test_at_most_max_workers_run_concurrently(monkeypatch: pytest.MonkeyPatch) -
         release.wait(timeout=_TIMEOUT)
         with lock:
             active -= 1
-        return real_parse_csv(content)
+        return real_parse_csv(content, **kwargs)
 
     monkeypatch.setattr(service_module, "parse_csv", _blocking_parse_csv)
 

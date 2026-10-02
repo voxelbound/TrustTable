@@ -45,14 +45,21 @@ are present, correctly typed, and bounded from day one.
 
 | Variable | Type | Default | Effect |
 |---|---|---|---|
-| `MAX_FILE_SIZE_MB` | positive integer | `100` | Maximum accepted compressed upload size, once upload handling exists. |
-| `MAX_ROWS` | positive integer | `1000000` | Maximum accepted dataset row count, once parsing exists. **Not yet consumed:** the CSV and Excel parsers enforce a built-in limit equal to this default, so changing the setting has no effect. |
-| `MAX_COLUMNS` | positive integer | `500` | Maximum accepted column count, once parsing exists. **Not yet consumed** (as `MAX_ROWS`). |
-| `MAX_WORKSHEETS` | positive integer | `20` | Maximum accepted worksheet count, once Excel support exists (`ING-03`). **Not yet consumed:** the Excel parser enforces a built-in limit of 20 (`ING-03` is open for this). |
-| `MAX_UNCOMPRESSED_WORKBOOK_MB` | positive integer | `500` | Maximum accepted uncompressed workbook size (expansion-bomb defense), once Excel support exists. **Not yet consumed:** the Excel parser enforces a built-in limit of 500 MB (`ING-03` is open for this). |
-| `MAX_CELL_COUNT` | positive integer | `50000000` | Maximum accepted total cell count, once parsing exists. **Not yet consumed:** the Excel parser enforces a built-in limit equal to this default; the CSV parser has no cell-count limit beyond its row and column limits. |
+| `MAX_FILE_SIZE_MB` | positive integer | `100` | Maximum accepted compressed upload size for `.csv` and `.xlsx` files. A larger upload is refused with `413 FILE_TOO_LARGE`. |
+| `MAX_ROWS` | positive integer | `1000000` | Maximum data rows in a CSV file or in the chosen worksheet. A file over the limit ends as a `failed` analysis. |
+| `MAX_COLUMNS` | positive integer | `500` | Maximum columns in a CSV file or in the chosen worksheet. A file over the limit ends as a `failed` analysis. |
+| `MAX_WORKSHEETS` | positive integer | `20` | Maximum worksheets in an uploaded workbook. A workbook with more is refused at upload with `413 WORKBOOK_EXPANSION_LIMIT`. |
+| `MAX_UNCOMPRESSED_WORKBOOK_MB` | positive integer | `500` | Maximum uncompressed workbook size (expansion-bomb defense). A workbook that declares or unpacks to more is refused at upload with `413 WORKBOOK_EXPANSION_LIMIT`. |
+| `MAX_CELL_COUNT` | positive integer | `50000000` | Maximum cells in the chosen worksheet. A worksheet over the limit ends as a `failed` analysis (`CELL_LIMIT_EXCEEDED`); the CSV parser has no cell-count limit beyond its row and column limits. |
 | `ANALYSIS_RETENTION_HOURS` | non-negative integer (`0` = unlimited) | `0` | Will control automatic analysis retention once persistence exists (`DB-01`). |
 | `BACKGROUND_WORKER_COUNT` | positive integer | `2` | Will size the bounded in-process worker pool once background jobs exist (`JOB-01`). |
+
+These limits are read from the settings on every parse of a stored file, not
+only at upload: the analysis run, a retry, and every later step that reads
+the file again (row context, rules, reports, explanations) use the same
+values. Lowering a limit therefore also applies to analyses created earlier;
+if a stored file no longer fits, the steps that read it again fail for that
+analysis. Leaving a variable unset keeps the default shown above.
 
 ## LLM provider
 
@@ -82,8 +89,8 @@ are present, correctly typed, and bounded from day one.
 | Variable | Type | Default | Effect |
 |---|---|---|---|
 | `PROMPT_INJECTION_DETECTION_ENABLED` | boolean | `true` | Will gate the prompt-injection detector once it exists (`DET-SEC-01`). |
-| `MAX_TEXT_VALUE_LENGTH_FOR_ANALYSIS` | positive integer | `10000` | Will bound how much of a single text value is inspected, once detectors exist. |
-| `MAX_COLUMN_NAME_LENGTH` | positive integer | `256` | Will bound accepted column-name length, once parsing exists. |
+| `MAX_TEXT_VALUE_LENGTH_FOR_ANALYSIS` | positive integer | `10000` | Longest cell value kept when a file is parsed; a longer value is truncated and the dataset records a parsing warning. |
+| `MAX_COLUMN_NAME_LENGTH` | positive integer | `256` | Longest column name kept when a file is parsed; a longer name is truncated and the dataset records a parsing warning. |
 
 ## Operational visibility
 

@@ -166,11 +166,11 @@ Deliver:
 - release artifacts
 
 > **Annotation (2026-10-01, `docs/decision-log.md` D-052):** `v1.0` is the
-> current milestone and has begun with XLSX support (`ING-03`), which is in
-> progress: Excel upload works from the API and the Start screen, and the
-> remaining gap is that the documented worksheet and uncompressed-size
-> settings are not yet read by the parser. The rest of the list above is
-> planned or has a `v0.1`-scoped baseline only.
+> current milestone and has begun with XLSX support (`ING-03`). **Update
+> (2026-10-02, `docs/decision-log.md` D-053):** `ING-03` is complete — Excel
+> upload works from the API and the Start screen, and the documented limit
+> settings are read on every parse. The rest of the list above is planned or
+> has a `v0.1`-scoped baseline only.
 
 Production definition:
 

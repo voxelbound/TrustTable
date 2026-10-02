@@ -132,10 +132,10 @@ def test_retry_cancelled_analysis_returns_409_not_retryable(
     entered = threading.Event()
     release = threading.Event()
 
-    def _blocking_parse_csv(content: bytes):  # type: ignore[no-untyped-def]
+    def _blocking_parse_csv(content: bytes, **kwargs):  # type: ignore[no-untyped-def]
         entered.set()
         release.wait(timeout=_TIMEOUT)
-        return real_parse_csv(content)
+        return real_parse_csv(content, **kwargs)
 
     monkeypatch.setattr(service_module, "parse_csv", _blocking_parse_csv)
 

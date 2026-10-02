@@ -752,6 +752,16 @@ Worksheet selection, stored values, macro rejection, expansion limits.
 > a serial number is shown as that number), and the end-to-end scenario
 > "Excel worksheet selection" (a `REL-04` test-gate item under
 > `docs/testing-strategy.md` §2.4).
+>
+> **Annotation (2026-10-02, slice 4 of `ING-03`): the item is complete.**
+> `MAX_FILE_SIZE_MB`, `MAX_ROWS`, `MAX_COLUMNS`, `MAX_WORKSHEETS`,
+> `MAX_UNCOMPRESSED_WORKBOOK_MB` and `MAX_CELL_COUNT` (with the column-name and
+> text-value length settings) are now read from the settings on every CSV and
+> Excel parse — the upload inspection and each pipeline stage — through one
+> factory (`analysis/parse_limits.py`); with no variables set behavior is
+> unchanged (`docs/decision-log.md` D-053). Unchanged and outside the item:
+> `POST /datasets/inspect`, date interpretation, and the Playwright worksheet
+> selection scenario (`REL-04`).
 
 ## DET-03 — Complete detector catalogue
 

@@ -590,3 +590,20 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** no backend, API contract or dependency change; no change to CSV upload behavior.
 
 **Decided by:** delegated implementation authority under the active work package, implementing the documented UI and API contracts.
+
+## D-053 — `ING-03` is complete: the documented limits are read from `Settings` on every parse
+
+**Decision (2026-10-02):**
+
+1. **One factory.** `analysis/parse_limits.py` builds `CsvParseLimits` and `XlsxParseLimits` from `Settings` (`MAX_FILE_SIZE_MB`, `MAX_ROWS`, `MAX_COLUMNS`, `MAX_WORKSHEETS`, `MAX_UNCOMPRESSED_WORKBOOK_MB`, `MAX_CELL_COUNT`, `MAX_COLUMN_NAME_LENGTH`, `MAX_TEXT_VALUE_LENGTH_FOR_ANALYSIS`). The parsers stay free of `Settings`; their built-in defaults still equal the documented defaults, so unset variables change nothing.
+2. **Every call site uses it.** The upload workbook inspection and the single stage dispatcher (`_parse_analysis_content`, used by the run, retry, row context, rules, reports and explanations) pass factory limits; a test audits all production code for a parser call without them.
+3. **Behavior follows the API specification.** Size and workbook-structure limits refuse the upload (`413 FILE_TOO_LARGE`, `413 WORKBOOK_EXPANSION_LIMIT`); row, column and cell limits end the analysis as `failed`, for CSV and Excel alike (`docs/api-specification.md` §6, §14). No default, endpoint or setting changed.
+4. **`ING-03` is complete.** Worksheet selection, stored values, macro rejection and the expansion limits are delivered and configurable (`D-050` to `D-052`, this entry). `POST /datasets/inspect`, date interpretation and the Excel worksheet-selection end-to-end scenario stay outside the item, as `D-052` recorded.
+
+**Known limit:** limits are read on every parse, so lowering one also applies to analyses created earlier. A later step that reads such a stored file again (row context, rules, reports, explanations) raises the parser's error instead of returning a documented error response. Mapping that to a fixed error response is a follow-up; it needs an error mapping outside this item's scope.
+
+**Alternatives considered:** reading the settings once at upload and storing the limits with the analysis (a schema change, and later steps would still not follow an operator's current setting); a full parse of the chosen worksheet at upload so row, column and cell limits also refuse the upload (a second full parse of every workbook, and a change to the documented contract that says these limits end the analysis as `failed`).
+
+**Explicit non-scope:** no new setting, endpoint, default value, dependency or frontend change.
+
+**Decided by:** delegated implementation authority under the active work package, implementing the documented configuration and API contracts.
