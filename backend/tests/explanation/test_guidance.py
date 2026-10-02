@@ -76,8 +76,13 @@ def remediation_texts(option: object) -> tuple[str, ...]:
 
 
 def test_the_table_covers_every_registered_detector_exactly() -> None:
-    assert len(ALL_DETECTOR_IDS) == 13
+    # A registered detector without a dedicated template would silently get the
+    # generic guidance, so the table must match the registry exactly.
     assert frozenset(ALL_DETECTOR_IDS) == GUIDED_DETECTOR_IDS
+    assert {
+        "completeness.fully_empty_rows",
+        "consistency.inconsistent_booleans",
+    } <= GUIDED_DETECTOR_IDS
 
 
 @pytest.mark.parametrize("detector_id", ALL_DETECTOR_IDS)

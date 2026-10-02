@@ -311,6 +311,17 @@ Every detector test suite includes:
 
 The latter two may initially map to one detector with evidence subtypes.
 
+### Catalogue status
+
+> **Annotation (2026-10-02, `DET-03` slice 1; `docs/decision-log.md` D-054):**
+> 15 detectors are built and registered: the 13 of `DET-02` and
+> `DET-SEC-01`, plus `completeness.fully_empty_rows` (rows blank in every
+> column) and `consistency.inconsistent_booleans` (a column whose values are
+> all boolean tokens written in more than one spelling family). Every other
+> entry in the lists above is **planned and not built**; several need
+> confirmed context or profile facts that do not exist yet. `DET-03` is in
+> progress, not complete.
+
 ## 17. Detector lifecycle
 
 ```text

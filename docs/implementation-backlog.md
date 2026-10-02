@@ -767,6 +767,22 @@ Worksheet selection, stored values, macro rejection, expansion limits.
 
 Add remaining structural, completeness, consistency, validity, statistical, and cross-field detectors.
 
+> **Annotation (2026-10-02, slice 1 of `DET-03`, item still in progress):**
+> `completeness.fully_empty_rows` and `consistency.inconsistent_booleans` are
+> built, registered and covered by built-in guidance (`docs/decision-log.md`
+> D-054); neither has a deterministic rule proposal, by design. **Still open
+> and part of the item:** the remaining detectors listed in
+> `docs/detector-framework.md` §16 — structural (empty dataset, unnamed
+> column, duplicate normalized column name, probable duplicate identifier,
+> mixed types, excessive parse failures), completeness (concentrated
+> missingness, completeness change over time), consistency (near-duplicate
+> categories, numeric values stored as text, inconsistent date formats,
+> conflicting stable attributes), validity (implausibly old dates, invalid
+> country or region values, invalid email shape), statistical (high-cardinality
+> categories, unexpected rarity, distribution shift, identifier-like measure),
+> cross-field (discount, tax, start date after end date, status/date conflict,
+> missing currency) and the second and third AI-processing security checks.
+
 ## PRIV-01 — Sensitive sample redaction
 
 Redact before prompt construction.

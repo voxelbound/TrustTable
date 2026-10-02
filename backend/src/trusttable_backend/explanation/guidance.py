@@ -490,6 +490,75 @@ _TEMPLATES: Final[dict[str, _Template]] = {
             "Values in {columns} should stay within a plausible range agreed with the data owner."
         ),
     ),
+    "completeness.fully_empty_rows": _Template(
+        impact=(
+            (
+                "Rows with no values add nothing to the analysis, but they are still counted "
+                "as records and can inflate row totals and missing-value percentages.",
+                "row counts or missing-value percentages from this file are reported or compared",
+            ),
+        ),
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Find out where the blank rows come from, such as stray blank lines or a "
+                "padded export, and remove them at the source."
+            ),
+            responsible_role="The person who maintains the export or enters the data",
+            urgency="Before row counts from this file are reported",
+            historical_correction_guidance=(
+                "Check the flagged rows to confirm they are blank, then remove them in the "
+                "source system or the export."
+            ),
+            source_system_prevention_guidance=(
+                "Stop the export or entry process from writing blank rows, for example by "
+                "trimming trailing empty lines."
+            ),
+            risk_warning=(
+                "A row that looks blank here could hold data in a column this file does not "
+                "include; confirm in the source before deleting any record."
+            ),
+            verification_step=(
+                "Re-run this check after the source is fixed and confirm no blank rows remain."
+            ),
+        ),
+        rule_type=ValidationRuleType.NOT_NULL,
+        rule_description="Every row should have a value in at least one column.",
+    ),
+    "consistency.inconsistent_booleans": _Template(
+        impact=(
+            (
+                "The same yes/no answer written in different ways, such as Y, yes and TRUE, "
+                "can be counted as separate values or dropped by a filter that expects only "
+                "one spelling.",
+                "the column is filtered, counted or converted to true/false",
+            ),
+        ),
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Agree on one spelling for the yes/no values in {columns} and standardize "
+                "it in the source system."
+            ),
+            responsible_role="The person who maintains the source system or data-entry standards",
+            urgency="Before the next report that filters or counts on this column",
+            historical_correction_guidance=(
+                "Standardize the yes/no values in {columns} to the one agreed spelling in the "
+                "source system."
+            ),
+            source_system_prevention_guidance=(
+                "Restrict the field to a single yes/no spelling, for example a checkbox or a "
+                "fixed list."
+            ),
+            risk_warning=(
+                "Single letters such as Y or T may not mean yes or true in your data; confirm "
+                "what each spelling means before converting them."
+            ),
+            verification_step=(
+                "Re-run this check and confirm the column now uses a single spelling."
+            ),
+        ),
+        rule_type=ValidationRuleType.ACCEPTED_VALUES,
+        rule_description="Values in {columns} should use one agreed yes/no spelling.",
+    ),
     "security.possible_llm_prompt_injection": _Template(
         impact=(
             (

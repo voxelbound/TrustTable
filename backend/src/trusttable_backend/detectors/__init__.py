@@ -13,8 +13,16 @@ package (`API-01`) calls `run_detectors()`.
 from __future__ import annotations
 
 from .catalogue import DETECTORS
-from .completeness import ExcessiveMissingValuesDetector, MissingLikelyIdentifierDetector
-from .consistency import InconsistentCapitalizationDetector, LeadingTrailingWhitespaceDetector
+from .completeness import (
+    ExcessiveMissingValuesDetector,
+    FullyEmptyRowsDetector,
+    MissingLikelyIdentifierDetector,
+)
+from .consistency import (
+    InconsistentBooleansDetector,
+    InconsistentCapitalizationDetector,
+    LeadingTrailingWhitespaceDetector,
+)
 from .contract import (
     Detector,
     DetectorCategory,
@@ -57,7 +65,9 @@ __all__ = [
     "ExecutionMetrics",
     "ExtremeOutliersDetector",
     "FindingCandidate",
+    "FullyEmptyRowsDetector",
     "FutureDatesDetector",
+    "InconsistentBooleansDetector",
     "InconsistentCapitalizationDetector",
     "InvalidPercentagesDetector",
     "LeadingTrailingWhitespaceDetector",

@@ -607,3 +607,18 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** no new setting, endpoint, default value, dependency or frontend change.
 
 **Decided by:** delegated implementation authority under the active work package, implementing the documented configuration and API contracts.
+
+## D-054 — `DET-03` is delivered in slices; slice 1 adds fully empty rows and inconsistent boolean spellings
+
+**Decision (2026-10-02):**
+
+1. **`DET-03` is sliced.** The documented catalogue (`docs/detector-framework.md` §16) has about 30 unbuilt detectors, several of which need confirmed context or profile facts that do not exist yet. Each slice delivers a small set that needs nothing new, so every merge leaves a working product. `DET-03` stays in progress until the catalogue is built.
+2. **Slice 1 adds two detectors that read only rows and the existing profile.** `completeness.fully_empty_rows` flags rows blank in every column (`None`, `""` or whitespace; placeholders such as `N/A` are content). `consistency.inconsistent_booleans` flags a column only when *every* non-blank value is in the closed vocabulary `true/false`, `yes/no`, `y/n`, `t/f`, `on/off`, `1/0` (any casing) and at least two spelling families appear. A column of one family, of casing differences only, or holding any other value is never flagged. Both are `low` severity; the boolean detector's confidence is `0.9` because single letters can be unrelated categories, which its documented limitations state.
+3. **Both are first-class downstream.** Each has authored built-in guidance, so neither falls to the generic template, and a registry-wide test requires guidance for every registered detector. Neither has a deterministic rule proposal: no rule type expresses "blank in every column", and the canonical boolean spelling is the owner's choice, not a calculation. Both are therefore excluded from rule proposals and from AI-assisted proposals, and tests state it.
+4. **No behavior change elsewhere.** Existing detectors, severities, scores, defaults and the demo dataset's results are unchanged.
+
+**Alternatives considered:** one package for the whole catalogue (too large to review or verify, and the context-dependent detectors need design first); inferring a canonical boolean spelling for a rule (a guess presented as a rule); flagging any column that mixes `0`/`1` with words only by inferred type (inference is not a boolean test).
+
+**Explicit non-scope:** no other `DET-03` detector, no new profile fact, no confirmed-context detector, no AI change, no frontend change.
+
+**Decided by:** delegated implementation authority under the active work package, implementing the documented detector contract.
