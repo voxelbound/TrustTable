@@ -45,6 +45,8 @@ from .statistical import ExtremeOutliersDetector, SuspiciouslyConstantColumnDete
 from .structural import EmptyColumnDetector, ExactDuplicateRowsDetector
 from .validity import (
     FutureDatesDetector,
+    ImplausiblyOldDatesDetector,
+    InvalidEmailShapeDetector,
     InvalidPercentagesDetector,
     NegativeLikelyNonNegativeValuesDetector,
 )
@@ -67,8 +69,10 @@ __all__ = [
     "FindingCandidate",
     "FullyEmptyRowsDetector",
     "FutureDatesDetector",
+    "ImplausiblyOldDatesDetector",
     "InconsistentBooleansDetector",
     "InconsistentCapitalizationDetector",
+    "InvalidEmailShapeDetector",
     "InvalidPercentagesDetector",
     "LeadingTrailingWhitespaceDetector",
     "LineTotalMismatchDetector",

@@ -622,3 +622,19 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** no other `DET-03` detector, no new profile fact, no confirmed-context detector, no AI change, no frontend change.
 
 **Decided by:** delegated implementation authority under the active work package, implementing the documented detector contract.
+
+## D-055 — `DET-03` slice 2 adds implausibly old dates and invalid email shapes; email findings never carry a value
+
+**Decision (2026-10-02):**
+
+1. **Slice 2 is the validity pair that needs no new inputs.** `validity.implausibly_old_dates` flags `date` columns holding ISO dates strictly before `1900-01-01` (placeholder and typo dates such as `0001-01-01`); the cutoff is a fixed, disclosed choice, so a genuinely historical dataset can be flagged, which the detector's documented limitations state. `validity.invalid_email_shape` flags values in an email-named column that cannot have the shape `local@domain.tld`. Both are `low` severity with confidence `0.8`, because a date cutoff and a column-name match are heuristics.
+2. **Email values are personal data and never leave the detector.** The finding, its observation text, its evidence payload and its summary carry counts, row numbers and the fixed shape string only: no value, fragment or domain. A test scans every string reachable from the finding and evidence for the values it was given. Guidance tells the person to handle flagged rows only as their data-protection rules allow.
+3. **No false alarm on non-email columns.** A column is checked only when its name contains `email` and at least half of its non-blank values already have an email shape, so an `email_sent` flag holding `Y`/`N` or an `email_template` column of names is left alone, while a real email column with some bad entries is found. The shape check is written without a regular expression, so a value up to `MAX_TEXT_VALUE_LENGTH_FOR_ANALYSIS` long cannot cause backtracking, and a test runs a 100,000-character hostile value.
+4. **Rule outcomes are stated, not accidental.** `validity.implausibly_old_dates` proposes a `date_range` rule whose minimum date is read verbatim from the finding's own evidence. `validity.invalid_email_shape` proposes none: a `regex` rule names the *disallowed* condition, so a faithful check would be one negative pattern with nested quantifiers over long values, a backtracking risk. `RULE-02`'s deterministic set therefore grows from 10 to 11 detectors; the other outcomes are unchanged.
+5. **`DET-03` stays in progress.** The catalogue has 17 detectors; the rest of `docs/detector-framework.md` §16 is planned.
+
+**Alternatives considered:** a loose or regular-expression email check that also proposes a rule (simpler, but a backtracking risk and a rule that could fail clean data); flagging any email-named column by name alone (an `email_sent` flag would be called 100% invalid); including a sample invalid value in the evidence so the owner can find it (the row number already locates it, and the value is personal data); a lower or configurable date cutoff (a guess, with no business context to support it).
+
+**Explicit non-scope:** no other `DET-03` detector, no new profile fact, no confirmed-context detector, no AI change, no frontend change.
+
+**Decided by:** delegated implementation authority under the active work package, implementing the documented detector contract.

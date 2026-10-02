@@ -82,6 +82,8 @@ def test_the_table_covers_every_registered_detector_exactly() -> None:
     assert {
         "completeness.fully_empty_rows",
         "consistency.inconsistent_booleans",
+        "validity.implausibly_old_dates",
+        "validity.invalid_email_shape",
     } <= GUIDED_DETECTOR_IDS
 
 

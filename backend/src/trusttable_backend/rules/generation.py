@@ -61,6 +61,20 @@ complete after this slice: every one of the 13 detector categories has a
 final generation outcome — 10 deterministic, 1 AI-assisted, and 2
 (`cross_field.line_total_mismatch`, `security.possible_llm_prompt_injection`)
 permanently unsupported for the structural reasons stated above.
+
+`DET-03` adds detectors after `RULE-02` closed, so each new detector gets an
+explicit outcome here instead of silently falling to the generic reply:
+
+- `validity.implausibly_old_dates` is mapped (`DATE_RANGE`, minimum date read
+  from the finding's own `earliest_plausible_date`).
+- `completeness.fully_empty_rows` and `consistency.inconsistent_booleans`
+  have no mapping (no rule type expresses a blank row; the canonical boolean
+  spelling is the owner's choice).
+- `validity.invalid_email_shape` has no mapping: a `REGEX` rule names the
+  *disallowed* condition, so a faithful shape check would be one negative
+  pattern with nested quantifiers over values up to
+  `Settings.max_text_value_length_for_analysis` long — a backtracking risk the
+  detector itself avoids by not using a regular expression.
 """
 
 from __future__ import annotations
@@ -179,6 +193,20 @@ def _generate_future_dates(
     return RuleProposalParameters(maximum_date=date.fromisoformat(reference_date))
 
 
+def _generate_implausibly_old_dates(
+    finding: FindingCandidate,
+    evidence_by_id: Mapping[str, Evidence],
+    all_columns: tuple[ColumnReference, ...],
+) -> RuleProposalParameters:
+    """`DET-03` slice 2: the cutoff the detector applied is recorded in its
+    own evidence (`earliest_plausible_date`); the rule is that same cutoff
+    as a `DATE_RANGE` minimum, read verbatim and never re-derived."""
+    del all_columns
+    cutoff = _payload(finding, evidence_by_id)["earliest_plausible_date"]
+    assert isinstance(cutoff, str)
+    return RuleProposalParameters(minimum_date=date.fromisoformat(cutoff))
+
+
 def _generate_non_negative(
     finding: FindingCandidate,
     evidence_by_id: Mapping[str, Evidence],
@@ -240,6 +268,7 @@ _GENERATORS: Final[dict[str, _Generator]] = {
     "completeness.excessive_missing_values": _generate_excessive_missing_values,
     "completeness.missing_likely_identifier": _generate_no_extra_parameters,
     "validity.future_dates": _generate_future_dates,
+    "validity.implausibly_old_dates": _generate_implausibly_old_dates,
     "validity.negative_likely_non_negative_values": _generate_non_negative,
     "validity.invalid_percentages": _generate_valid_percentage,
     "statistical.extreme_outliers": _generate_extreme_outliers,

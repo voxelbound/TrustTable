@@ -172,6 +172,286 @@ class FutureDatesDetector:
         )
 
 
+_EARLIEST_PLAUSIBLE_DATE = date(1900, 1, 1)
+"""Dates strictly before this are flagged `implausibly_old_dates`. A
+disclosed, reversible design choice (`docs/detector-framework.md` §11
+requires an explicit rule but fixes no exact number): it catches the usual
+placeholder and typo dates (`0001-01-01`, `1000-01-01`) while leaving
+ordinary business history alone. A genuinely historical dataset can hold
+real earlier dates, which the detector's documented limitations state."""
+
+
+class ImplausiblyOldDatesDetector:
+    """`validity.implausibly_old_dates` — flags `DATE`-typed columns holding
+    ISO dates strictly before `_EARLIEST_PLAUSIBLE_DATE` (`DET-03` slice 2).
+
+    Dates this old are most often placeholders or typing errors, and they
+    distort ages, durations and time-based grouping. Only the cutoff date
+    and the oldest date found are recorded, never a row's other content.
+    """
+
+    metadata = DetectorMetadata(
+        detector_id="validity.implausibly_old_dates",
+        version="1",
+        name="Implausibly old dates",
+        category=DetectorCategory.VALIDITY,
+        description="Flags date columns containing dates before 1900-01-01.",
+        applicable_inferred_types=(InferredColumnType.DATE,),
+        required_profile_fields=("column_profiles[].inferred_type",),
+        requires_raw_rows=True,
+        requires_confirmed_context=False,
+        default_configuration={},
+        performance_class=PerformanceClass.LINEAR_BY_ROW,
+        documented_limitations=(
+            "The cutoff is a fixed 1900-01-01; a genuinely historical dataset (archives, "
+            "genealogy) can hold real dates before it and would be flagged.",
+            "Only ISO dates (YYYY-MM-DD) are read; other formats are not checked.",
+        ),
+    )
+    config_schema: type[BaseModel] = _EmptyConfig
+
+    def supports(self, request: DetectorSupportRequest) -> bool:
+        del request  # Dataset-level, structurally always applicable.
+        return True
+
+    def run(self, request: DetectorRunRequest) -> DetectorRunResult:
+        findings: list[FindingCandidate] = []
+        evidence: list[Evidence] = []
+
+        for profile in request.dataset_profile.column_profiles:
+            if profile.inferred_type is not InferredColumnType.DATE:
+                continue
+
+            affected_indices: list[int] = []
+            oldest: date | None = None
+            for index, row in enumerate(request.rows):
+                value = row.get(profile.column.internal_key)
+                if not isinstance(value, str) or not value.strip():
+                    continue
+                try:
+                    parsed = date.fromisoformat(value.strip())
+                except ValueError:
+                    continue
+                if parsed < _EARLIEST_PLAUSIBLE_DATE:
+                    affected_indices.append(index)
+                    oldest = parsed if oldest is None else min(oldest, parsed)
+
+            if not affected_indices or oldest is None:
+                continue
+
+            affected_row_references = tuple(
+                request.row_references[index] for index in affected_indices
+            )
+            evidence_id = f"validity.implausibly_old_dates.evidence.{profile.column.internal_key}"
+            cutoff = _EARLIEST_PLAUSIBLE_DATE.isoformat()
+            column_evidence = Evidence(
+                evidence_id=evidence_id,
+                evidence_type=EvidenceType.ROW_SET,
+                calculation_version="1",
+                structured_payload={
+                    "earliest_plausible_date": cutoff,
+                    "old_date_count": len(affected_indices),
+                    "oldest_date_found": oldest.isoformat(),
+                },
+                affected_columns=(profile.column,),
+                affected_row_references=affected_row_references,
+                scope=SamplingScope.FULL,
+                display_safe_summary=(
+                    f"Column '{profile.column.original_name}' has {len(affected_indices)} "
+                    f"date(s) before {cutoff}."
+                ),
+            )
+            finding = FindingCandidate(
+                detector_id=self.metadata.detector_id,
+                detector_version=self.metadata.version,
+                category=self.metadata.category,
+                severity=Severity.LOW,
+                confidence=0.8,
+                calculated_observation=(
+                    f"Column '{profile.column.original_name}' has {len(affected_indices)} "
+                    f"date(s) before {cutoff} (oldest {oldest.isoformat()})."
+                ),
+                affected_columns=(profile.column,),
+                affected_row_references=affected_row_references,
+                evidence_ids=(evidence_id,),
+                default_remediation_template_key=None,
+                default_validation_rule_template_key=None,
+            )
+            evidence.append(column_evidence)
+            findings.append(finding)
+
+        return DetectorRunResult(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            status=DetectorRunStatus.SUCCESS,
+            findings=tuple(findings),
+            evidence=tuple(evidence),
+            warnings=(),
+            execution_metrics=ExecutionMetrics(duration_ms=0),
+        )
+
+
+_EMAIL_NAME_MARKER = "email"
+"""A text-family column is treated as a candidate email column when its
+lowercased name, with `-`, `_` and spaces removed, contains this marker. A
+disclosed, reversible column-name heuristic — no confirmed column-role
+context (`CTX-01`) exists yet — in the same spirit as
+`_PERCENTAGE_NAME_MARKERS` below."""
+
+_EMAIL_MIN_VALID_SHARE = 0.5
+"""A candidate column is checked only when at least this share of its
+non-blank values already have an email shape. A column named `email_sent`
+holding `Y`/`N`, or `email_template` holding names, is then left alone,
+while an email column with some bad entries is still found."""
+
+_EMAIL_APPLICABLE_TYPES: tuple[InferredColumnType, ...] = (
+    InferredColumnType.TEXT,
+    InferredColumnType.CATEGORICAL,
+    InferredColumnType.IDENTIFIER,
+    InferredColumnType.MIXED,
+)
+
+
+def _has_email_shape(value: str) -> bool:
+    """Whether `value` has the shape `local@domain.tld`: no whitespace, one
+    `@`, a non-empty local part and a domain of at least two non-empty
+    dot-separated labels. A shape check only — it never claims the address
+    exists or can receive mail. Written without a regular expression so
+    value length cannot cause backtracking."""
+    if any(character.isspace() for character in value):
+        return False
+    if value.count("@") != 1:
+        return False
+    local, domain = value.split("@")
+    if not local or not domain:
+        return False
+    labels = domain.split(".")
+    return len(labels) >= 2 and all(labels)
+
+
+class InvalidEmailShapeDetector:
+    """`validity.invalid_email_shape` — flags a column named like an email
+    column whose non-blank values mostly have an email shape but include
+    some that cannot (`DET-03` slice 2).
+
+    Email values are personal data, so this detector records **counts and
+    row numbers only**: no value, fragment or domain ever appears in the
+    finding, the evidence or any text built from them.
+    """
+
+    metadata = DetectorMetadata(
+        detector_id="validity.invalid_email_shape",
+        version="1",
+        name="Invalid email shape",
+        category=DetectorCategory.VALIDITY,
+        description=(
+            "Flags values in an email-named column that do not have the shape local@domain.tld."
+        ),
+        applicable_inferred_types=_EMAIL_APPLICABLE_TYPES,
+        required_profile_fields=("column_profiles[].inferred_type",),
+        requires_raw_rows=True,
+        requires_confirmed_context=False,
+        default_configuration={},
+        performance_class=PerformanceClass.LINEAR_BY_ROW,
+        documented_limitations=(
+            "Email columns are found by name ('email' in the column name); a differently "
+            "named email column is not checked, and a column named like one that holds "
+            "something else is checked only if most of its values look like emails.",
+            "Only the shape is checked; an address with a valid shape can still be wrong "
+            "or undeliverable.",
+        ),
+    )
+    config_schema: type[BaseModel] = _EmptyConfig
+
+    def supports(self, request: DetectorSupportRequest) -> bool:
+        del request  # Dataset-level, structurally always applicable.
+        return True
+
+    def run(self, request: DetectorRunRequest) -> DetectorRunResult:
+        findings: list[FindingCandidate] = []
+        evidence: list[Evidence] = []
+
+        for profile in request.dataset_profile.column_profiles:
+            if profile.inferred_type not in _EMAIL_APPLICABLE_TYPES:
+                continue
+            compact_name = (
+                profile.column.original_name.lower()
+                .replace("-", "")
+                .replace("_", "")
+                .replace(" ", "")
+            )
+            if _EMAIL_NAME_MARKER not in compact_name:
+                continue
+
+            checked = 0
+            invalid_indices: list[int] = []
+            for index, row in enumerate(request.rows):
+                value = row.get(profile.column.internal_key)
+                if not isinstance(value, str):
+                    continue
+                stripped = value.strip()
+                if not stripped:
+                    continue
+                checked += 1
+                if not _has_email_shape(stripped):
+                    invalid_indices.append(index)
+
+            if not invalid_indices:
+                continue
+            if (checked - len(invalid_indices)) / checked < _EMAIL_MIN_VALID_SHARE:
+                continue
+
+            affected_row_references = tuple(
+                request.row_references[index] for index in invalid_indices
+            )
+            evidence_id = f"validity.invalid_email_shape.evidence.{profile.column.internal_key}"
+            column_evidence = Evidence(
+                evidence_id=evidence_id,
+                evidence_type=EvidenceType.ROW_SET,
+                calculation_version="1",
+                structured_payload={
+                    "checked_value_count": checked,
+                    "invalid_value_count": len(invalid_indices),
+                    "expected_shape": "local@domain.tld",
+                },
+                affected_columns=(profile.column,),
+                affected_row_references=affected_row_references,
+                scope=SamplingScope.FULL,
+                display_safe_summary=(
+                    f"Column '{profile.column.original_name}' has {len(invalid_indices)} of "
+                    f"{checked} value(s) that do not have an email shape."
+                ),
+            )
+            finding = FindingCandidate(
+                detector_id=self.metadata.detector_id,
+                detector_version=self.metadata.version,
+                category=self.metadata.category,
+                severity=Severity.LOW,
+                confidence=0.8,
+                calculated_observation=(
+                    f"Column '{profile.column.original_name}' has {len(invalid_indices)} of "
+                    f"{checked} non-blank value(s) that do not have the shape of an email address."
+                ),
+                affected_columns=(profile.column,),
+                affected_row_references=affected_row_references,
+                evidence_ids=(evidence_id,),
+                default_remediation_template_key=None,
+                default_validation_rule_template_key=None,
+            )
+            evidence.append(column_evidence)
+            findings.append(finding)
+
+        return DetectorRunResult(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            status=DetectorRunStatus.SUCCESS,
+            findings=tuple(findings),
+            evidence=tuple(evidence),
+            warnings=(),
+            execution_metrics=ExecutionMetrics(duration_ms=0),
+        )
+
+
 _PERCENTAGE_NAME_MARKERS: tuple[str, ...] = ("pct", "percent", "%")
 """A `NUMERIC` column is treated as a candidate percentage column when
 its lowercased `original_name` contains any of these markers. A

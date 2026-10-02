@@ -3,10 +3,11 @@
 Covers WP-014's acceptance criteria AC-13..AC-15, WP-015's AC-14/AC-15,
 WP-016's AC-14/AC-15, WP-017's AC-14/AC-15, WP-018's AC-16/AC-17,
 WP-019's AC-15/AC-16, and WP-021's AC-17: `DETECTORS` registers
-successfully, contains exactly the expected fifteen detector IDs (the
-original thirteen plus `DET-03` slice 1's `completeness.fully_empty_rows`
-and `consistency.inconsistent_booleans`), and interoperates correctly with
-`DET-01`'s `run_detectors()`.
+successfully, contains exactly the expected seventeen detector IDs (the
+original thirteen, `DET-03` slice 1's `completeness.fully_empty_rows` and
+`consistency.inconsistent_booleans`, and slice 2's
+`validity.implausibly_old_dates` and `validity.invalid_email_shape`), and
+interoperates correctly with `DET-01`'s `run_detectors()`.
 """
 
 from __future__ import annotations
@@ -15,11 +16,13 @@ from trusttable_backend.detectors.catalogue import DETECTORS
 
 
 def test_detectors_catalogue_registers_without_exception() -> None:
-    assert len(DETECTORS) == 15
+    assert len(DETECTORS) == 17
 
 
 def test_detectors_catalogue_has_exactly_expected_ids() -> None:
     assert {detector.metadata.detector_id for detector in DETECTORS} == {
+        "validity.implausibly_old_dates",
+        "validity.invalid_email_shape",
         "completeness.fully_empty_rows",
         "consistency.inconsistent_booleans",
         "structural.exact_duplicate_rows",

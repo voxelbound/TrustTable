@@ -364,6 +364,46 @@ def test_inconsistent_booleans_not_available_and_never_ai_assisted() -> None:
     assert extract_ai_assist_candidates(finding, evidence) is None
 
 
+def test_implausibly_old_dates_maps_to_a_date_range_read_from_its_evidence() -> None:
+    """`DET-03` slice 2: the cutoff the detector applied is the rule's minimum
+    date, read verbatim from the finding's own evidence."""
+    finding = make_finding(
+        "validity.implausibly_old_dates",
+        category=DetectorCategory.VALIDITY,
+        columns=(col("order_date", 2),),
+    )
+    evidence = make_evidence(
+        {
+            "earliest_plausible_date": "1900-01-01",
+            "old_date_count": 2,
+            "oldest_date_found": "0001-01-01",
+        }
+    )
+    proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
+    assert reason is None and proposal is not None
+    assert proposal.rule_type is ValidationRuleType.DATE_RANGE
+    assert proposal.parameters.minimum_date == date(1900, 1, 1)
+    assert proposal.parameters.maximum_date is None
+
+
+def test_invalid_email_shape_not_available() -> None:
+    """`DET-03` slice 2: a `REGEX` rule names the disallowed condition, so a
+    faithful shape check would be a negative pattern over values up to 10,000
+    characters — a backtracking risk the detector avoids by not using a
+    regular expression. No weaker rule is offered in its place."""
+    finding = make_finding(
+        "validity.invalid_email_shape",
+        category=DetectorCategory.VALIDITY,
+        columns=(col("email", 6),),
+    )
+    evidence = make_evidence(
+        {"checked_value_count": 10, "invalid_value_count": 2, "expected_shape": "local@domain.tld"}
+    )
+    proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
+    assert proposal is None
+    assert reason is not None and "validity.invalid_email_shape" in reason
+
+
 def test_unmapped_generic_detector_not_available() -> None:
     """A detector id with no dedicated guidance template (the generic
     CONDITIONAL_RULE fallback) has no real WHEN/THEN semantics to derive."""
@@ -376,7 +416,7 @@ def test_unmapped_generic_detector_not_available() -> None:
     assert reason is not None
 
 
-def test_generatable_detector_ids_is_exactly_the_disclosed_ten() -> None:
+def test_generatable_detector_ids_is_exactly_the_disclosed_eleven() -> None:
     assert (
         frozenset(
             {
@@ -385,6 +425,7 @@ def test_generatable_detector_ids_is_exactly_the_disclosed_ten() -> None:
                 "completeness.excessive_missing_values",
                 "completeness.missing_likely_identifier",
                 "validity.future_dates",
+                "validity.implausibly_old_dates",
                 "validity.negative_likely_non_negative_values",
                 "validity.invalid_percentages",
                 "statistical.extreme_outliers",
