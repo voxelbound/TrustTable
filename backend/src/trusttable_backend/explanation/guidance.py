@@ -559,6 +559,78 @@ _TEMPLATES: Final[dict[str, _Template]] = {
         rule_type=ValidationRuleType.ACCEPTED_VALUES,
         rule_description="Values in {columns} should use one agreed yes/no spelling.",
     ),
+    "validity.implausibly_old_dates": _Template(
+        impact=(
+            (
+                "Dates far in the past are often placeholders or typing errors, and they can "
+                "distort ages, durations and time-based groupings.",
+                "the column is used for ages, durations, time ranges or sorting by date",
+            ),
+        ),
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Check the flagged rows in {columns} and replace placeholder or mistyped "
+                "dates with the real ones in the source."
+            ),
+            responsible_role="The person who entered or owns the record",
+            urgency="Before this column is used for time-based reporting",
+            historical_correction_guidance=(
+                "Check the flagged rows in {columns} against the original records and correct "
+                "any placeholder or mistyped dates."
+            ),
+            source_system_prevention_guidance=(
+                "If a date is unknown, leave it blank instead of using a placeholder such as "
+                "an early default date."
+            ),
+            risk_warning=(
+                "Some datasets hold genuine historical dates; replacing a real old date with "
+                "a guess would damage correct data, so confirm each one against its source."
+            ),
+            verification_step=(
+                "Re-run this check and confirm no unexpected dates before 1900 remain."
+            ),
+        ),
+        rule_type=ValidationRuleType.DATE_RANGE,
+        rule_description="Dates in {columns} should not be earlier than 1900-01-01.",
+    ),
+    "validity.invalid_email_shape": _Template(
+        impact=(
+            (
+                "Entries that are not email addresses can make messages bounce or be skipped, "
+                "and they hide customers who cannot be contacted.",
+                "the column is used to contact people or to match records by email",
+            ),
+        ),
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Review the flagged entries in {columns} and correct or remove the ones that "
+                "are not email addresses."
+            ),
+            responsible_role="The person who owns the contact records",
+            urgency="Before this column is used to send messages or match records",
+            historical_correction_guidance=(
+                "Review the flagged entries in {columns} against the source records and fix "
+                "typing errors, such as a missing @ or domain."
+            ),
+            source_system_prevention_guidance=(
+                "Validate the email format where addresses are entered, and keep other "
+                "contact details in their own fields."
+            ),
+            risk_warning=(
+                "Email addresses are personal data; handle the flagged rows only as your "
+                "data-protection rules allow, and do not guess a correction."
+            ),
+            verification_step=(
+                "Re-run this check and confirm every remaining entry has the shape of an "
+                "email address."
+            ),
+        ),
+        rule_type=ValidationRuleType.REGEX,
+        rule_description=(
+            "Values in {columns} should have the shape of an email address, such as "
+            "name@example.com."
+        ),
+    ),
     "security.possible_llm_prompt_injection": _Template(
         impact=(
             (

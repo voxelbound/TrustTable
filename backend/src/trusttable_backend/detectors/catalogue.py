@@ -21,9 +21,10 @@ this list additively to 13/13, the required
 (`docs/detector-framework.md` §14).
 
 `DET-03` slice 1 (`WP-100`) adds `FullyEmptyRowsDetector` and
-`InconsistentBooleansDetector`, bringing the list to 15. `DET-03` is
-delivered in slices; the rest of `docs/detector-framework.md` §16 is not
-built yet.
+`InconsistentBooleansDetector`, bringing the list to 15; slice 2 (`WP-101`)
+adds `ImplausiblyOldDatesDetector` and `InvalidEmailShapeDetector`, bringing
+it to 17. `DET-03` is delivered in slices; the rest of
+`docs/detector-framework.md` §16 is not built yet.
 """
 
 from __future__ import annotations
@@ -45,6 +46,8 @@ from .statistical import ExtremeOutliersDetector, SuspiciouslyConstantColumnDete
 from .structural import EmptyColumnDetector, ExactDuplicateRowsDetector
 from .validity import (
     FutureDatesDetector,
+    ImplausiblyOldDatesDetector,
+    InvalidEmailShapeDetector,
     InvalidPercentagesDetector,
     NegativeLikelyNonNegativeValuesDetector,
 )
@@ -66,5 +69,7 @@ DETECTORS = register_detectors(
         PossiblePromptInjectionDetector(),
         FullyEmptyRowsDetector(),
         InconsistentBooleansDetector(),
+        ImplausiblyOldDatesDetector(),
+        InvalidEmailShapeDetector(),
     ]
 )
