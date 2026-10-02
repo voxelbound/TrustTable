@@ -776,14 +776,20 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > `validity.implausibly_old_dates` (proposes a date-range rule from its own
 > evidence) and `validity.invalid_email_shape` (no rule proposal; counts only,
 > never an email value) are built, registered and covered by built-in guidance
-> (`docs/decision-log.md` D-055). **Still open and part of the item:** the
-> remaining detectors listed in `docs/detector-framework.md` §16 — structural
-> (empty dataset, unnamed column, duplicate normalized column name, probable
+> (`docs/decision-log.md` D-055).
+>
+> **Annotation (2026-10-02, slice 3 of `DET-03`, item still in progress):**
+> `consistency.numeric_values_stored_as_text` and
+> `consistency.near_duplicate_categories` are built, registered and covered by
+> built-in guidance (`docs/decision-log.md` D-056); neither has a deterministic
+> rule proposal, by design. **Still open and part of the item:** the remaining
+> detectors listed in `docs/detector-framework.md` §16 — structural (empty
+> dataset, unnamed column, duplicate normalized column name, probable
 > duplicate identifier, mixed types, excessive parse failures), completeness
 > (concentrated missingness, completeness change over time), consistency
-> (near-duplicate categories, numeric values stored as text, inconsistent date
-> formats, conflicting stable attributes), validity (invalid country or region
-> values), statistical (high-cardinality categories, unexpected rarity,
+> (inconsistent date formats, conflicting stable attributes), validity
+> (invalid country or region values), statistical (high-cardinality categories,
+> unexpected rarity,
 > distribution shift, identifier-like measure),
 > cross-field (discount, tax, start date after end date, status/date conflict,
 > missing currency) and the second and third AI-processing security checks.

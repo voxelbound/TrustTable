@@ -70,6 +70,12 @@ explicit outcome here instead of silently falling to the generic reply:
 - `completeness.fully_empty_rows` and `consistency.inconsistent_booleans`
   have no mapping (no rule type expresses a blank row; the canonical boolean
   spelling is the owner's choice).
+- `consistency.numeric_values_stored_as_text` has no mapping: no rule type
+  says "this column must be numeric", and `NUMERIC_RANGE` presupposes values
+  the engine can already read as numbers, which these are not.
+- `consistency.near_duplicate_categories` has no mapping: which spelling is
+  canonical is the owner's choice, as for `inconsistent_booleans`, and it is
+  not on the AI-assisted list.
 - `validity.invalid_email_shape` has no mapping: a `REGEX` rule names the
   *disallowed* condition, so a faithful shape check would be one negative
   pattern with nested quantifiers over values up to

@@ -326,6 +326,342 @@ class InconsistentBooleansDetector:
         )
 
 
+_CURRENCY_SYMBOLS = "$€£¥"
+_ASCII_DIGITS = frozenset("0123456789")
+
+_NUMBERS_AS_TEXT_MIN_SHARE = 0.9
+"""A column is read as numbers stored as text only when at least this share
+of its non-blank values read as numbers. A disclosed, reversible design
+choice (`docs/detector-framework.md` §11 requires an explicit rule but fixes
+no exact number): high enough that a text column with a few numeric-looking
+entries is left alone, low enough that a numeric column with a few blank-ish
+or stray entries is still found."""
+
+_NUMBERS_AS_TEXT_APPLICABLE_TYPES: tuple[InferredColumnType, ...] = (
+    InferredColumnType.TEXT,
+    InferredColumnType.CATEGORICAL,
+    InferredColumnType.IDENTIFIER,
+    InferredColumnType.MIXED,
+)
+
+
+def _is_ascii_digits(text: str) -> bool:
+    return bool(text) and all(character in _ASCII_DIGITS for character in text)
+
+
+def _read_number(value: str) -> tuple[bool, tuple[str, ...]]:
+    """Whether `value` is a number, and which decorations it carries.
+
+    Accepts an optional sign, one optional currency symbol, digits with
+    optional thousands commas (groups of exactly three), an optional decimal
+    part and an optional percent sign. Rejects anything else — brackets,
+    hyphens inside the number, spaces, letters — so phone numbers and codes
+    are not numbers. An integer part with a leading zero (`007`) is treated
+    as a code, not a number. Written with character checks only, no regular
+    expression, so value length cannot cause backtracking.
+    """
+    text = value.strip()
+    decorations: list[str] = []
+    if text[:1] in ("+", "-"):
+        text = text[1:]
+    if text[:1] and text[0] in _CURRENCY_SYMBOLS:
+        decorations.append("currency symbol")
+        text = text[1:]
+        if text[:1] in ("+", "-"):
+            text = text[1:]
+    if text.endswith("%"):
+        decorations.append("percent sign")
+        text = text[:-1]
+    integer, dot, fraction = text.partition(".")
+    if "," in integer:
+        groups = integer.split(",")
+        if not (1 <= len(groups[0]) <= 3 and all(len(group) == 3 for group in groups[1:])):
+            return False, ()
+        decorations.append("thousands separator")
+        integer = "".join(groups)
+    if dot and not fraction:
+        return False, ()
+    if (integer and not _is_ascii_digits(integer)) or (fraction and not _is_ascii_digits(fraction)):
+        return False, ()
+    if not integer and not fraction:
+        return False, ()
+    if len(integer) > 1 and integer.startswith("0"):
+        return False, ()
+    return True, tuple(decorations)
+
+
+class NumericValuesStoredAsTextDetector:
+    """`consistency.numeric_values_stored_as_text` — flags a column that is
+    not already numeric but whose values are almost all numbers written with
+    a currency symbol, percent sign or thousands separator, such as
+    `$1,234.50` or `12%` (`DET-03` slice 3).
+
+    Such values cannot be summed, averaged or sorted as numbers, and most
+    tools skip or mis-sort them silently. `PROF-02` calls a column numeric
+    only when every value is a plain number, so these columns are typed as
+    text; this detector finds them.
+
+    False-positive guards, all deliberate: at least one value must carry a
+    decoration (a column of plain numbers is already numeric); at least 90%
+    of non-blank values must read as numbers; and zero-padded values,
+    phone numbers, codes with hyphens or brackets, and anything with letters
+    are never numbers here.
+    """
+
+    metadata = DetectorMetadata(
+        detector_id="consistency.numeric_values_stored_as_text",
+        version="1",
+        name="Numeric values stored as text",
+        category=DetectorCategory.CONSISTENCY,
+        description=(
+            "Flags a column whose values are numbers written with currency symbols, "
+            "percent signs or thousands separators, so it is typed as text."
+        ),
+        applicable_inferred_types=_NUMBERS_AS_TEXT_APPLICABLE_TYPES,
+        required_profile_fields=("column_profiles[].inferred_type",),
+        requires_raw_rows=True,
+        requires_confirmed_context=False,
+        default_configuration={},
+        performance_class=PerformanceClass.LINEAR_BY_ROW,
+        documented_limitations=(
+            "Only a sign, one currency symbol ($, €, £, ¥), comma thousands separators and "
+            "a percent sign are recognized; European decimal commas, spaces inside numbers, "
+            "accounting brackets and currency codes such as USD are not.",
+            "Zero-padded values such as 007 are treated as codes, so a column of "
+            "zero-padded amounts is not flagged.",
+        ),
+    )
+    config_schema: type[BaseModel] = _EmptyConfig
+
+    def supports(self, request: DetectorSupportRequest) -> bool:
+        del request  # Dataset-level, structurally always applicable.
+        return True
+
+    def run(self, request: DetectorRunRequest) -> DetectorRunResult:
+        findings: list[FindingCandidate] = []
+        evidence: list[Evidence] = []
+
+        for profile in request.dataset_profile.column_profiles:
+            if profile.inferred_type not in _NUMBERS_AS_TEXT_APPLICABLE_TYPES:
+                continue
+
+            checked = 0
+            numeric_like = 0
+            decorated_indices: list[int] = []
+            decoration_kinds: set[str] = set()
+            for index, row in enumerate(request.rows):
+                value = row.get(profile.column.internal_key)
+                if not isinstance(value, str) or not value.strip():
+                    continue
+                checked += 1
+                is_number, decorations = _read_number(value)
+                if is_number:
+                    numeric_like += 1
+                    if decorations:
+                        decorated_indices.append(index)
+                        decoration_kinds.update(decorations)
+
+            if not decorated_indices or numeric_like / checked < _NUMBERS_AS_TEXT_MIN_SHARE:
+                continue
+
+            affected_row_references = tuple(
+                request.row_references[index] for index in decorated_indices
+            )
+            kinds = sorted(decoration_kinds)
+            evidence_id = (
+                f"consistency.numeric_values_stored_as_text.evidence.{profile.column.internal_key}"
+            )
+            column_evidence = Evidence(
+                evidence_id=evidence_id,
+                evidence_type=EvidenceType.ROW_SET,
+                calculation_version="1",
+                structured_payload={
+                    "checked_value_count": checked,
+                    "numeric_like_count": numeric_like,
+                    "decorated_value_count": len(decorated_indices),
+                    "decorations": kinds,
+                },
+                affected_columns=(profile.column,),
+                affected_row_references=affected_row_references,
+                scope=SamplingScope.FULL,
+                display_safe_summary=(
+                    f"Column '{profile.column.original_name}' holds numbers as text in "
+                    f"{len(decorated_indices)} row(s) ({', '.join(kinds)})."
+                ),
+            )
+            finding = FindingCandidate(
+                detector_id=self.metadata.detector_id,
+                detector_version=self.metadata.version,
+                category=self.metadata.category,
+                severity=Severity.MEDIUM,
+                confidence=0.9,
+                calculated_observation=(
+                    f"Column '{profile.column.original_name}' holds numbers as text in "
+                    f"{len(decorated_indices)} of {checked} non-blank row(s) "
+                    f"({', '.join(kinds)}), so it is not read as a numeric column."
+                ),
+                affected_columns=(profile.column,),
+                affected_row_references=affected_row_references,
+                evidence_ids=(evidence_id,),
+                default_remediation_template_key=None,
+                default_validation_rule_template_key=None,
+            )
+            evidence.append(column_evidence)
+            findings.append(finding)
+
+        return DetectorRunResult(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            status=DetectorRunStatus.SUCCESS,
+            findings=tuple(findings),
+            evidence=tuple(evidence),
+            warnings=(),
+            execution_metrics=ExecutionMetrics(duration_ms=0),
+        )
+
+
+_NEAR_DUPLICATE_MAX_VARIANTS_SHOWN = 10
+_NEAR_DUPLICATE_MAX_VARIANT_LENGTH = 60
+_NEAR_DUPLICATE_MIN_KEY_LENGTH = 2
+
+
+def _near_duplicate_key(value: str) -> str:
+    """The value lowercased with every character that is not a letter or a
+    digit removed, so `New York`, `New-York` and `NewYork` share a key."""
+    return "".join(character for character in value.lower() if character.isalnum())
+
+
+class NearDuplicateCategoriesDetector:
+    """`consistency.near_duplicate_categories` — flags category values in a
+    categorical column that differ only by punctuation or internal spacing,
+    such as `New York`, `New-York` and `NewYork` (`DET-03` slice 3).
+
+    One finding is produced per group of variants, with every row in the
+    group as an affected row, the same convention as
+    `consistency.inconsistent_capitalization`.
+
+    It deliberately leaves two things to the existing detectors so nothing is
+    reported twice: values that differ only in casing
+    (`consistency.inconsistent_capitalization`) and values that differ only in
+    leading or trailing whitespace (`consistency.leading_trailing_whitespace`).
+    A group is reported only when it has at least two variants that differ
+    after trimming and lowercasing.
+
+    Guards: only categorical columns; a key of fewer than two characters, or
+    made only of digits (where `1.5` and `15` are different numbers), is
+    ignored.
+    """
+
+    metadata = DetectorMetadata(
+        detector_id="consistency.near_duplicate_categories",
+        version="1",
+        name="Near-duplicate categories",
+        category=DetectorCategory.CONSISTENCY,
+        description=("Flags category values that differ only by punctuation or internal spacing."),
+        applicable_inferred_types=(InferredColumnType.CATEGORICAL,),
+        required_profile_fields=("column_profiles[].inferred_type",),
+        requires_raw_rows=True,
+        requires_confirmed_context=False,
+        default_configuration={},
+        performance_class=PerformanceClass.LINEAR_BY_ROW,
+        documented_limitations=(
+            "Only differences in punctuation and internal spacing are found; spelling "
+            "variants, abbreviations and plurals are not.",
+            "Two categories that really are different but share letters and digits, such "
+            "as A-1 and A1, are reported as near-duplicates.",
+        ),
+    )
+    config_schema: type[BaseModel] = _EmptyConfig
+
+    def supports(self, request: DetectorSupportRequest) -> bool:
+        del request  # Dataset-level, structurally always applicable.
+        return True
+
+    def run(self, request: DetectorRunRequest) -> DetectorRunResult:
+        findings: list[FindingCandidate] = []
+        evidence: list[Evidence] = []
+
+        for profile in request.dataset_profile.column_profiles:
+            if profile.inferred_type is not InferredColumnType.CATEGORICAL:
+                continue
+
+            groups: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
+            for index, row in enumerate(request.rows):
+                value = row.get(profile.column.internal_key)
+                if not isinstance(value, str):
+                    continue
+                stripped = value.strip()
+                if not stripped:
+                    continue
+                key = _near_duplicate_key(stripped)
+                if len(key) < _NEAR_DUPLICATE_MIN_KEY_LENGTH or _is_ascii_digits(key):
+                    continue
+                groups[key][stripped.lower()].append(index)
+
+            for key, variants in sorted(groups.items()):
+                if len(variants) < 2:
+                    continue
+
+                affected_indices = sorted(
+                    index for indices in variants.values() for index in indices
+                )
+                affected_row_references = tuple(
+                    request.row_references[index] for index in affected_indices
+                )
+                shown = sorted(variants)[:_NEAR_DUPLICATE_MAX_VARIANTS_SHOWN]
+                shown = [variant[:_NEAR_DUPLICATE_MAX_VARIANT_LENGTH] for variant in shown]
+                evidence_id = (
+                    f"consistency.near_duplicate_categories.evidence."
+                    f"{profile.column.internal_key}.{key}"
+                )
+                column_evidence = Evidence(
+                    evidence_id=evidence_id,
+                    evidence_type=EvidenceType.ROW_SET,
+                    calculation_version="1",
+                    structured_payload={
+                        "variant_count": len(variants),
+                        "variants_shown": shown,
+                        "affected_row_count": len(affected_indices),
+                    },
+                    affected_columns=(profile.column,),
+                    affected_row_references=affected_row_references,
+                    scope=SamplingScope.FULL,
+                    display_safe_summary=(
+                        f"Column '{profile.column.original_name}' has {len(variants)} "
+                        f"spellings of one category across {len(affected_indices)} row(s)."
+                    ),
+                )
+                finding = FindingCandidate(
+                    detector_id=self.metadata.detector_id,
+                    detector_version=self.metadata.version,
+                    category=self.metadata.category,
+                    severity=Severity.LOW,
+                    confidence=0.8,
+                    calculated_observation=(
+                        f"Column '{profile.column.original_name}' writes what looks like one "
+                        f"category {len(variants)} ways ({', '.join(shown)}) across "
+                        f"{len(affected_indices)} row(s)."
+                    ),
+                    affected_columns=(profile.column,),
+                    affected_row_references=affected_row_references,
+                    evidence_ids=(evidence_id,),
+                    default_remediation_template_key=None,
+                    default_validation_rule_template_key=None,
+                )
+                evidence.append(column_evidence)
+                findings.append(finding)
+
+        return DetectorRunResult(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            status=DetectorRunStatus.SUCCESS,
+            findings=tuple(findings),
+            evidence=tuple(evidence),
+            warnings=(),
+            execution_metrics=ExecutionMetrics(duration_ms=0),
+        )
+
+
 class LeadingTrailingWhitespaceDetector:
     """`consistency.leading_trailing_whitespace` — flags text-family
     columns with one or more values carrying leading or trailing

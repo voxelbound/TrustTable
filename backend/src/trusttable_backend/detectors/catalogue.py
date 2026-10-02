@@ -23,8 +23,9 @@ this list additively to 13/13, the required
 `DET-03` slice 1 (`WP-100`) adds `FullyEmptyRowsDetector` and
 `InconsistentBooleansDetector`, bringing the list to 15; slice 2 (`WP-101`)
 adds `ImplausiblyOldDatesDetector` and `InvalidEmailShapeDetector`, bringing
-it to 17. `DET-03` is delivered in slices; the rest of
-`docs/detector-framework.md` §16 is not built yet.
+it to 17; slice 3 (`WP-102`) adds `NumericValuesStoredAsTextDetector` and
+`NearDuplicateCategoriesDetector`, bringing it to 19. `DET-03` is delivered
+in slices; the rest of `docs/detector-framework.md` §16 is not built yet.
 """
 
 from __future__ import annotations
@@ -38,6 +39,8 @@ from .consistency import (
     InconsistentBooleansDetector,
     InconsistentCapitalizationDetector,
     LeadingTrailingWhitespaceDetector,
+    NearDuplicateCategoriesDetector,
+    NumericValuesStoredAsTextDetector,
 )
 from .cross_field import LineTotalMismatchDetector
 from .registry import register_detectors
@@ -71,5 +74,7 @@ DETECTORS = register_detectors(
         InconsistentBooleansDetector(),
         ImplausiblyOldDatesDetector(),
         InvalidEmailShapeDetector(),
+        NumericValuesStoredAsTextDetector(),
+        NearDuplicateCategoriesDetector(),
     ]
 )

@@ -130,8 +130,10 @@ def test_no_readme_line_contradicts_the_completed_ing_03_or_the_open_det_03() ->
     assert "**DET-03 (in progress)**" in readme
     assert "**In progress — detector catalogue (`DET-03`):**" in readme
     assert "the catalogue is not complete" in readme
-    assert "17 detectors are built" in readme
+    assert "19 detectors are built" in readme
     assert "bringing it to 17" in readme
+    assert "bringing it to 19" in readme
+    assert "Zero-padded codes and phone numbers are never reported" in readme
     assert "never an address" in readme
     assert "never an email value" in readme
 

@@ -631,6 +631,77 @@ _TEMPLATES: Final[dict[str, _Template]] = {
             "name@example.com."
         ),
     ),
+    "consistency.numeric_values_stored_as_text": _Template(
+        impact=(
+            (
+                "Numbers written with currency symbols, percent signs or thousands separators "
+                "are read as text, so totals, averages and sorting can silently skip or "
+                "misorder them.",
+                "the column is summed, averaged, sorted or compared as numbers",
+            ),
+        ),
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Store the values in {columns} as plain numbers, and keep the currency or "
+                "percent meaning in the column name or a separate column."
+            ),
+            responsible_role="The person who maintains the export or the source system",
+            urgency="Before this column is totalled, averaged or sorted",
+            historical_correction_guidance=(
+                "Convert the values in {columns} to plain numbers, after confirming what "
+                "each symbol means, for example which currency."
+            ),
+            source_system_prevention_guidance=(
+                "Export numbers without symbols or separators, and record the unit once, "
+                "for example in the column name."
+            ),
+            risk_warning=(
+                "Removing a symbol can lose its meaning, such as mixed currencies or a "
+                "percentage versus a fraction; confirm the unit before converting."
+            ),
+            verification_step=(
+                "Re-run this check and confirm the column is now read as a numeric column."
+            ),
+        ),
+        rule_type=ValidationRuleType.REGEX,
+        rule_description=(
+            "Values in {columns} should be plain numbers, without currency symbols, percent "
+            "signs or thousands separators."
+        ),
+    ),
+    "consistency.near_duplicate_categories": _Template(
+        impact=(
+            (
+                "The same category written with different punctuation or spacing can be "
+                "split into separate groups in summaries and filters.",
+                "the column is used for grouping, filtering or joining",
+            ),
+        ),
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Agree on one spelling for each category and standardize {columns} in the "
+                "source system."
+            ),
+            responsible_role="The person who maintains the source system or data-entry standards",
+            urgency="Before the next grouped or filtered report",
+            historical_correction_guidance=(
+                "Standardize the punctuation and spacing of the category values in {columns} "
+                "in the source system."
+            ),
+            source_system_prevention_guidance=(
+                "Use a fixed list of allowed categories instead of free text."
+            ),
+            risk_warning=(
+                "Two spellings that look alike can be genuinely different categories, such "
+                "as product codes A-1 and A1; confirm each pair before merging them."
+            ),
+            verification_step=(
+                "Re-run this check and confirm each category now has a single spelling."
+            ),
+        ),
+        rule_type=ValidationRuleType.ACCEPTED_VALUES,
+        rule_description="Values in {columns} should come from one agreed list of categories.",
+    ),
     "security.possible_llm_prompt_injection": _Template(
         impact=(
             (

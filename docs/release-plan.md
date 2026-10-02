@@ -171,9 +171,9 @@ Deliver:
 > upload works from the API and the Start screen, and the documented limit
 > settings are read on every parse. The rest of the list above is planned or
 > has a `v0.1`-scoped baseline only. **Update (2026-10-02,
-> `docs/decision-log.md` D-054, D-055):** the detector catalogue (`DET-03`)
-> is in progress — 17 detectors are built (four added over two slices) and the
-> rest of `docs/detector-framework.md` §16 is planned.
+> `docs/decision-log.md` D-054, D-055, D-056):** the detector catalogue
+> (`DET-03`) is in progress — 19 detectors are built (six added over three
+> slices) and the rest of `docs/detector-framework.md` §16 is planned.
 
 Production definition:
 
