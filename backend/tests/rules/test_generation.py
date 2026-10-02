@@ -404,6 +404,46 @@ def test_invalid_email_shape_not_available() -> None:
     assert reason is not None and "validity.invalid_email_shape" in reason
 
 
+def test_numeric_values_stored_as_text_not_available() -> None:
+    """`DET-03` slice 3: no rule type says "this column must be numeric", and
+    `NUMERIC_RANGE` presupposes values the engine can already read as numbers,
+    which these are not. No weaker rule is offered in its place."""
+    finding = make_finding(
+        "consistency.numeric_values_stored_as_text",
+        category=DetectorCategory.CONSISTENCY,
+        columns=(col("amount", 4),),
+    )
+    evidence = make_evidence(
+        {
+            "checked_value_count": 10,
+            "numeric_like_count": 10,
+            "decorated_value_count": 8,
+            "decorations": ["currency symbol"],
+        }
+    )
+    proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
+    assert proposal is None
+    assert reason is not None and "consistency.numeric_values_stored_as_text" in reason
+
+
+def test_near_duplicate_categories_not_available_and_never_ai_assisted() -> None:
+    """`DET-03` slice 3: which spelling is canonical is the owner's choice,
+    and the detector is not on the AI-assisted list."""
+    finding = make_finding(
+        "consistency.near_duplicate_categories",
+        category=DetectorCategory.CONSISTENCY,
+        columns=(col("city", 7),),
+    )
+    evidence = make_evidence(
+        {"variant_count": 2, "variants_shown": ["new york", "new-york"], "affected_row_count": 4}
+    )
+    proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
+    assert proposal is None
+    assert reason is not None and "consistency.near_duplicate_categories" in reason
+    assert "consistency.near_duplicate_categories" not in AI_ASSISTABLE_DETECTOR_IDS
+    assert extract_ai_assist_candidates(finding, evidence) is None
+
+
 def test_unmapped_generic_detector_not_available() -> None:
     """A detector id with no dedicated guidance template (the generic
     CONDITIONAL_RULE fallback) has no real WHEN/THEN semantics to derive."""

@@ -22,6 +22,8 @@ from .consistency import (
     InconsistentBooleansDetector,
     InconsistentCapitalizationDetector,
     LeadingTrailingWhitespaceDetector,
+    NearDuplicateCategoriesDetector,
+    NumericValuesStoredAsTextDetector,
 )
 from .contract import (
     Detector,
@@ -77,7 +79,9 @@ __all__ = [
     "LeadingTrailingWhitespaceDetector",
     "LineTotalMismatchDetector",
     "MissingLikelyIdentifierDetector",
+    "NearDuplicateCategoriesDetector",
     "NegativeLikelyNonNegativeValuesDetector",
+    "NumericValuesStoredAsTextDetector",
     "PerformanceClass",
     "SafeFailure",
     "SecurityExposureState",

@@ -638,3 +638,20 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** no other `DET-03` detector, no new profile fact, no confirmed-context detector, no AI change, no frontend change.
 
 **Decided by:** delegated implementation authority under the active work package, implementing the documented detector contract.
+
+## D-056 — `DET-03` slice 3 adds numbers stored as text and near-duplicate categories; codes are not numbers and other detectors' differences are not reported twice
+
+**Decision (2026-10-02):**
+
+1. **Slice 3 is the consistency pair that needs no new inputs.** `consistency.numeric_values_stored_as_text` flags a column of numbers written with a currency symbol (`$`, `€`, `£`, `¥`), a percent sign or comma thousands separators, such as `$1,234.50` or `12%`. `PROF-02` calls a column numeric only when every value is a plain number, so these columns are typed as text and their totals, averages and sorting silently break. `consistency.near_duplicate_categories` flags category values that differ only by punctuation or internal spacing, such as `New York`, `New-York` and `NewYork`.
+2. **Codes are never numbers.** A value is read as a number only with character checks: an optional sign, one currency symbol, digits with comma groups of exactly three, an optional decimal part and an optional percent sign. Anything else is not a number: brackets and hyphens (phone numbers), spaces, letters (`USD 12`), decimal commas, exponents, non-ASCII digits, and any integer part with a leading zero (`007`, so zero-padded identifiers are left alone). A column is flagged only when at least one value carries a decoration (a column of plain numbers is already numeric) and at least 90% of its non-blank values read as numbers. Severity is `medium` because the effect is silently wrong totals; confidence is `0.9`.
+3. **No double reporting.** Near-duplicates are grouped by the lowercased value with every non-alphanumeric character removed, and a group is reported only when it has at least two variants that still differ after trimming and lowercasing. Casing-only differences stay with `consistency.inconsistent_capitalization` and outer-whitespace-only differences with `consistency.leading_trailing_whitespace`. Only categorical columns are checked; a key under two characters, or made only of digits (where `1.5` and `15` are different numbers), is ignored. At most 10 variants are recorded per finding, each truncated to 60 characters. Severity is `low`, confidence `0.8`, because two similar-looking categories can be genuinely different.
+4. **No regular expression runs over untrusted values.** Both detectors use character checks, and a test runs 1,000,000-character hostile values in linear time.
+5. **Rule outcomes are stated.** Neither proposes a rule: no rule type says "this column must be numeric" and `numeric_range` presupposes values the engine can already read as numbers; the canonical spelling of a category is the owner's choice, and the detector is not on the AI-assisted list. Both have authored built-in guidance. The deterministic rule set stays at 11 detectors.
+6. **`DET-03` stays in progress.** The catalogue has 19 detectors. The rest of `docs/detector-framework.md` §16 is planned, and most of it needs new profile facts or confirmed context.
+
+**Alternatives considered:** reading any numeric-looking text as a number (flags zip codes, phone numbers and zero-padded identifiers); treating a decorated number as a different type in the profiler (a profile change beyond this slice, and it would change existing results); fuzzy matching of near-duplicates by edit distance (noisy, and a threshold with no business context to defend it); reporting casing and whitespace variants here as well (the same values would appear in two findings).
+
+**Explicit non-scope:** no other `DET-03` detector, no new profile fact, no confirmed-context detector, no AI change, no frontend change.
+
+**Decided by:** delegated implementation authority under the active work package, implementing the documented detector contract.
