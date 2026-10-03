@@ -282,7 +282,8 @@ Every detector test suite includes:
 - implausibly old dates
 - negative likely non-negative values
 - invalid percentages
-- invalid country/region values
+- invalid country/region values — **moved out of `DET-03`, not built** (see
+  "Design outcome" below)
 - invalid email shape where relevant
 
 ### Statistical
@@ -300,7 +301,8 @@ Every detector test suite includes:
 - discount inconsistency
 - tax inconsistency
 - start date after end date
-- status/date conflict
+- status/date conflict — **moved out of `DET-03`, not built** (see "Design
+  outcome" below)
 - missing currency in multi-currency data
 
 ### AI-processing security
@@ -330,6 +332,159 @@ The latter two may initially map to one detector with evidence subtypes.
 > lists above is **planned and not built**;
 > several need confirmed context or profile facts that do not exist yet.
 > `DET-03` is in progress, not complete.
+
+### Design outcome (2026-10-02, documentation only)
+
+This subsection records the confirmed `DET-03` design outcome (`docs/decision-log.md`
+D-057). It changes no code, tests, schemas or detector behavior. Items marked
+"open" are deliberately undecided.
+
+**Per-entry status.** Every catalogue entry has exactly one status:
+*implemented* (the 19 built detectors listed above), *planned* (stays in
+`DET-03`), or *moved* (removed from `DET-03` with a traceable note). Moved
+entries are never counted as completed, and `DET-03` completion language counts
+implemented entries only.
+
+| Entry | Status | Note |
+|---|---|---|
+| invalid country/region values | **moved** | Moved, not dropped, into two separately named proposed capabilities: *standards policy* and *semantic category harmonization* (below). |
+| status/date conflict | **moved** | Moved into a named business-rule follow-up until a way to capture owner-stated categorical rules exists. |
+| unnamed column; duplicate normalized column name; empty dataset | planned | Findings (meaning-independent structural defects). Empty dataset only if zero-row handling is verified reachable (open). |
+| mixed types; inconsistent date formats; high-cardinality categories; unexpected rarity; concentrated missingness | planned | **Observations by default**, not findings. |
+| start date after end date; discount inconsistency; tax inconsistency; missing currency; conflicting stable attributes; probable duplicate identifier; identifier-like measure | planned | Context-bound; depend on the confirmed-context foundation. |
+| completeness change over time; distribution shift | planned | Context-bound and time-based; neutral observation unless a confirmed expectation is violated. |
+| possible data-exfiltration instruction; suspicious secret-request text | planned | Findings after a security review and an extended adversarial suite. |
+| excessive parse failures | planned | Re-framed by the ingest-facts record (below): "parse failure" is not an umbrella concept. |
+
+**Finding versus observation.** A *Finding* is produced by a detector, has its
+own identity, provenance and evidence, and may affect trust scoring. An
+*Observation* is based only on facts observable in the data, makes no claim
+that a business role is true, never affects trust scoring, may suggest a
+possible interpretation, and can be dismissed or suppressed. An observation is
+never promoted or converted into a finding; a later finding is a new object and
+the observation stays unchanged. A meaning-independent defect may become a
+finding; a pattern whose significance depends on business meaning stays an
+observation until sufficient confirmed context or an explicit expectation
+exists. The planned observation kinds are processing-limit, value-evidence,
+not-checked, standards-advisory and equivalence-suggestion; the final closed
+vocabulary and its persistence and API surface are open.
+
+**Confirmed-context rule for context-bound detectors.** A context-bound
+detector runs only when every role it declares is confirmed or corrected,
+unambiguous, type-compatible and not stale (and, for discount and tax, the
+interpretation is confirmed). Otherwise it is *not evaluated*: no finding, trust
+score unchanged, and the run is recorded as NOT EVALUATED, never as passed. When
+the skip is because confirmed context is stale, conflicting or invalid, a
+neutral NOT_CHECKED observation is mandatory; when a role was simply never
+confirmed it is optional. A detector never runs from a suggestion and never
+infers a role from a name, label, value pattern or AI output. **Most
+context-bound detectors therefore stay inactive until a confirmation path
+ships, and their tests until then are contract-level, not end-to-end.**
+
+**Context-bound contracts that remain in `DET-03`** (exact formulas, tolerances
+and thresholds are specified at each detector's own design):
+
+- *Start date after end date:* confirmed, distinct, date-typed start and end
+  roles; equality is not a violation unless a confirmed interpretation says so;
+  rows blank in either role are counted as not evaluated.
+- *Discount inconsistency:* confirmed gross, discount and net roles, a confirmed
+  discount interpretation (percentage, fraction or absolute) and relationship;
+  the finding states the interpretation and tolerance used.
+- *Tax inconsistency:* confirmed base, tax and total roles and confirmed tax
+  semantics (rate or amount, inclusive or exclusive, rounding); no inferred
+  formula.
+- *Missing currency:* a confirmed currency field, or a confirmed dataset-level
+  currency; applies only where the confirmed currency field shows more than one
+  currency and stays silent under a confirmed dataset-level currency. This
+  narrows the catalogue wording and is an owner-visible product-behavior choice.
+- *Conflicting stable attributes:* a confirmed key role, confirmed attribute
+  roles and an explicit confirmed expectation that the attribute is stable per
+  key.
+- *Probable duplicate identifier:* before confirmation only an observation of
+  observed facts; after the identifier role is confirmed a separate finding.
+- *Identifier-like measure:* an observation by default; a finding only with an
+  explicit confirmed expectation.
+
+**Time-based checks.** Comparison is within the uploaded file on a confirmed
+date role, with disclosed period construction and windows and a stated minimum
+sample per period (silent when evidence is insufficient). A confirmed time axis,
+an observed change, a confirmed business expectation and a finding caused by
+violating that expectation are four separate concepts; a change is never a
+defect by itself. Comparison with a previous upload is outside this design
+until durable dataset identity exists.
+
+**Ingest-facts record.** A typed, parser-neutral, immutable record with a fixed
+vocabulary and consistent semantics across CSV and XLSX; no cell values, only
+counts and bounded row or column references; each fact states its scope and
+whether evidence is complete-file or sampled; "not applicable", "zero observed"
+and "not evaluated" stay distinct. Categories: source-structure facts,
+spreadsheet or source-cell facts, TrustTable processing-limit facts (not defects
+in the user's data and never ordinary findings), and value-level interpretation
+facts. An originally blank header stays an explicit fact after the parser
+assigns `column_<n>`. The ingest layer owns the immutable source fact; the
+detector owns whether it becomes a finding, with no double reporting.
+
+**Moved capability 1 — standards policy (proposed, not committed).** Per column
+Off / Advisory / Enforced; no standard by default (no standard selected means
+unknown, not invalid); optional user-selected starter standards, never applied
+automatically and never treated as universal truth; optional custom reference
+lists; local aliases and exceptions; suppression and dismissal. Advisory output
+is excluded from trust scoring; only explicitly confirmed Enforced deviations
+become findings, worded "does not match your selected standard". Region meaning
+is never inferred from a column name (EMEA, DACH, Nordics and internal codes are
+legitimate business vocabulary). Which starter standards ship, when, and how
+Advisory suppression is keyed are open.
+
+**Moved capability 2 — semantic category harmonization (proposed, not
+committed).** Generic across countries, regions, organizations, products,
+statuses and other categorical dimensions. Candidates come deterministically
+where possible (the near-duplicate category evidence is a candidate input), with
+optional local-AI assistance that is advisory only. Suggestions stay advisory
+until the user confirms; a confirmed equivalence becomes durable business
+context. "Treat as equivalent" (analysis treats values as one concept, source
+data untouched) stays separate from "normalize" (changes or exports toward a
+canonical value; needs an explicit canonical-value decision). Ambiguous values
+(for example Georgia; Congo versus DR Congo) are never silently collapsed, and
+values are never merged or rewritten automatically. Wording is "possible
+equivalent values". How much local-AI assistance ships first and the candidate
+rules are open.
+
+**Standing principles.** Column names and labels may be hints and supporting
+evidence but never by themselves define business meaning; naming variants
+(`pct`, `%`, `percent`, `rabatt`, `disc`) are the user's terminology and never
+correctness issues; built-in standards are never universal truth; value
+distribution can support a suggestion but does not establish business meaning.
+
+**Shipped detectors and name-based meaning.** A read-only audit (detector code
+plus a text search of profiling and rules; type inference not audited line by
+line) found:
+
+- *Require migration to confirmed roles:* `cross_field.line_total_mismatch`
+  (default column names and a fixed pricing formula; a historical stopgap) and
+  `validity.invalid_percentages` (name contains `pct`, `percent` or `%`, plus a
+  numeric-type guard).
+- *Compatibility exception to review:* `validity.invalid_email_shape` (name
+  contains `email` and at least half of non-blank values already look like
+  emails; the value-shape guard materially limits false positives).
+- *No name inference:* the structural, completeness, consistency, validity,
+  statistical and security detectors not named above. `missing_likely_identifier`
+  and `negative_likely_non_negative_values` read meaning from value distribution
+  and are to be reviewed under the observation and finding rule.
+
+The standing name principle is therefore **partly unmet by shipped code until
+migration**. The name-based detectors are temporary compatibility exceptions with
+a migration requirement, not an accepted long-term pattern. Shipped detector
+behavior is unchanged by this design. The exit condition (migration of the two
+detectors and review of the third, with a compatibility window and a measurable
+owner-visible exit) is open.
+
+**Acceptance criteria carried by follow-on items (specified, not built here).**
+An executable catalogue check that every entry is implemented or carries a
+traceable moved or deferred note; a machine-readable dependency-edge validator;
+per-detector negative tests (no context, stale, ambiguous role, type-incompatible
+role, unconfirmed interpretation) asserting zero findings, unchanged score and a
+NOT EVALUATED record; a scoring-boundary regression test over the
+observation-kind registry; and a migration plan for demo and benchmark fixtures.
 
 ## 17. Detector lifecycle
 

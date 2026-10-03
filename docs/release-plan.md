@@ -174,6 +174,22 @@ Deliver:
 > `docs/decision-log.md` D-054, D-055, D-056):** the detector catalogue
 > (`DET-03`) is in progress — 19 detectors are built (six added over three
 > slices) and the rest of `docs/detector-framework.md` §16 is planned.
+>
+> **Annotation (2026-10-02, `docs/decision-log.md` D-057, documentation only):**
+> the confirmed `DET-03` design outcome is recorded; no scope is added to this
+> milestone. Two catalogue entries are **moved out of `DET-03`, not dropped and
+> not counted as completed**: geographic validation (to two separately named,
+> proposed capabilities, standards policy and semantic category harmonization,
+> which are *not* committed release scope and have no milestone placement) and
+> the status/date conflict check (to a named business-rule follow-up). The
+> context-free part of `DET-03` can close independently; the context-bound
+> detectors depend on a confirmed-context foundation that is a named prerequisite
+> item, so `DET-03` stays open while they remain. **Most context-bound detectors
+> stay inactive until a confirmation path ships, and their tests until then are
+> contract-level, not end-to-end.** The exit condition for the shipped
+> name-based detectors (`line_total_mismatch`, `invalid_percentages`; review of
+> `invalid_email_shape`) is open; until they migrate, the standing principle that
+> column names never define business meaning is partly unmet by shipped code.
 
 Production definition:
 

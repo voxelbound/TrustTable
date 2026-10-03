@@ -930,6 +930,48 @@ explanations and remediation → Generate and execute validation rules
 → Review and export
 ```
 
+**Annotation (2026-10-02, `docs/decision-log.md` D-057; target direction, not
+implemented, documentation only):** the `DET-03` design records how the reserved
+option above is to be approached, without adopting a new pipeline. Context-bound
+findings are an *additive, versioned second detection pass on the same
+analysis*: not a separate analysis, and never computed from unconfirmed context.
+The first pass is unchanged and its profile facts stay immutable.
+
+- **One shared applicability gate** in the detector contract, additive and
+  specified before any context-bound detector ships. A detector runs only when
+  every role it declares is confirmed or corrected, unambiguous, type-compatible
+  and not stale; otherwise the run is recorded NOT EVALUATED, with no finding and
+  an unchanged trust score. A neutral NOT_CHECKED observation is mandatory when
+  context is stale, conflicting or invalid, and optional when a role was never
+  confirmed. Stale or conflicting context fails closed.
+- **Authoritative confirmed context is a separate record** from the existing
+  hypotheses and inferred state, which serve as the suggestion layer; an
+  inferred value never reaches a gate. Confirmed roles need a stable column
+  identity, not a name. The context-version identity scheme and the
+  finding-provenance schema are decided before any context-bound detector ships.
+  Per-analysis scope for stored roles is a known irreversibility. Whether the
+  foundation extends or replaces `DatasetContext` is open.
+- **Observations are a type separate from findings** and are never seen by trust
+  scoring (`docs/domain-model.md` §12). Ship only observation kinds that have a
+  producer; keep persistence and API open until two producers exist.
+- **Security and privacy conditions** carried by follow-on items: optional local
+  AI runs locally only, with no remote fallback, bounded unlogged samples and a
+  network-egress test; retention, deletion, access scope and API exposure for
+  confirmed context, provenance and aliases are decided before the first
+  context-bound detector ships, with non-forgeable provenance under a
+  single-user local identity model; header strings and security-check evidence
+  are untrusted, sanitised and bounded, and matched content is never echoed
+  verbatim; suppression keys never embed raw values and are scoped per dataset or
+  analysis; parsing never evaluates formulas or follows external links; confirmed
+  context is never applied across datasets automatically; evidence and
+  row-reference lists have hard caps; each detector states a memory bound.
+- **Ingest facts** are produced by the ingest layer as an immutable,
+  parser-neutral record and consumed by detectors (`docs/domain-model.md` §12).
+  Its relationship to existing parsing-warning codes is open; the architecture
+  review leans toward coexisting additively, but nothing is decided.
+- **Local-first and no new service:** none of this introduces a dependency, a
+  remote call or a new runtime.
+
 ## 7. LLM trust boundary
 
 Inputs are divided into:
