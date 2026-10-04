@@ -1016,7 +1016,8 @@ mixed-type, stale, conflicting or invalid is `NOT_CHECKED`, never a pass and nev
 a finding; confirmation-gated detectors never fall back to column names, and
 name-based shipped detectors are not gated by confirmations.
 
-**Execution (package 2):** a run is identified by (analysis, relationship,
+**Execution (package 2; owner-confirmed target behavior, provisional until the
+execution package's own design restates it):** a run is identified by (analysis, relationship,
 confirmation version) and is idempotent. `check_status` is durable and an open,
 additive enum: `not_active`, `pending`, `queued`, `running`, `completed`,
 `superseded`, `failed`. `pending` means stored and not yet accepted by the

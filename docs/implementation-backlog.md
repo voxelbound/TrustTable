@@ -837,6 +837,9 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > | Business-rule follow-up (status/date conflict) | named follow-up |
 >
 > **Dependency graph.** An edge `A -> B` means `A` must exist before `B` starts.
+> **Amended on 2026-10-04 (D-059): see `dependency_graph_amendment` in the
+> annotation below this one; it refines E1 and E3, and the lists in this
+> annotation are history, not current open items.**
 > The block below is the machine-readable form; automation must not propose a
 > slice with an unmet edge. Names in `needs`/`blocks` that are working titles
 > carry `id: pending` and are matched by title until identifiers are assigned.
