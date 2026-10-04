@@ -947,7 +947,8 @@ The first pass is unchanged and its profile facts stay immutable.
 - **Authoritative confirmed context is a separate record** from the existing
   hypotheses and inferred state, which serve as the suggestion layer; an
   inferred value never reaches a gate. Confirmed roles need a stable column
-  identity, not a name. **Decided by D-059 (design only, not built):** the record
+  identity, not a name. **Decided by D-059 (the stored record is built, D-060; the
+gate and detectors are not):** the record
   is a *confirmed relationship* kept beside `DatasetContext`, which is neither
   extended nor replaced and whose AI-facing slot is unchanged; scope is one
   analysis (a known irreversibility, now chosen); each role points at a column by
@@ -979,23 +980,29 @@ The first pass is unchanged and its profile facts stay immutable.
 - **Local-first and no new service:** none of this introduces a dependency, a
   remote call or a new runtime.
 
-### Confirmed-relationship foundation (D-059; target design, not built, documentation only)
+### Confirmed-relationship foundation (D-059; package 1 built, package 2 planned)
 
-`docs/decision-log.md` D-059 records the confirmed design. It is delivered by two
-ordered packages and changes no shipped behavior until they merge.
+`docs/decision-log.md` D-059 records the confirmed design, and D-060 records what
+package 1 built. It is delivered by two ordered packages; package 2 changes no
+shipped behavior until it merges.
 
-**Package 1, the foundation** (planned): a persisted confirmed-relationship
-record with immutable versions and a stable relationship id; server-set
+**Package 1, the foundation** (built, `docs/decision-log.md` D-060): a persisted
+confirmed-relationship record (`confirmed_relationship_versions`, migration
+`0007`) with immutable versions and a stable relationship id; server-set
 provenance; confirm, replace and withdraw transitions with version-aware writes;
 `GET` of the current projection and its history; the storage limits (50 active
 relationships, 50 versions per relationship, 500 versions per analysis); and the
 `delete_analysis` cascade. It ships no observation and does not claim that
 context-bound detection is active: its `POST` returns `201` or `200` with
-`check_status: "not_active"`, which never means a check passed.
+`check_status: "not_active"`, which never means a check passed. No detector reads
+the record yet.
 
-**Open gate on package 1:** package 1 is not fully design-complete and cannot be
-authorized until the owner decides whether a withdrawal is allowed when the
-relationship has already reached the 50-version cap. This is undecided here.
+**Withdrawal and the caps (owner decision, option A):** a withdrawal is exempt
+from both the 50-version and the 500-version cap, so a relationship at its cap can
+always be withdrawn. Growth stays bounded because a withdrawal is final for its
+relationship: it is allowed once, a replace or second withdrawal is refused, and a
+later confirmation creates a new relationship with a new id. Replace and confirm
+remain subject to the caps.
 
 **Package 2, context-bound execution** (planned): the minimal `NOT_CHECKED`
 observation with its read route; the gate; the asynchronous second pass bound to
@@ -1005,8 +1012,9 @@ and finding and run provenance bound to the confirmation version. Package 2 is
 not authorized until two open decisions are made: what counts as a *conflicting*
 confirmation, and how the gate and the summary treat a *withdrawn* relationship.
 
-**Routes (target):** `POST` and `GET .../confirmed-relationships` and
-`GET .../observations`, separate from the existing `.../context` routes, with the
+**Routes:** `POST` and `GET .../confirmed-relationships` are built (package 1);
+`GET .../observations` is planned (package 2). Both are separate from the existing
+`.../context` routes, with the
 same access model as the existing analysis routes. Writes reject only
 structurally impossible input (malformed body, unknown kind, invalid transition,
 version mismatch, a `ColumnReference` outside the analysis, a storage limit);

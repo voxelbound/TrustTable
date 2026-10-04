@@ -348,6 +348,70 @@ Returns:
 - updated resource (the enrichment result, layered over the unchanged,
   already-`completed` deterministic analysis)
 
+### Confirmed relationships (`DET-03`, `docs/decision-log.md` D-059, D-060)
+
+A user-stated relationship between columns of one analysis, kept apart from the
+context above. The first kind is `start_end_date`: one column holds a start date,
+another an end date. It is never inferred. Nothing reads these records yet: no
+check runs, and no detector, gate or observation depends on them.
+
+#### POST `/analyses/{analysis_id}/confirmed-relationships`
+
+Body (strict; unknown fields are rejected, every string is bounded, there is no
+free-text field, and a column is named only by its internal key):
+
+- `transition`: `confirm`, `replace` or `withdraw`
+- `kind`: `start_end_date`
+- `relationship_id` and `expected_version`: required for `replace` and `withdraw`,
+  forbidden for `confirm`
+- `start` and `end`: the two columns' internal keys; required for `confirm` and
+  `replace`, forbidden for `withdraw`
+- `source`: `direct` (default) or `suggestion`
+
+Each success is a new immutable version. `201 Created` for a new relationship,
+`200 OK` for a new version of an existing one. The response carries
+`relationship_id`, `version`, `state` (`active` or `withdrawn`), `check_status` and
+`recorded_at`. `check_status` is an open, additive set; clients treat an unknown
+value as opaque and rely on it and the identifiers, not on the status code alone.
+In this foundation it is always `not_active`: no check exists to run, and it never
+means the data passed one.
+
+Writes are version-aware: `expected_version` must equal the relationship's current
+version, so an older client cannot overwrite a newer confirmation, and of two
+concurrent writers holding the same version exactly one succeeds. Only a
+`completed` analysis accepts a write, because the keys are checked against its
+stored profile columns.
+
+Refusals use stable codes and never echo a submitted value:
+
+| Status | Code | Meaning |
+|---|---|---|
+| 404 | `ANALYSIS_NOT_FOUND`, `RELATIONSHIP_NOT_FOUND` | no such analysis or relationship |
+| 409 | `INVALID_ANALYSIS_STATE` | the analysis is not `completed` |
+| 409 | `RELATIONSHIP_VERSION_CONFLICT` | `expected_version` is not current; `details.current_version` says which is |
+| 409 | `RELATIONSHIP_WITHDRAWN` | the relationship was withdrawn; withdrawal is final |
+| 409 | `ACTIVE_RELATIONSHIP_LIMIT_REACHED` | 50 active relationships; withdrawn ones do not count |
+| 409 | `RELATIONSHIP_VERSION_LIMIT_REACHED` | 50 versions of this relationship (blocks `replace`) |
+| 409 | `ANALYSIS_RELATIONSHIP_VERSION_LIMIT_REACHED` | 500 versions in the analysis (blocks `confirm` and `replace`) |
+| 422 | `INVALID_RELATIONSHIP_TRANSITION` | the fields do not fit the transition |
+| 422 | `COLUMN_REFERENCE_NOT_IN_ANALYSIS` | a key is not a column of this analysis |
+| 422 | `INVALID_REQUEST` | malformed body, unknown kind, transition or field, over-long value |
+
+A withdrawal is exempt from both version caps, so a relationship at its cap can
+always be withdrawn. A later confirmation of the same columns is a new
+relationship with a new id. The same column on both sides, or a column in several
+relationships, is stored and not rejected: whether it is meaningful is for a later
+gate to judge.
+
+#### GET `/analyses/{analysis_id}/confirmed-relationships`
+
+Returns every relationship in the order it first appeared, each with its `state`,
+`check_status`, `current` version and the full ordered `history` of versions.
+Provenance on each version is server-set only: the version, `recorded_at` and
+`source`. The access model is that of every other analysis route: the analysis id
+is the only capability. The records end with the analysis (`DELETE
+/analyses/{analysis_id}` removes them).
+
 ## 10. Findings
 
 ### GET `/analyses/{analysis_id}/findings`
@@ -808,6 +872,14 @@ call's own status via its own `ai_call_status` field.
 - QUESTION_NOT_FOUND
 - RULE_NOT_FOUND
 - REPORT_NOT_FOUND
+- RELATIONSHIP_NOT_FOUND
+- RELATIONSHIP_VERSION_CONFLICT
+- RELATIONSHIP_WITHDRAWN
+- ACTIVE_RELATIONSHIP_LIMIT_REACHED
+- RELATIONSHIP_VERSION_LIMIT_REACHED
+- ANALYSIS_RELATIONSHIP_VERSION_LIMIT_REACHED
+- INVALID_RELATIONSHIP_TRANSITION
+- COLUMN_REFERENCE_NOT_IN_ANALYSIS
 - RULE_INVALID
 - RULE_EXECUTION_FAILED
 - MODEL_UNAVAILABLE

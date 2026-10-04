@@ -340,6 +340,14 @@ The latter two may initially map to one detector with evidence subtypes.
 > lists above is **planned and not built**;
 > several need confirmed context or profile facts that do not exist yet.
 > `DET-03` is in progress, not complete.
+>
+> **Annotation (2026-10-04, `DET-03` confirmed-relationship foundation;
+> `docs/decision-log.md` D-060):** the stored, versioned record of user-stated
+> `start_end_date` relationships is built, with routes to confirm, replace,
+> withdraw and read it. **No detector reads it, no gate or observation exists, and
+> the detector count is unchanged at 20.** Its `check_status` is always
+> `not_active`, which never means a check passed. The context-bound entries below
+> stay **planned and not built**.
 
 ### Design outcome (2026-10-02, documentation only)
 
@@ -406,8 +414,8 @@ and thresholds are specified at each detector's own design):
   D-059 fixes how the roles are confirmed: a user-stated `start_end_date`
   relationship, each side a `ColumnReference` within one immutable analysis,
   versioned, never inferred from a name. The same column on both sides, a column in
-  several relationships, and non-date or mixed-type columns are stored and judged
-  by the gate as `NOT_CHECKED`. The detector's severity, evidence cap and
+  several relationships, and non-date or mixed-type columns are stored (built,
+  D-060) and judged by the gate as `NOT_CHECKED` (the gate is not built). The detector's severity, evidence cap and
   finding-to-version link are specified in the execution package's design, which
   also must define what a conflicting confirmation is.
 - *Discount inconsistency:* confirmed gross, discount and net roles, a confirmed

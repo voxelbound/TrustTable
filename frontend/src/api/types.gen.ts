@@ -443,6 +443,120 @@ export type ConfirmContextFieldsRequest = {
 };
 
 /**
+ * ConfirmedRelationshipModel
+ *
+ * A relationship: its current version and its full ordered history.
+ */
+export type ConfirmedRelationshipModel = {
+    /**
+     * Check Status
+     */
+    check_status: string;
+    current: RelationshipVersionModel;
+    /**
+     * History
+     */
+    history: Array<RelationshipVersionModel>;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Relationship Id
+     */
+    relationship_id: string;
+    /**
+     * State
+     */
+    state: string;
+};
+
+/**
+ * ConfirmedRelationshipRequest
+ *
+ * Body for `POST /analyses/{analysis_id}/confirmed-relationships`.
+ *
+ * `confirm` carries `start` and `end` only. `replace` carries
+ * `relationship_id`, `expected_version`, `start` and `end`. `withdraw`
+ * carries `relationship_id` and `expected_version` only.
+ */
+export type ConfirmedRelationshipRequest = {
+    /**
+     * End
+     */
+    end?: string | null;
+    /**
+     * Expected Version
+     */
+    expected_version?: number | null;
+    /**
+     * Kind
+     */
+    kind: 'start_end_date';
+    /**
+     * Relationship Id
+     */
+    relationship_id?: string | null;
+    /**
+     * Source
+     */
+    source?: 'direct' | 'suggestion';
+    /**
+     * Start
+     */
+    start?: string | null;
+    /**
+     * Transition
+     */
+    transition: 'confirm' | 'replace' | 'withdraw';
+};
+
+/**
+ * ConfirmedRelationshipWriteResponse
+ *
+ * Result of one write.
+ *
+ * `check_status` states whether a check exists for the relationship. The
+ * set of values is open and additive: a client treats an unknown value as
+ * opaque. `not_active` means no check exists to run and never means the
+ * data passed one.
+ */
+export type ConfirmedRelationshipWriteResponse = {
+    /**
+     * Check Status
+     */
+    check_status: string;
+    /**
+     * Recorded At
+     */
+    recorded_at: string;
+    /**
+     * Relationship Id
+     */
+    relationship_id: string;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Version
+     */
+    version: number;
+};
+
+/**
+ * ConfirmedRelationshipsResponse
+ *
+ * Body for `GET /analyses/{analysis_id}/confirmed-relationships`.
+ */
+export type ConfirmedRelationshipsResponse = {
+    /**
+     * Relationships
+     */
+    relationships: Array<ConfirmedRelationshipModel>;
+};
+
+/**
  * ContextFieldValueResponse
  *
  * Mirrors `domain.context.ContextFieldValue` (`UI-02` slice 2,
@@ -1229,6 +1343,45 @@ export type ReadinessResponse = {
 };
 
 /**
+ * RelationshipVersionModel
+ *
+ * One immutable version. Provenance is server-set only: the version
+ * number, a server timestamp and the entry source.
+ */
+export type RelationshipVersionModel = {
+    end: RoleColumnModel;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Recorded At
+     */
+    recorded_at: string;
+    /**
+     * Relationship Id
+     */
+    relationship_id: string;
+    /**
+     * Source
+     */
+    source: string;
+    start: RoleColumnModel;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Transition
+     */
+    transition: string;
+    /**
+     * Version
+     */
+    version: number;
+};
+
+/**
  * RemediationOptionResponse
  *
  * One structured remediation recommendation (`REM-01`), mirroring
@@ -1366,6 +1519,22 @@ export type RetryAnalysisResponse = {
      * Status Url
      */
     status_url: string;
+};
+
+/**
+ * RoleColumnModel
+ *
+ * A role's `ColumnReference` identity: the internal key and ordinal.
+ */
+export type RoleColumnModel = {
+    /**
+     * Internal Key
+     */
+    internal_key: string;
+    /**
+     * Ordinal
+     */
+    ordinal: number;
 };
 
 /**
@@ -1972,6 +2141,70 @@ export type PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses = {
 };
 
 export type PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponse = PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses[keyof PostAnalysisCancelApiV1AnalysesAnalysisIdCancelPostResponses];
+
+export type ListConfirmedRelationshipsApiV1AnalysesAnalysisIdConfirmedRelationshipsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/confirmed-relationships';
+};
+
+export type ListConfirmedRelationshipsApiV1AnalysesAnalysisIdConfirmedRelationshipsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListConfirmedRelationshipsApiV1AnalysesAnalysisIdConfirmedRelationshipsGetError = ListConfirmedRelationshipsApiV1AnalysesAnalysisIdConfirmedRelationshipsGetErrors[keyof ListConfirmedRelationshipsApiV1AnalysesAnalysisIdConfirmedRelationshipsGetErrors];
+
+export type ListConfirmedRelationshipsApiV1AnalysesAnalysisIdConfirmedRelationshipsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConfirmedRelationshipsResponse;
+};
+
+export type ListConfirmedRelationshipsApiV1AnalysesAnalysisIdConfirmedRelationshipsGetResponse = ListConfirmedRelationshipsApiV1AnalysesAnalysisIdConfirmedRelationshipsGetResponses[keyof ListConfirmedRelationshipsApiV1AnalysesAnalysisIdConfirmedRelationshipsGetResponses];
+
+export type WriteConfirmedRelationshipApiV1AnalysesAnalysisIdConfirmedRelationshipsPostData = {
+    body: ConfirmedRelationshipRequest;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/confirmed-relationships';
+};
+
+export type WriteConfirmedRelationshipApiV1AnalysesAnalysisIdConfirmedRelationshipsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type WriteConfirmedRelationshipApiV1AnalysesAnalysisIdConfirmedRelationshipsPostError = WriteConfirmedRelationshipApiV1AnalysesAnalysisIdConfirmedRelationshipsPostErrors[keyof WriteConfirmedRelationshipApiV1AnalysesAnalysisIdConfirmedRelationshipsPostErrors];
+
+export type WriteConfirmedRelationshipApiV1AnalysesAnalysisIdConfirmedRelationshipsPostResponses = {
+    /**
+     * OK
+     */
+    200: ConfirmedRelationshipWriteResponse;
+    /**
+     * Successful Response
+     */
+    201: ConfirmedRelationshipWriteResponse;
+};
+
+export type WriteConfirmedRelationshipApiV1AnalysesAnalysisIdConfirmedRelationshipsPostResponse = WriteConfirmedRelationshipApiV1AnalysesAnalysisIdConfirmedRelationshipsPostResponses[keyof WriteConfirmedRelationshipApiV1AnalysesAnalysisIdConfirmedRelationshipsPostResponses];
 
 export type GetAnalysisContextApiV1AnalysesAnalysisIdContextGetData = {
     body?: never;
