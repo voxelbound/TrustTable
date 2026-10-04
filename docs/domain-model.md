@@ -339,8 +339,10 @@ Layers, kept distinct:
   organization-level configuration) is considered, not adopted; the model must
   stay extensible to it without changing detector contracts.
 
-Still open after D-059: what counts as a *conflicting* confirmation (to be decided
-before the execution package is authorized), role kinds beyond `start_end_date`,
+Still open after D-059: what counts as a *conflicting* confirmation and how the
+gate treats a *withdrawn* relationship (both to be decided before the execution
+package is authorized), whether withdrawal is exempt from the per-relationship
+version cap, role kinds beyond `start_end_date`,
 the expectation-capture mechanism, a durable cross-parse column identity, and how
 tests and documents migrate if the two context models are ever merged.
 

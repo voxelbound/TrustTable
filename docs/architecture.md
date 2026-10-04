@@ -998,8 +998,8 @@ observation with its read route; the gate; the asynchronous second pass bound to
 the exact confirmation version; the `start_end_date` detector; stale-result
 protection and idempotent retry; the derived "awaiting confirmed context" summary;
 and finding and run provenance bound to the confirmation version. Package 2 is
-not authorized until the open decision on what counts as a *conflicting*
-confirmation is made.
+not authorized until two open decisions are made: what counts as a *conflicting*
+confirmation, and how the gate and the summary treat a *withdrawn* relationship.
 
 **Routes (target):** `POST` and `GET .../confirmed-relationships` and
 `GET .../observations`, separate from the existing `.../context` routes, with the

@@ -903,8 +903,14 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > | 1 (next) | Confirmed-relationship foundation | The persisted confirmed-relationship record (kind `start_end_date`), immutable versions with a stable relationship id, server-set provenance, confirm / replace / withdraw with version-aware writes, `POST` and `GET .../confirmed-relationships` (current projection plus history), the storage limits, the `delete_analysis` cascade; `POST` returns `check_status: "not_active"` | Any observation, any detector run, the gate, the summary; it does not claim context-bound detection is active |
 > | 2 | Context-bound execution | The minimal `NOT_CHECKED` observation and `GET .../observations`, the gate, the durable idempotent bounded second pass, the `start_end_date` detector, stale-result protection, the derived "awaiting confirmed context" summary, finding and run provenance bound to the confirmation version | The confirmation screen, observation dismissal and suppression, any other observation kind or relationship kind |
 >
-> **Gate.** Package 2 must not be authorized until the open design decision on
-> what counts as a *conflicting* confirmation is made. Package 2's own design also
+> **Gate.** Package 2 must not be authorized until two open design decisions are
+> made: what counts as a *conflicting* confirmation, and how the gate and the
+> derived summary treat a *withdrawn* relationship. Package 1 ships the withdraw
+> transition before the second decision, so that decision must not require a
+> different stored shape. One further owner question is open and affects package
+> 1: whether a withdrawal is exempt from the 50-versions-per-relationship cap
+> (as decided, a relationship at 50 versions can no longer be replaced or
+> withdrawn, and only deleting the analysis recovers it). Package 2's own design also
 > specifies the detector's severity and evidence cap, how a finding records its
 > confirmation version, the justification for a new scheduler beside the existing
 > job pool, and the ordering rule between `delete_analysis` and a running context
@@ -919,9 +925,11 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 >     cc_package_1: {title: "Confirmed-relationship foundation", id: pending}
 >     cc_package_2: {title: "Context-bound execution", id: pending}
 >     conflicting_confirmation_decision: {title: "Define a conflicting confirmation", id: pending, kind: design-decision}
+>     withdrawn_relationship_decision: {title: "Gate and summary treatment of a withdrawn relationship", id: pending, kind: design-decision}
 >   edges:
 >     - {id: E9,  from: cc_package_1, to: cc_package_2}
 >     - {id: E10, from: conflicting_confirmation_decision, to: cc_package_2}
+>     - {id: E10b, from: withdrawn_relationship_decision, to: cc_package_2}
 >     - {id: E11, from: cc_package_2, to: "start date after end date detector"}
 >     - {id: E12, from: cc_package_2, to: "every other context-bound DET-03 slice, each adding its own relationship kind"}
 >     - {id: E1r, from: cc_package_2, to: "the first NOT_CHECKED observation (the observation type ships here with its first producer)"}

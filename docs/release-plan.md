@@ -206,8 +206,9 @@ Deliver:
 > with read and write routes; it does not make any check run), then
 > *context-bound execution* (the first context-bound detector, start date after
 > end date, with its `NOT_CHECKED` observation and a durable, bounded, idempotent
-> second pass). The second package is not authorized until the open decision on
-> what counts as a conflicting confirmation is made. The confirmation screen and
+> second pass). The second package is not authorized until two open decisions are
+> made: what counts as a conflicting confirmation, and how a withdrawn
+> relationship is treated. The confirmation screen and
 > any further relationship kinds are later work with no milestone placement.
 > `DET-03` is still in progress and is not claimed complete.
 
