@@ -369,14 +369,19 @@ implemented entries only.
 own identity, provenance and evidence, and may affect trust scoring. An
 *Observation* is based only on facts observable in the data, makes no claim
 that a business role is true, never affects trust scoring, may suggest a
-possible interpretation, and can be dismissed or suppressed. An observation is
+possible interpretation, and is intended to be dismissible or suppressible
+(dismissal and suppression are a later design: `docs/decision-log.md` D-059 ships
+the first observation kind read-only and without dismissal). An observation is
 never promoted or converted into a finding; a later finding is a new object and
 the observation stays unchanged. A meaning-independent defect may become a
 finding; a pattern whose significance depends on business meaning stays an
 observation until sufficient confirmed context or an explicit expectation
 exists. The planned observation kinds are processing-limit, value-evidence,
 not-checked, standards-advisory and equivalence-suggestion; the final closed
-vocabulary and its persistence and API surface are open.
+vocabulary is open. D-059 decides the first, minimal step only: a single
+`NOT_CHECKED` kind, stored per analysis with a read-only route, shipped together
+with its first producer (the start-date-after-end-date detector) and never counted
+by trust scoring; no other kind is decided.
 
 **Confirmed-context rule for context-bound detectors.** A context-bound
 detector runs only when every role it declares is confirmed or corrected,
@@ -385,7 +390,9 @@ interpretation is confirmed). Otherwise it is *not evaluated*: no finding, trust
 score unchanged, and the run is recorded as NOT EVALUATED, never as passed. When
 the skip is because confirmed context is stale, conflicting or invalid, a
 neutral NOT_CHECKED observation is mandatory; when a role was simply never
-confirmed it is optional. A detector never runs from a suggestion and never
+confirmed it is optional (D-059 decides no observation record is created then;
+the analysis summary carries a derived, non-persisted count of checks awaiting
+confirmed context instead). A detector never runs from a suggestion and never
 infers a role from a name, label, value pattern or AI output. **Most
 context-bound detectors therefore stay inactive until a confirmation path
 ships, and their tests until then are contract-level, not end-to-end.**
@@ -395,7 +402,14 @@ and thresholds are specified at each detector's own design):
 
 - *Start date after end date:* confirmed, distinct, date-typed start and end
   roles; equality is not a violation unless a confirmed interpretation says so;
-  rows blank in either role are counted as not evaluated.
+  rows blank in either role are counted as not evaluated. **Planned, not built.**
+  D-059 fixes how the roles are confirmed: a user-stated `start_end_date`
+  relationship, each side a `ColumnReference` within one immutable analysis,
+  versioned, never inferred from a name. The same column on both sides, a column in
+  several relationships, and non-date or mixed-type columns are stored and judged
+  by the gate as `NOT_CHECKED`. The detector's severity, evidence cap and
+  finding-to-version link are specified in the execution package's design, which
+  also must define what a conflicting confirmation is.
 - *Discount inconsistency:* confirmed gross, discount and net roles, a confirmed
   discount interpretation (percentage, fraction or absolute) and relationship;
   the finding states the interpretation and tolerance used.

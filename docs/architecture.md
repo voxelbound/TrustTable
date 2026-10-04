@@ -947,13 +947,20 @@ The first pass is unchanged and its profile facts stay immutable.
 - **Authoritative confirmed context is a separate record** from the existing
   hypotheses and inferred state, which serve as the suggestion layer; an
   inferred value never reaches a gate. Confirmed roles need a stable column
-  identity, not a name. The context-version identity scheme and the
-  finding-provenance schema are decided before any context-bound detector ships.
-  Per-analysis scope for stored roles is a known irreversibility. Whether the
-  foundation extends or replaces `DatasetContext` is open.
+  identity, not a name. **Decided by D-059 (design only, not built):** the record
+  is a *confirmed relationship* kept beside `DatasetContext`, which is neither
+  extended nor replaced and whose AI-facing slot is unchanged; scope is one
+  analysis (a known irreversibility, now chosen); each role points at a column by
+  its `ColumnReference` internal key; each relationship has a stable id separate
+  from its immutable version number; and the finding-provenance link is the exact
+  confirmation version, with its schema specified in the execution package's
+  design. See "Confirmed-relationship foundation (D-059)" below.
 - **Observations are a type separate from findings** and are never seen by trust
   scoring (`docs/domain-model.md` §12). Ship only observation kinds that have a
-  producer; keep persistence and API open until two producers exist.
+  producer. D-059 narrows the earlier "keep persistence and API open until two
+  producers exist": the single `NOT_CHECKED` kind, read-only and without
+  dismissal, ships with its first producer in the execution package; any further
+  kind, and dismissal and suppression, stay open.
 - **Security and privacy conditions** carried by follow-on items: optional local
   AI runs locally only, with no remote fallback, bounded unlogged samples and a
   network-egress test; retention, deletion, access scope and API exposure for
@@ -971,6 +978,71 @@ The first pass is unchanged and its profile facts stay immutable.
   review leans toward coexisting additively, but nothing is decided.
 - **Local-first and no new service:** none of this introduces a dependency, a
   remote call or a new runtime.
+
+### Confirmed-relationship foundation (D-059; target design, not built, documentation only)
+
+`docs/decision-log.md` D-059 records the confirmed design. It is delivered by two
+ordered packages and changes no shipped behavior until they merge.
+
+**Package 1, the foundation** (planned): a persisted confirmed-relationship
+record with immutable versions and a stable relationship id; server-set
+provenance; confirm, replace and withdraw transitions with version-aware writes;
+`GET` of the current projection and its history; the storage limits (50 active
+relationships, 50 versions per relationship, 500 versions per analysis); and the
+`delete_analysis` cascade. It ships no observation and does not claim that
+context-bound detection is active: its `POST` returns `201` or `200` with
+`check_status: "not_active"`, which never means a check passed.
+
+**Open gate on package 1:** package 1 is not fully design-complete and cannot be
+authorized until the owner decides whether a withdrawal is allowed when the
+relationship has already reached the 50-version cap. This is undecided here.
+
+**Package 2, context-bound execution** (planned): the minimal `NOT_CHECKED`
+observation with its read route; the gate; the asynchronous second pass bound to
+the exact confirmation version; the `start_end_date` detector; stale-result
+protection and idempotent retry; the derived "awaiting confirmed context" summary;
+and finding and run provenance bound to the confirmation version. Package 2 is
+not authorized until two open decisions are made: what counts as a *conflicting*
+confirmation, and how the gate and the summary treat a *withdrawn* relationship.
+
+**Routes (target):** `POST` and `GET .../confirmed-relationships` and
+`GET .../observations`, separate from the existing `.../context` routes, with the
+same access model as the existing analysis routes. Writes reject only
+structurally impossible input (malformed body, unknown kind, invalid transition,
+version mismatch, a `ColumnReference` outside the analysis, a storage limit);
+semantic doubt is judged by the gate. Request schemas are strict and bounded, and
+error messages never echo submitted values.
+
+**The gate:** every confirmed `ColumnReference` is resolved within the immutable
+analysis and checked against the stored profile columns, because an on-demand
+re-parse reads the current limit settings. Anything unresolved, incompatible,
+mixed-type, stale, conflicting or invalid is `NOT_CHECKED`, never a pass and never
+a finding; confirmation-gated detectors never fall back to column names, and
+name-based shipped detectors are not gated by confirmations.
+
+**Execution (package 2; owner-confirmed target behavior, provisional until the
+execution package's own design restates it):** a run is identified by (analysis, relationship,
+confirmation version) and is idempotent. `check_status` is durable and an open,
+additive enum: `not_active`, `pending`, `queued`, `running`, `completed`,
+`superseded`, `failed`. `pending` means stored and not yet accepted by the
+in-memory executor; `queued` is set only after acceptance, so a persisted
+confirmation is never lost or falsely reported as queued when capacity is
+unavailable. At most one context run per analysis executes at a time, with one
+scheduled drain job per analysis; an internal, configurable cap on analyses with
+scheduled context work (default 20) applies backpressure without changing any
+semantics. An unstarted older version of the same relationship becomes
+`superseded`; a running older version may finish as historical evidence and never
+becomes current. On restart, `queued` and `running` runs return to `pending` and
+are rescheduled from durable state. This is a new recovery path for the new
+mechanism only; the existing analysis-job recovery is unchanged. Today's job pool
+has an unbounded in-memory queue, no per-analysis serialization and no job
+identity, which is why the execution package needs its own scheduler; its design
+must also state why the existing mechanism cannot be reused and the ordering rule
+between `delete_analysis` and a running drain job.
+
+**Privacy:** confirmations never enter an AI payload unless a later design opts
+them in; findings, observations and the summary carry no raw cell value and no
+column name beyond what a `ColumnReference` already exposes.
 
 ## 7. LLM trust boundary
 

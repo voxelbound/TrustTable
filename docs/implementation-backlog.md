@@ -837,6 +837,9 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > | Business-rule follow-up (status/date conflict) | named follow-up |
 >
 > **Dependency graph.** An edge `A -> B` means `A` must exist before `B` starts.
+> **Amended on 2026-10-04 (D-059): see `dependency_graph_amendment` in the
+> annotation below this one; it refines E1 and E3, and the lists in this
+> annotation are history, not current open items.**
 > The block below is the machine-readable form; automation must not propose a
 > slice with an unmet edge. Names in `needs`/`blocks` that are working titles
 > carry `id: pending` and are matched by title until identifiers are assigned.
@@ -886,6 +889,63 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > and type-inference verifications; migration exit condition; relationship of
 > ingest facts to parsing-warning codes; durable dataset identity) are **open**
 > and are not decided here.
+
+> **Annotation (2026-10-04, confirmed-context foundation design; `docs/decision-log.md`
+> D-059; documentation only, `DET-03` still in progress): PLAN CHANGE.** The
+> confirmed design splits the "Confirmed-context foundation" working title into
+> two ordered, planned work packages and folds the "Observation type" working
+> title into the second. **Nothing here is built, and neither package is
+> authorized yet.** Both belong to `DET-03` and are implementation-planned, not
+> implemented. Identifiers are assigned when each package is defined.
+>
+> | Order | Planned package | Delivers | Does not deliver |
+> |---|---|---|---|
+> | 1 (next) | Confirmed-relationship foundation | The persisted confirmed-relationship record (kind `start_end_date`), immutable versions with a stable relationship id, server-set provenance, confirm / replace / withdraw with version-aware writes, `POST` and `GET .../confirmed-relationships` (current projection plus history), the storage limits, the `delete_analysis` cascade; `POST` returns `check_status: "not_active"` | Any observation, any detector run, the gate, the summary; it does not claim context-bound detection is active |
+> | 2 | Context-bound execution | The minimal `NOT_CHECKED` observation and `GET .../observations`, the gate, the durable idempotent bounded second pass, the `start_end_date` detector, stale-result protection, the derived "awaiting confirmed context" summary, finding and run provenance bound to the confirmation version | The confirmation screen, observation dismissal and suppression, any other observation kind or relationship kind |
+>
+> **Gate.** Package 2 must not be authorized until two open design decisions are
+> made: what counts as a *conflicting* confirmation, and how the gate and the
+> derived summary treat a *withdrawn* relationship. Package 1 ships the withdraw
+> transition before the second decision, so that decision must not require a
+> different stored shape. One further owner question is open and affects package
+> 1: whether a withdrawal is exempt from the 50-versions-per-relationship cap
+> (as decided, a relationship at 50 versions can no longer be replaced or
+> withdrawn, and only deleting the analysis recovers it). Package 2's own design also
+> specifies the detector's severity and evidence cap, how a finding records its
+> confirmation version, the justification for a new scheduler beside the existing
+> job pool, and the ordering rule between `delete_analysis` and a running context
+> run.
+>
+> ```yaml
+> dependency_graph_amendment:
+>   schema: 1
+>   status: design-recorded-not-implemented
+>   refines_edges: [E1, E3]      # E1 and E3 are NOT dropped: E1 still holds for every observation producer other than NOT_CHECKED, and E3 holds per relationship kind; the original block above is history
+>   nodes:
+>     cc_package_1: {title: "Confirmed-relationship foundation", id: pending}
+>     cc_package_2: {title: "Context-bound execution", id: pending}
+>     conflicting_confirmation_decision: {title: "Define a conflicting confirmation", id: pending, kind: design-decision}
+>     withdrawn_relationship_decision: {title: "Gate and summary treatment of a withdrawn relationship", id: pending, kind: design-decision}
+>   edges:
+>     - {id: E9,  from: cc_package_1, to: cc_package_2}
+>     - {id: E10, from: conflicting_confirmation_decision, to: cc_package_2}
+>     - {id: E10b, from: withdrawn_relationship_decision, to: cc_package_2}
+>     - {id: E11, from: cc_package_2, to: "start date after end date detector"}
+>     - {id: E12, from: cc_package_2, to: "every other context-bound DET-03 slice, each adding its own relationship kind"}
+>     - {id: E1r, from: cc_package_2, to: "the first NOT_CHECKED observation (the observation type ships here with its first producer)"}
+>     - {id: E13, from: "a later observation-kind design", to: "any observation kind other than NOT_CHECKED, and observation dismissal and suppression"}
+>   notes:
+>     - "E1 still holds for every observation-emitting detector other than the NOT_CHECKED producer; only the NOT_CHECKED kind ships with package 2."
+>     - "E3 is satisfied per relationship kind, not once: each context-bound detector adds its own kind to the confirmed-relationship record."
+>     - "Name-based shipped detectors are not gated by confirmations; E4 (migration) still depends on confirmed roles and is unchanged."
+> ```
+>
+> The remaining open items stay open and are not decided here: what a conflicting
+> confirmation is, observation dismissal and suppression, the confirmation screen,
+> a durable cross-parse column identity, relationship kinds beyond `start_end_date`,
+> how the gate and the derived summary treat a *withdrawn* relationship (stale,
+> with a mandatory `NOT_CHECKED` observation, or the same as never confirmed),
+> and the migration of the name-based shipped detectors.
 
 ## PRIV-01 — Sensitive sample redaction
 
