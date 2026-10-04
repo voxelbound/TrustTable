@@ -47,20 +47,28 @@ class _EmptyConfig(BaseModel):
 
 _MAX_NAMES_SHOWN: Final[int] = 5
 _MAX_NAME_DISPLAY: Final[int] = 60
+#: Unicode general-category first letters kept in a name key: Letter, Number, Mark.
+_KEPT_CATEGORIES: Final[str] = "LNM"
 
 
 def _column_name_key(name: str) -> tuple[bool, str]:
     """The comparison key for a column name: compatibility-composed, casefolded
-    and reduced to its letters and digits (any script).
+    and reduced to its letters, digits and combining marks (any script).
 
     Deliberately *not* the CSV parser's ASCII-only internal key, which maps
     every non-Latin character to `_` and would make unrelated non-Latin names
-    collide. A name with no letter or digit at all (for example `?`) keeps
-    its exact text as the key, so only identical names group. Linear in the
-    name length; no regular expression runs over the (untrusted) name.
+    collide. Combining marks are kept because in many scripts (for example
+    Devanagari vowel signs, Thai tone marks, Arabic diacritics) they cannot be
+    composed into a base letter and they distinguish one name from another;
+    only punctuation, symbols, separators and control characters are dropped.
+    A name with no letter, digit or mark at all (for example `?`) keeps its
+    exact text as the key, so only identical names group. Linear in the name
+    length; no regular expression runs over the (untrusted) name.
     """
     folded = unicodedata.normalize("NFKC", name).casefold()
-    reduced = "".join(character for character in folded if character.isalnum())
+    reduced = "".join(
+        character for character in folded if unicodedata.category(character)[0] in _KEPT_CATEGORIES
+    )
     if reduced:
         return (True, reduced)
     return (False, name)
@@ -70,6 +78,8 @@ class DuplicateNormalizedColumnNameDetector:
     """`structural.duplicate_normalized_column_name` — flags two or more
     columns whose names are the same once case, spacing and punctuation are
     ignored (for example `Order ID` and `order_id`), one finding per group.
+    Names are compared by letters, digits and combining marks in any script
+    (see `_column_name_key`).
 
     Reads column names only (never a cell value) from the profile. A blank
     header reaches the profile as the parser-assigned `column_<n>` name, so

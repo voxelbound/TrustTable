@@ -334,7 +334,8 @@ The latter two may initially map to one detector with evidence subtypes.
 > a 20th detector is built and registered,
 > `structural.duplicate_normalized_column_name` (two or more columns whose names
 > are the same once case, spacing and punctuation are ignored; names are
-> compared as letters and digits in any script, not by the parser's ASCII key;
+> compared as letters, digits and combining marks in any script, not by the
+> parser's ASCII key;
 > column names only, never a cell value). Every other entry in the
 > lists above is **planned and not built**;
 > several need confirmed context or profile facts that do not exist yet.

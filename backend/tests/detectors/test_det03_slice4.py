@@ -109,10 +109,37 @@ def test_column_name_key_equates_names_that_differ_only_by_case_spacing_or_punct
         ("Order ID", "Order No"),
         ("?", "#"),  # nothing alphanumeric: only identical names group
         ("a", "b"),
+        # Combining marks distinguish names in scripts that cannot compose them
+        # into a base letter, so dropping them would merge unrelated names.
+        ("कि", "कु"),  # Devanagari ki versus ku
+        ("ไก่", "ไก"),  # Thai: with versus without a tone mark
+        ("كتب", "كَتَب"),  # Arabic: with fatha marks
+        ("é", "e"),  # a combining accent that composes to a different letter
     ],
 )
 def test_column_name_key_keeps_genuinely_different_names_apart(first: str, second: str) -> None:
     assert _column_name_key(first) != _column_name_key(second)
+
+
+@pytest.mark.parametrize(
+    "names",
+    [
+        ("कि", "कु"),  # Devanagari
+        ("ไก่", "ไก"),  # Thai
+        ("كتب", "كَتَب"),  # Arabic
+    ],
+)
+def test_detector_does_not_flag_names_that_differ_only_by_combining_marks(
+    names: tuple[str, ...],
+) -> None:
+    assert _run(names).findings == ()
+
+
+def test_combining_marks_do_not_hide_a_real_collision() -> None:
+    """The same marked name written with different punctuation still collides."""
+    (finding,) = _run(("कि-कु", "कि कु")).findings
+
+    assert [column.ordinal for column in finding.affected_columns] == [0, 1]
 
 
 # ---------------------------------------------------------------------------
