@@ -444,6 +444,23 @@ def test_near_duplicate_categories_not_available_and_never_ai_assisted() -> None
     assert extract_ai_assist_candidates(finding, evidence) is None
 
 
+def test_duplicate_normalized_column_name_not_available_and_never_ai_assisted() -> None:
+    """`DET-03` slice 4: no rule type expresses that column names are distinct,
+    and which name is right is the owner's choice."""
+    finding = make_finding(
+        "structural.duplicate_normalized_column_name",
+        category=DetectorCategory.STRUCTURAL,
+        columns=(col("order_id", 1), col("Order ID", 2)),
+    )
+    evidence = make_evidence({"column_count": 2, "ordinals": [1, 2], "identical_as_written": False})
+    proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
+    assert proposal is None
+    assert reason is not None and "structural.duplicate_normalized_column_name" in reason
+    assert "structural.duplicate_normalized_column_name" not in AI_ASSISTABLE_DETECTOR_IDS
+    assert "structural.duplicate_normalized_column_name" not in GENERATABLE_DETECTOR_IDS
+    assert extract_ai_assist_candidates(finding, evidence) is None
+
+
 def test_unmapped_generic_detector_not_available() -> None:
     """A detector id with no dedicated guidance template (the generic
     CONDITIONAL_RULE fallback) has no real WHEN/THEN semantics to derive."""

@@ -252,7 +252,7 @@ Every detector test suite includes:
 - empty dataset
 - empty column
 - unnamed column
-- duplicate normalized column name
+- duplicate normalized column name — **built** (`DET-03` slice 4)
 - exact duplicate rows
 - probable duplicate identifier
 - mixed types
@@ -328,7 +328,14 @@ The latter two may initially map to one detector with evidence subtypes.
 > such as zero-padded values and phone numbers are never read as numbers) and
 > `consistency.near_duplicate_categories` (category values that differ only by
 > punctuation or internal spacing; casing-only and outer-whitespace-only
-> differences stay with the existing detectors). Every other entry in the
+> differences stay with the existing detectors).
+>
+> **Annotation (2026-10-04, `DET-03` slice 4; `docs/decision-log.md` D-058):**
+> a 20th detector is built and registered,
+> `structural.duplicate_normalized_column_name` (two or more columns whose names
+> are the same once case, spacing and punctuation are ignored; names are
+> compared as letters and digits in any script, not by the parser's ASCII key;
+> column names only, never a cell value). Every other entry in the
 > lists above is **planned and not built**;
 > several need confirmed context or profile facts that do not exist yet.
 > `DET-03` is in progress, not complete.
@@ -340,7 +347,7 @@ D-057). It changes no code, tests, schemas or detector behavior. Items marked
 "open" are deliberately undecided.
 
 **Per-entry status.** Every catalogue entry has exactly one status:
-*implemented* (the 19 built detectors listed above), *planned* (stays in
+*implemented* (the 20 built detectors listed above), *planned* (stays in
 `DET-03`), or *moved* (removed from `DET-03` with a traceable note). Moved
 entries are never counted as completed, and `DET-03` completion language counts
 implemented entries only.
@@ -349,7 +356,8 @@ implemented entries only.
 |---|---|---|
 | invalid country/region values | **moved** | Moved, not dropped, into two separately named proposed capabilities: *standards policy* and *semantic category harmonization* (below). |
 | status/date conflict | **moved** | Moved into a named business-rule follow-up until a way to capture owner-stated categorical rules exists. |
-| unnamed column; duplicate normalized column name; empty dataset | planned | Findings (meaning-independent structural defects). Empty dataset only if zero-row handling is verified reachable (open). |
+| duplicate normalized column name | **implemented** (slice 4, D-058) | Finding; the 20th built detector. |
+| unnamed column; empty dataset | planned | Findings (meaning-independent structural defects). Unnamed column depends on the ingest-facts record; empty dataset only if zero-row handling is verified reachable (open). |
 | mixed types; inconsistent date formats; high-cardinality categories; unexpected rarity; concentrated missingness | planned | **Observations by default**, not findings. |
 | start date after end date; discount inconsistency; tax inconsistency; missing currency; conflicting stable attributes; probable duplicate identifier; identifier-like measure | planned | Context-bound; depend on the confirmed-context foundation. |
 | completeness change over time; distribution shift | planned | Context-bound and time-based; neutral observation unless a confirmed expectation is violated. |

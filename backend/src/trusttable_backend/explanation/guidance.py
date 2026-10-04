@@ -702,6 +702,44 @@ _TEMPLATES: Final[dict[str, _Template]] = {
         rule_type=ValidationRuleType.ACCEPTED_VALUES,
         rule_description="Values in {columns} should come from one agreed list of categories.",
     ),
+    "structural.duplicate_normalized_column_name": _Template(
+        impact=(
+            (
+                "Columns whose names read as the same name are easy to mix up, and a tool "
+                "that matches columns by name can pick the wrong one or merge them.",
+                "people or tools refer to these columns by name",
+            ),
+        ),
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Check whether {columns} are the same field exported twice or two different "
+                "fields, then give each column one distinct name in the source system."
+            ),
+            responsible_role="The person who maintains the export or the source system",
+            urgency="Before these columns are used in a report, join or import",
+            historical_correction_guidance=(
+                "Compare the values of {columns}, then rename or remove the extra column so "
+                "that every column has its own distinct name."
+            ),
+            source_system_prevention_guidance=(
+                "Give every column a distinct name in the export, so that names cannot be "
+                "confused by case, spacing or punctuation."
+            ),
+            risk_warning=(
+                "Two columns with similar names can hold different data, such as a billing "
+                "and a shipping value; confirm what each holds before removing or merging "
+                "one."
+            ),
+            verification_step=(
+                "Re-run this check and confirm each of these columns now has a distinct name."
+            ),
+        ),
+        rule_type=ValidationRuleType.CONDITIONAL_RULE,
+        rule_description=(
+            "Once you have decided which names are correct, define a rule that every "
+            "column name is distinct, including {columns}."
+        ),
+    ),
     "security.possible_llm_prompt_injection": _Template(
         impact=(
             (

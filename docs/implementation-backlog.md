@@ -794,6 +794,14 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > cross-field (discount, tax, start date after end date, status/date conflict,
 > missing currency) and the second and third AI-processing security checks.
 
+> **Annotation (2026-10-04, slice 4 of `DET-03`, item still in progress):**
+> `structural.duplicate_normalized_column_name` is built, registered and covered
+> by built-in guidance (`docs/decision-log.md` D-058); it proposes no rule, by
+> design. It is the entry the dependency graph below marks as needing no new
+> prerequisite. The catalogue has 20 detectors. In the list above, "duplicate
+> normalized column name" is no longer open; the other remaining entries are
+> unchanged and `DET-03` is not complete.
+
 > **Annotation (2026-10-02, design materialization; `docs/decision-log.md`
 > D-057; documentation only, `DET-03` still in progress):** the confirmed design
 > changes the shape of the remaining work. Nothing here is built.
