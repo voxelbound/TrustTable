@@ -339,6 +339,12 @@ Layers, kept distinct:
   organization-level configuration) is considered, not adopted; the model must
   stay extensible to it without changing detector contracts.
 
+**Open gate on the foundation package.** Package 1 is not fully design-complete and
+cannot be authorized until the owner decides whether a withdrawal is allowed when
+the relationship has already reached the 50-version cap (as recorded, such a
+relationship can no longer be replaced or withdrawn, and only deleting the analysis
+recovers it). This is undecided here.
+
 Still open after D-059: what counts as a *conflicting* confirmation and how the
 gate treats a *withdrawn* relationship (both to be decided before the execution
 package is authorized), whether withdrawal is exempt from the per-relationship

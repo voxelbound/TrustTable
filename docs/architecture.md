@@ -993,6 +993,10 @@ relationships, 50 versions per relationship, 500 versions per analysis); and the
 context-bound detection is active: its `POST` returns `201` or `200` with
 `check_status: "not_active"`, which never means a check passed.
 
+**Open gate on package 1:** package 1 is not fully design-complete and cannot be
+authorized until the owner decides whether a withdrawal is allowed when the
+relationship has already reached the 50-version cap. This is undecided here.
+
 **Package 2, context-bound execution** (planned): the minimal `NOT_CHECKED`
 observation with its read route; the gate; the asynchronous second pass bound to
 the exact confirmation version; the `start_end_date` detector; stale-result
