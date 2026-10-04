@@ -887,6 +887,53 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > ingest facts to parsing-warning codes; durable dataset identity) are **open**
 > and are not decided here.
 
+> **Annotation (2026-10-04, confirmed-context foundation design; `docs/decision-log.md`
+> D-059; documentation only, `DET-03` still in progress): PLAN CHANGE.** The
+> confirmed design splits the "Confirmed-context foundation" working title into
+> two ordered, planned work packages and folds the "Observation type" working
+> title into the second. **Nothing here is built, and neither package is
+> authorized yet.** Both belong to `DET-03` and are implementation-planned, not
+> implemented. Identifiers are assigned when each package is defined.
+>
+> | Order | Planned package | Delivers | Does not deliver |
+> |---|---|---|---|
+> | 1 (next) | Confirmed-relationship foundation | The persisted confirmed-relationship record (kind `start_end_date`), immutable versions with a stable relationship id, server-set provenance, confirm / replace / withdraw with version-aware writes, `POST` and `GET .../confirmed-relationships` (current projection plus history), the storage limits, the `delete_analysis` cascade; `POST` returns `check_status: "not_active"` | Any observation, any detector run, the gate, the summary; it does not claim context-bound detection is active |
+> | 2 | Context-bound execution | The minimal `NOT_CHECKED` observation and `GET .../observations`, the gate, the durable idempotent bounded second pass, the `start_end_date` detector, stale-result protection, the derived "awaiting confirmed context" summary, finding and run provenance bound to the confirmation version | The confirmation screen, observation dismissal and suppression, any other observation kind or relationship kind |
+>
+> **Gate.** Package 2 must not be authorized until the open design decision on
+> what counts as a *conflicting* confirmation is made. Package 2's own design also
+> specifies the detector's severity and evidence cap, how a finding records its
+> confirmation version, the justification for a new scheduler beside the existing
+> job pool, and the ordering rule between `delete_analysis` and a running context
+> run.
+>
+> ```yaml
+> dependency_graph_amendment:
+>   schema: 1
+>   status: design-recorded-not-implemented
+>   supersedes_edges: [E1, E3]   # E1 and E3 are refined below; the original block above is history
+>   nodes:
+>     cc_package_1: {title: "Confirmed-relationship foundation", id: pending}
+>     cc_package_2: {title: "Context-bound execution", id: pending}
+>     conflicting_confirmation_decision: {title: "Define a conflicting confirmation", id: pending, kind: design-decision}
+>   edges:
+>     - {id: E9,  from: cc_package_1, to: cc_package_2}
+>     - {id: E10, from: conflicting_confirmation_decision, to: cc_package_2}
+>     - {id: E11, from: cc_package_2, to: "start date after end date detector"}
+>     - {id: E12, from: cc_package_2, to: "every other context-bound DET-03 slice, each adding its own relationship kind"}
+>     - {id: E1r, from: cc_package_2, to: "the first NOT_CHECKED observation (the observation type ships here with its first producer)"}
+>     - {id: E13, from: "a later observation-kind design", to: "any observation kind other than NOT_CHECKED, and observation dismissal and suppression"}
+>   notes:
+>     - "E1 still holds for every observation-emitting detector other than the NOT_CHECKED producer; only the NOT_CHECKED kind ships with package 2."
+>     - "E3 is satisfied per relationship kind, not once: each context-bound detector adds its own kind to the confirmed-relationship record."
+>     - "Name-based shipped detectors are not gated by confirmations; E4 (migration) still depends on confirmed roles and is unchanged."
+> ```
+>
+> The remaining open items stay open and are not decided here: what a conflicting
+> confirmation is, observation dismissal and suppression, the confirmation screen,
+> a durable cross-parse column identity, relationship kinds beyond `start_end_date`,
+> and the migration of the name-based shipped detectors.
+
 ## PRIV-01 — Sensitive sample redaction
 
 Redact before prompt construction.

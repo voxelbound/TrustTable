@@ -288,18 +288,43 @@ Each field contains:
 
 ### Target design: confirmed context (proposed, not built; `docs/decision-log.md` D-057)
 
-This subsection states approved target direction, not current behavior. The
-current context model has only all-date-columns, all-numeric-columns and one
-dataset-level currency value. A named prerequisite item (the confirmed-context
-foundation) is to specify, at its own design: a fine-grained semantic role
-vocabulary; how confirmed roles are stored and versioned per dataset or analysis
-context, with the context version recorded by each detector run; provenance of
-every confirmation or correction (who, when, from which suggestion); detector
-applicability and gating; fail-closed behavior when context is stale or
-conflicting; and an explicit separation of *suggestion*, *confirmed role* and
-*detector applicability*. Roles must use a stable column identity, not a name.
-Whether the foundation extends or replaces `DatasetContext`, and how its tests
-and documents migrate, is open.
+This subsection states approved target direction, not current behavior; nothing
+in it is built. The current context model has only all-date-columns,
+all-numeric-columns and one dataset-level currency value. The confirmed-context
+foundation design is recorded in `docs/decision-log.md` D-059, which amends D-057
+on provenance and answers its open question about `DatasetContext`:
+
+- **A separate record.** Authoritative confirmed context is a *confirmed
+  relationship* record beside `DatasetContext`, not an extension or replacement.
+  It covers only the `start_end_date` kind, is read only by detectors, and leaves
+  `DatasetContext`, its confirmation states and the AI-facing `confirmed_context`
+  slot unchanged. `DatasetContext` stays the suggestion and AI layer; the
+  confirmed-relationship record never feeds `DatasetContext` fields, so detectors
+  read one authority. A confirmation never enters an AI payload unless a later
+  design opts it in.
+- **Scope and identity.** One analysis. Each relationship has a stable
+  relationship id within the analysis, separate from its immutable version
+  number, and each role points at a column by its `ColumnReference` internal key,
+  never by name. The parsed column set of an analysis is immutable, so a
+  re-parse or re-import is a different analysis and confirmations never carry
+  across.
+- **Versions.** A confirm, replace or withdraw is a new immutable version. The
+  detector run records the exact confirmation version it used, which satisfies
+  the invariant above. A result is stale when its version is no longer current;
+  earlier results stay visible and superseded.
+- **Provenance** is server-set only: version, server timestamp, and whether the
+  confirmation was entered directly or accepted from a named suggestion. The
+  earlier wording "who, when, from which suggestion" is superseded: no identity,
+  client or note field exists, because the system has no identity to record.
+- **Limits and lifetime.** At most 50 active relationships, 50 versions per
+  relationship and 500 versions in total per analysis. The record ends with its
+  analysis; `delete_analysis` must remove it, with its versions, observations and
+  run records.
+- **The gate.** Detector applicability and fail-closed behavior are specified in
+  the "Confirmed-relationship foundation (D-059)" subsection of
+  `docs/architecture.md` and in D-059: unresolved, incompatible, mixed-type, stale,
+  conflicting or invalid context is `NOT_CHECKED`, never a pass and never a
+  finding.
 
 Layers, kept distinct:
 
@@ -314,9 +339,10 @@ Layers, kept distinct:
   organization-level configuration) is considered, not adopted; the model must
   stay extensible to it without changing detector contracts.
 
-Open: the role vocabulary, storage and versioning schema, stable column identity,
-conflict and stale-context rules, the expectation-capture mechanism and the
-detector interface.
+Still open after D-059: what counts as a *conflicting* confirmation (to be decided
+before the execution package is authorized), role kinds beyond `start_end_date`,
+the expectation-capture mechanism, a durable cross-parse column identity, and how
+tests and documents migrate if the two context models are ever merged.
 
 ## 9. ContextHypothesis
 

@@ -196,6 +196,20 @@ Deliver:
 > 20 detectors. `DET-03` is still in progress and the rest of
 > `docs/detector-framework.md` §16 is planned; no scope is added to this
 > milestone.
+>
+> **Annotation (2026-10-04, `docs/decision-log.md` D-059, documentation only):
+> PLAN CHANGE within `DET-03`; no scope is added to or removed from this
+> milestone.** The confirmed design for the confirmed-context foundation is
+> recorded. `DET-03` gains two ordered, planned work packages, neither built nor
+> yet authorized: first the *confirmed-relationship foundation* (a stored,
+> versioned, per-analysis record of user-confirmed start/end date relationships
+> with read and write routes; it does not make any check run), then
+> *context-bound execution* (the first context-bound detector, start date after
+> end date, with its `NOT_CHECKED` observation and a durable, bounded, idempotent
+> second pass). The second package is not authorized until the open decision on
+> what counts as a conflicting confirmation is made. The confirmation screen and
+> any further relationship kinds are later work with no milestone placement.
+> `DET-03` is still in progress and is not claimed complete.
 
 Production definition:
 
