@@ -914,7 +914,7 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > dependency_graph_amendment:
 >   schema: 1
 >   status: design-recorded-not-implemented
->   supersedes_edges: [E1, E3]   # E1 and E3 are refined below; the original block above is history
+>   refines_edges: [E1, E3]      # E1 and E3 are NOT dropped: E1 still holds for every observation producer other than NOT_CHECKED, and E3 holds per relationship kind; the original block above is history
 >   nodes:
 >     cc_package_1: {title: "Confirmed-relationship foundation", id: pending}
 >     cc_package_2: {title: "Context-bound execution", id: pending}
@@ -935,6 +935,8 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > The remaining open items stay open and are not decided here: what a conflicting
 > confirmation is, observation dismissal and suppression, the confirmation screen,
 > a durable cross-parse column identity, relationship kinds beyond `start_end_date`,
+> how the gate and the derived summary treat a *withdrawn* relationship (stale,
+> with a mandatory `NOT_CHECKED` observation, or the same as never confirmed),
 > and the migration of the name-based shipped detectors.
 
 ## PRIV-01 — Sensitive sample redaction
