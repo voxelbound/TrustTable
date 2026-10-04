@@ -190,6 +190,12 @@ Deliver:
 > name-based detectors (`line_total_mismatch`, `invalid_percentages`; review of
 > `invalid_email_shape`) is open; until they migrate, the standing principle that
 > column names never define business meaning is partly unmet by shipped code.
+>
+> **Update (2026-10-04, `docs/decision-log.md` D-058):** `DET-03` slice 4 adds
+> `structural.duplicate_normalized_column_name`, bringing the built catalogue to
+> 20 detectors. `DET-03` is still in progress and the rest of
+> `docs/detector-framework.md` §16 is planned; no scope is added to this
+> milestone.
 
 Production definition:
 

@@ -674,3 +674,21 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 **Explicit non-scope:** no code, test, schema, migration, API or detector-behavior change; no placement of the new capabilities in the release plan as committed scope; no decision on any open item above.
 
 **Decided by:** the human owner, through the confirmed design session; recorded under work package WP-103 as a docs-only materialization. Reviewer routing: product, architecture and QA review of this package.
+
+## D-058 — `DET-03` slice 4 adds duplicate normalized column names; names are compared as letters and digits in any script, not by the parser's ASCII key
+
+**Decision (2026-10-04):**
+
+1. **Slice 4 is the one remaining entry the dependency graph marks as needing nothing new.** `structural.duplicate_normalized_column_name` flags two or more columns whose names are the same once case, spacing and punctuation are ignored (`Order ID` and `order_id`, or two identical names). It reads column names from the profile only, never a cell value, and is a finding because a name collision is a meaning-independent structural defect (D-057).
+2. **Names are compared as letters, digits and combining marks in any script.** The key is the name after Unicode compatibility composition and case folding, keeping letters, digits and combining marks and dropping punctuation, symbols, separators and control characters. It is deliberately not the CSV parser's internal key: that key keeps only `a-z` and `0-9`, so every non-Latin character becomes `_` and unrelated headers such as `名前` and `価格` collide there (the parser renames the second to `column_2`). They are different names and are not flagged; a test pins this against real parser output. Combining marks are kept because in scripts such as Devanagari, Thai and Arabic they cannot be composed into a base letter and they distinguish one name from another (dropping them would merge `कि` and `कु`); a fresh-context review of the first implementation found exactly that defect, and tests now pin it. A name with no letter, digit or mark at all (for example `?`) groups only with an identical name.
+3. **One finding per colliding group.** The finding names every column in the group (at most five shown, each truncated to 60 characters), lists all of them as affected columns, and carries no row references. Severity is `medium`, because tools that match columns by name can pick the wrong one; confidence is `1.0` when the names are identical as written and `0.9` when they match only after normalization.
+4. **No regular expression runs over untrusted names**, and a test runs 500 columns and a 1,000,000-character name in linear time.
+5. **Rule outcome is stated.** No rule is proposed: no rule type expresses that column names are distinct (`unique` is a rule over row values) and which name is right is the owner's choice. The detector has authored built-in guidance. The deterministic rule set stays at 11 detectors.
+6. **Limitation, disclosed.** A blank header reaches the profile as the parser-assigned `column_<n>` name, so it can collide only with a real header of that exact shape. Blank headers themselves stay with the later unnamed-column detector, which depends on the ingest-facts record. The parser's existing duplicate-name warning is unchanged.
+7. **`DET-03` stays in progress.** The catalogue has 20 detectors. The rest of `docs/detector-framework.md` §16 is planned.
+
+**Alternatives considered:** reusing the parser's internal key (flags unrelated non-Latin headers); comparing exact text only (misses `Order ID` versus `order_id`, which is the common export mistake); one finding per column (the same collision would be reported twice); proposing a uniqueness rule (no rule type fits).
+
+**Explicit non-scope:** no other `DET-03` detector, no unnamed-column detector, no parser, parsing-warning, ingest-fact or profile change, no confirmed-context detector, no AI change, no frontend change.
+
+**Decided by:** delegated implementation authority under the active work package, implementing the documented detector contract and the D-057 design.

@@ -76,6 +76,9 @@ explicit outcome here instead of silently falling to the generic reply:
 - `consistency.near_duplicate_categories` has no mapping: which spelling is
   canonical is the owner's choice, as for `inconsistent_booleans`, and it is
   not on the AI-assisted list.
+- `structural.duplicate_normalized_column_name` has no mapping: no rule type
+  expresses that column *names* are distinct (`UNIQUE` is a rule over row
+  values), and which name is the right one is the owner's choice.
 - `validity.invalid_email_shape` has no mapping: a `REGEX` rule names the
   *disallowed* condition, so a faithful shape check would be one negative
   pattern with nested quantifiers over values up to

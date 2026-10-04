@@ -86,6 +86,7 @@ def test_the_table_covers_every_registered_detector_exactly() -> None:
         "validity.invalid_email_shape",
         "consistency.numeric_values_stored_as_text",
         "consistency.near_duplicate_categories",
+        "structural.duplicate_normalized_column_name",
     } <= GUIDED_DETECTOR_IDS
 
 
