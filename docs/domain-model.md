@@ -455,8 +455,10 @@ observation). A finding with no recorded review is implicitly
 An *Observation* is a first-class, typed, immutable object, separate from
 `Finding` by construction. It states only facts observable in the data, makes no
 claim that a business role is true, never affects trust scoring, may suggest a
-possible interpretation or role, and can be dismissed or suppressed (dismissal
-and suppression never delete provenance or history). Scoring sees only findings;
+possible interpretation or role, and is intended to be dismissible or
+suppressible (dismissal and suppression never delete provenance or history; they
+are a later design, and `docs/decision-log.md` D-059 ships the first observation
+kind read-only and without dismissal). Scoring sees only findings;
 reports and APIs keep the two types separate. An observation is never promoted,
 mutated or converted into a finding; a later finding is a new object with its
 own identity, provenance and evidence, and the observation stays unchanged.
@@ -467,9 +469,14 @@ standards-advisory and equivalence-suggestion. Each producer declares its kind,
 source and provenance, scope, whether evidence is complete-file or sampled,
 dismissal and suppression behavior, whether it may suggest a role or action, and
 whether it is purely informational. Processing-limit observations are analysis
-provenance, not problems with the user's data. Open: the final vocabulary and
-its persistence and API surface; only kinds that have a producer ship, and
-persistence stays open until two producers exist.
+provenance, not problems with the user's data. Open: the final vocabulary. Only
+kinds that have a producer ship. D-059 narrows the earlier "persistence stays open
+until two producers exist" for one kind only: `NOT_CHECKED` is stored per analysis
+and read through a read-only route, shipped with its first producer (the
+start-date-after-end-date detector). It is never created when a role was simply
+never confirmed; the analysis summary then carries a derived count that is not
+persisted and is not an observation. Every other kind, and dismissal and
+suppression, remain open.
 
 ### Target design: ingest-facts record (proposed, not built)
 
