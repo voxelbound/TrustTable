@@ -988,8 +988,8 @@ shipped behavior until it merges.
 
 **Package 1, the foundation** (built, `docs/decision-log.md` D-060): a persisted
 confirmed-relationship record (`confirmed_relationship_versions`, migration
-`0007`) with immutable versions and a stable relationship id; server-set
-provenance; confirm, replace and withdraw transitions with version-aware writes;
+`0007`) with immutable versions and a stable relationship id; a server-assigned
+version and timestamp plus a client-asserted, unverified `source`; confirm, replace and withdraw transitions with version-aware writes;
 `GET` of the current projection and its history; the storage limits (50 active
 relationships, 50 versions per relationship, 500 versions per analysis); and the
 `delete_analysis` cascade. It ships no observation and does not claim that

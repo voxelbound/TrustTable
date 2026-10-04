@@ -407,8 +407,9 @@ gate to judge.
 
 Returns every relationship in the order it first appeared, each with its `state`,
 `check_status`, `current` version and the full ordered `history` of versions.
-Provenance on each version is server-set only: the version, `recorded_at` and
-`source`. The access model is that of every other analysis route: the analysis id
+Each version carries a server-assigned version number and `recorded_at`, and a
+`source` that is the client's own assertion and is not verified; there is no
+identity field. The access model is that of every other analysis route: the analysis id
 is the only capability. The records end with the analysis (`DELETE
 /analyses/{analysis_id}` removes them).
 

@@ -1345,8 +1345,9 @@ export type ReadinessResponse = {
 /**
  * RelationshipVersionModel
  *
- * One immutable version. Provenance is server-set only: the version
- * number, a server timestamp and the entry source.
+ * One immutable version. The version number and `recorded_at` are set by
+ * the server; `source` is the client's own assertion (`direct` or
+ * `suggestion`) and is not verified provenance. There is no identity field.
  */
 export type RelationshipVersionModel = {
     end: RoleColumnModel;

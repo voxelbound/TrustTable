@@ -342,7 +342,8 @@ Layers, kept distinct:
 
 **Built (package 1, `docs/decision-log.md` D-060).** The stored record exists:
 immutable versions of a user-stated `start_end_date` relationship, with a stable
-relationship id, server-set provenance, version-aware confirm, replace and
+relationship id, a server-assigned version and timestamp with a client-asserted,
+unverified `source`, version-aware confirm, replace and
 withdraw writes, a read of the current projection and history, the three limits,
 and deletion with the analysis. Nothing reads it yet: there is no gate, no
 observation and no detector, and `check_status` is always `not_active`, which
