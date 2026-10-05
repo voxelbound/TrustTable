@@ -504,9 +504,12 @@ enforces that exclusion. Dismissal, suppression, history and every other kind st
 open. The route and response schema the foundation adds are provisional and are
 recorded in `docs/api-specification.md` by that package.
 
-The ingest-facts record below stays proposed and not built. `DET-03` delivers only
-an immutable, in-memory projection of four existing parser-warning codes for two
-detectors; it is not persisted, not exposed and not the record described below.
+The ingest-facts record below stays proposed and not built. `DET-03` closure package 1
+delivered only an immutable, in-memory projection of four existing parser-warning
+codes for two detectors (built, `docs/decision-log.md` D-062); it is not persisted,
+not exposed and not the record described below. Each parsing warning now also
+carries an occurrence `count` (default 1) so that an aggregate warning, such as the
+XLSX cell totals, is never read from its message.
 
 ### Target design: ingest-facts record (proposed, not built)
 

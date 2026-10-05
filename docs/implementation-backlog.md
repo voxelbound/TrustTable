@@ -986,7 +986,7 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > | # | Package | Delivers | Count after |
 > |---|---|---|---|
 > | 0 | Re-scope materialization (documentation only) | This record | 20 |
-> | 1 | Structural and ingest closure | Zero-row and header-only investigation, then `structural.empty_dataset` or a regression proof that it is parser-owned; an immutable in-memory parser-warning projection limited to four warning codes; `structural.unnamed_column`; `structural.excessive_parse_failures`. No persisted ingest-facts record | 23 (22 if parser-owned) |
+> | 1 | Structural and ingest closure | Zero-row and header-only investigation, then `structural.empty_dataset` or a regression proof that it is parser-owned; an immutable in-memory parser-warning projection limited to four warning codes; `structural.unnamed_column`; `structural.excessive_parse_failures`. No persisted ingest-facts record | 23 (22 if parser-owned) — **built; the empty case is detector-owned, so 23 (D-062)** |
 > | 2 | Observation and value-evidence slice | The minimal Observation foundation, a read-only API and a read-only results-UI list; `structural.mixed_types`, `consistency.inconsistent_date_formats`, `completeness.concentrated_missingness` | 26 (25) |
 > | 3 | Security detector slice | The adversarial suite extended first; one detector for possible data-exfiltration instruction and suspicious secret-request text as two evidence subtypes; bounded, redacted evidence; "possible risk" wording; the Security Reviewer review | 27 (26) |
 > | 4 | `DET-03` closure | An executable catalogue-status check against the 41-entry table; document and count reconciliation; the closure report | 27 (26) |
@@ -1035,6 +1035,21 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 >
 > **Successor items** are listed in the group "Successor items carried out of
 > `DET-03`" at the end of this file. Their milestone placement is open.
+>
+> **Annotation (2026-10-05, closure package 1 built; `docs/decision-log.md`
+> D-062; `DET-03` still in progress):** closure package 1 is built. The zero-row
+> investigation found that parsers accept a header-only CSV or worksheet, so the
+> empty case is detector-owned and the "26 registered detectors" alternative above no
+> longer applies; the target stays **27 registered detectors covering 28 of 41
+> entries**. Registered today: **23**. Built: `structural.empty_dataset`,
+> `structural.unnamed_column` and `structural.excessive_parse_failures`, with the
+> in-memory four-code ingest-facts projection behind a default-off metadata flag. No
+> persisted ingest-facts record, Observation, confirmed-context execution, scheduler
+> or `NOT_CHECKED` work was built, and no detector reads confirmed relationships.
+> Packages 2 to 4 remain planned and are not authorized by this package. The
+> catalogue is not complete. Open for the owner at closure: whether
+> `structural.empty_column` should skip a zero-row dataset so that the empty case is
+> reported once (D-062 item 9).
 >
 > ```yaml
 > dependency_graph_closure:

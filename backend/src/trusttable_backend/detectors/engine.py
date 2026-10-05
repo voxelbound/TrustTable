@@ -21,6 +21,7 @@ from datetime import datetime
 
 from pydantic import ValidationError
 
+from ..domain.ingest_facts import IngestFacts
 from ..domain.value_objects import RowReference
 from ..profiling.schemas import DatasetProfile
 from .contract import (
@@ -71,6 +72,25 @@ def _skipped_result(detector: Detector) -> DetectorRunResult:
     )
 
 
+def _skipped_ingest_facts_absent_result(detector: Detector) -> DetectorRunResult:
+    """A detector that requires ingest facts is skipped, never run and never
+    passed, when the caller supplied none (D-061 item 8a)."""
+    return DetectorRunResult(
+        detector_id=detector.metadata.detector_id,
+        detector_version=detector.metadata.version,
+        status=DetectorRunStatus.SKIPPED,
+        findings=(),
+        evidence=(),
+        warnings=(
+            DetectorWarning(
+                code="detector.skipped_ingest_facts_absent",
+                message=(f"{detector.metadata.detector_id} skipped: no ingest facts were provided"),
+            ),
+        ),
+        execution_metrics=ExecutionMetrics(duration_ms=0),
+    )
+
+
 def run_detectors(
     detectors: Sequence[Detector],
     *,
@@ -81,6 +101,7 @@ def run_detectors(
     security_exposure: SecurityExposureState,
     analysis_timestamp: datetime,
     configuration_overrides: Mapping[str, Mapping[str, object]] | None = None,
+    ingest_facts: IngestFacts | None = None,
 ) -> tuple[DetectorRunResult, ...]:
     """Run `detectors` in the given (deterministic) order, returning one
     `DetectorRunResult` per detector in the same order.
@@ -90,7 +111,9 @@ def run_detectors(
     detector that does not request raw rows receives empty `rows`/
     `row_references` tuples regardless of what the caller supplied, and a
     detector that does not request confirmed context always receives
-    `None`.
+    `None`. Likewise a detector receives `ingest_facts` only when it declares
+    `requires_ingest_facts`, and is skipped (never run) when it does and none
+    were supplied.
     """
     if len(rows) != len(row_references):
         raise ValueError("run_detectors: rows and row_references must have the same length")
@@ -100,10 +123,15 @@ def run_detectors(
 
     for detector in detectors:
         metadata = detector.metadata
+        if metadata.requires_ingest_facts and ingest_facts is None:
+            results.append(_skipped_ingest_facts_absent_result(detector))
+            continue
+        detector_facts = ingest_facts if metadata.requires_ingest_facts else None
         support_request = DetectorSupportRequest(
             dataset_profile=dataset_profile,
             confirmed_context=(confirmed_context if metadata.requires_confirmed_context else None),
             security_exposure=security_exposure,
+            ingest_facts=detector_facts,
         )
 
         start = time.perf_counter()
@@ -138,6 +166,7 @@ def run_detectors(
             configuration=validated_configuration,
             analysis_timestamp=analysis_timestamp,
             security_exposure=security_exposure,
+            ingest_facts=detector_facts,
         )
 
         start = time.perf_counter()

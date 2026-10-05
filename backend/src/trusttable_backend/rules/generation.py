@@ -79,6 +79,12 @@ explicit outcome here instead of silently falling to the generic reply:
 - `structural.duplicate_normalized_column_name` has no mapping: no rule type
   expresses that column *names* are distinct (`UNIQUE` is a rule over row
   values), and which name is the right one is the owner's choice.
+- `structural.empty_dataset`, `structural.unnamed_column` and
+  `structural.excessive_parse_failures` have no mapping: each describes the
+  shape of the file as exported (no data rows, a blank header cell, rows or
+  cells the parser could not read), which no rule over row values can
+  express, and the fix belongs in the export, not in a data rule. None is on
+  the AI-assisted list.
 - `validity.invalid_email_shape` has no mapping: a `REGEX` rule names the
   *disallowed* condition, so a faithful shape check would be one negative
   pattern with nested quantifiers over values up to

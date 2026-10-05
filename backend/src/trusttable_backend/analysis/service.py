@@ -104,6 +104,7 @@ from ..domain.clarification import (
 from ..domain.context import ConfirmationState, ContextField, ContextFieldValue, DatasetContext
 from ..domain.evidence import Evidence
 from ..domain.explanation import ValidationRuleType
+from ..domain.ingest_facts import project_ingest_facts
 from ..domain.parsing import Dataset, DatasetFormat, DatasetSourceType
 from ..domain.review import FindingReview, FindingReviewState
 from ..domain.row_context import RowContextEntry, RowContextWindow
@@ -852,6 +853,7 @@ def run_analysis(
             confirmed_context=None,
             security_exposure=analysis.security_exposure,
             analysis_timestamp=effective_now,
+            ingest_facts=project_ingest_facts(parsed.parsed_dataset),
         )
         findings = tuple(finding for result in results for finding in result.findings)
         evidence = tuple(item for result in results for item in result.evidence)

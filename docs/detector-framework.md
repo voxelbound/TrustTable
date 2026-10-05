@@ -32,6 +32,7 @@ Every detector defines:
 - required profile fields
 - whether raw rows are required
 - whether confirmed context is required
+- whether ingest facts are required (additive; defaults to no; `docs/decision-log.md` D-062)
 - default configuration
 - performance classification
 - documented limitations
@@ -63,6 +64,10 @@ A detector receives only the inputs it declares:
 - bounded source columns or rows
 - row-reference mapping
 - confirmed context
+- ingest facts (optional and only if declared: an immutable, in-memory projection of
+  four parser warning codes holding counts and bounded references, never a parser
+  message or a cell value; a detector that requires them is skipped, never run,
+  when none are supplied)
 - detector configuration
 - analysis timestamp
 - security exposure state
@@ -249,14 +254,14 @@ Every detector test suite includes:
 
 ### Structural
 
-- empty dataset
+- empty dataset — **built** (`DET-03` closure package 1)
 - empty column
-- unnamed column
+- unnamed column — **built** (`DET-03` closure package 1)
 - duplicate normalized column name — **built** (`DET-03` slice 4)
 - exact duplicate rows
 - probable duplicate identifier
 - mixed types
-- excessive parse failures
+- excessive parse failures — **built** (`DET-03` closure package 1)
 
 ### Completeness
 
@@ -348,6 +353,17 @@ The latter two may initially map to one detector with evidence subtypes.
 > the detector count is unchanged at 20.** Its `check_status` is always
 > `not_active`, which never means a check passed. The context-bound entries below
 > stay **planned and not built**.
+>
+> **Annotation (2026-10-05, `DET-03` closure package 1; `docs/decision-log.md`
+> D-062):** three detectors are built and registered, bringing the catalogue to 23:
+> `structural.empty_dataset` (a header with no data rows; the parsers accept such a
+> file, so detector execution owns the case), `structural.unnamed_column` (blank
+> header cells) and `structural.excessive_parse_failures` (an excessive share of rows
+> with the wrong number of fields, or of XLSX cells read as empty or holding an error
+> value). The last two read only the in-memory four-code ingest-facts projection;
+> nothing is persisted or exposed, and no detector reads a parser message or a cell
+> value. None proposes a validation rule. **`DET-03` is in progress, not complete**;
+> the catalogue is not complete.
 
 ### Design outcome (2026-10-02, documentation only)
 
@@ -527,27 +543,29 @@ detection is active for it.
 
 **Target:** 27 registered detectors covering 28 of the 41 catalogue entries. One
 planned security detector covers two entries (data-exfiltration instruction and
-suspicious secret-request text), which is why detectors and entries differ. If the
-empty-dataset case is conclusively parser-owned and terminal before detector
-execution, the target is 26 registered detectors covering 27 entries; that outcome
-is decided by the package-1 investigation and this document stays conditional until
-then. 13 entries are carried by named successor items. No entry is dropped.
+suspicious secret-request text), which is why detectors and entries differ. The
+package-1 investigation (D-062) found that the empty-dataset case is **not**
+parser-owned, so the 26-detector alternative no longer applies and the target stays
+27 detectors covering 28 entries. 13 entries are carried by named successor items.
+No entry is dropped.
 
-**Dispositions.** BUILT: registered today (20). BUILT BY CLOSURE: planned for
-`DET-03` closure, not built (8 entries, 7 detectors). MOVED: carried by a named
-successor item (11). MOVED PREVIOUSLY: moved by D-057 (2). 20 + 8 + 11 + 2 = 41.
-Planned detector names below are working names; each is fixed in its own package.
+**Dispositions.** BUILT: registered before closure (20). BUILT BY CLOSURE: planned
+for `DET-03` closure (8 entries, 7 detectors), of which closure package 1 has built 3
+entries and 3 detectors (D-062) and 5 entries and 4 detectors are **still not built**.
+MOVED: carried by a named successor item (11). MOVED PREVIOUSLY: moved by D-057 (2).
+20 + 8 + 11 + 2 = 41. **Registered today: 23 detectors.** Names of detectors not yet
+built below are working names; each is fixed in its own package.
 
 | # | Catalogue entry | Disposition | Detector or carrier |
 |---|---|---|---|
-| 1 | empty dataset | BUILT BY CLOSURE (conditional) | `structural.empty_dataset`; if parser-owned, a regression-tested pre-detection outcome and no detector |
+| 1 | empty dataset | BUILT BY CLOSURE (built, package 1) | `structural.empty_dataset` (the parsers accept a header-only file, so detector execution owns the case; D-062) |
 | 2 | empty column | BUILT | `structural.empty_column` |
-| 3 | unnamed column | BUILT BY CLOSURE | `structural.unnamed_column` |
+| 3 | unnamed column | BUILT BY CLOSURE (built, package 1) | `structural.unnamed_column` |
 | 4 | duplicate normalized column name | BUILT | `structural.duplicate_normalized_column_name` |
 | 5 | exact duplicate rows | BUILT | `structural.exact_duplicate_rows` |
 | 6 | probable duplicate identifier | MOVED | DET-04 (observation form), DET-05 (finding form) |
 | 7 | mixed types | BUILT BY CLOSURE | `structural.mixed_types` (observation) |
-| 8 | excessive parse failures | BUILT BY CLOSURE | `structural.excessive_parse_failures` |
+| 8 | excessive parse failures | BUILT BY CLOSURE (built, package 1) | `structural.excessive_parse_failures` |
 | 9 | excessive missing values | BUILT | `completeness.excessive_missing_values` |
 | 10 | missing likely identifier | BUILT | `completeness.missing_likely_identifier` |
 | 11 | fully empty rows | BUILT | `completeness.fully_empty_rows` |
@@ -583,13 +601,14 @@ Planned detector names below are working names; each is fixed in its own package
 | 41 | suspicious secret-request text | BUILT BY CLOSURE | the same detector as #40 (evidence subtype) |
 
 Counts: BUILT 20 entries and 20 detectors; BUILT BY CLOSURE 8 entries and 7
-detectors; MOVED 11; MOVED PREVIOUSLY 2. Entries #6 and #32 each have an observation
+detectors (3 entries and 3 detectors built by package 1, 5 entries and 4 detectors
+not yet built); MOVED 11; MOVED PREVIOUSLY 2. Entries #6 and #32 each have an observation
 form (DET-04) and a later confirmed-finding form (DET-05); they are counted once, as
 MOVED.
 
-**Closure packages (planned).** Package 1, structural and ingest closure: the
-zero-row and header-only investigation, then `structural.empty_dataset` or its
-regression proof; an immutable, in-memory parser-warning projection limited to four
+**Closure packages (package 1 built, packages 2 to 4 planned).** Package 1,
+structural and ingest closure, **built** (D-062): the zero-row and header-only
+investigation, then `structural.empty_dataset`; an immutable, in-memory parser-warning projection limited to four
 codes (`parsing.empty_column_name`, `parsing.ragged_row`,
 `parsing.xlsx_formula_without_cached_value`, `parsing.xlsx_error_value`) carrying
 counts and bounded references only, never a message or a cell value, and reaching a

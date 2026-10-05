@@ -25,9 +25,11 @@ this list additively to 13/13, the required
 adds `ImplausiblyOldDatesDetector` and `InvalidEmailShapeDetector`, bringing
 it to 17; slice 3 (`WP-102`) adds `NumericValuesStoredAsTextDetector` and
 `NearDuplicateCategoriesDetector`, bringing it to 19; slice 4 (`WP-104`) adds
-`DuplicateNormalizedColumnNameDetector`, bringing it to 20. `DET-03` is
-delivered in slices; the rest of `docs/detector-framework.md` §16 is not built
-yet.
+`DuplicateNormalizedColumnNameDetector`, bringing it to 20. Closure package 1
+(`WP-108`, D-061) adds `EmptyDatasetDetector`, `UnnamedColumnDetector` and
+`ExcessiveParseFailuresDetector`, bringing it to 23; the last two read only the
+in-memory ingest-facts projection. `DET-03` is delivered in packages; the rest
+of `docs/detector-framework.md` §16 is not built yet.
 """
 
 from __future__ import annotations
@@ -51,7 +53,10 @@ from .statistical import ExtremeOutliersDetector, SuspiciouslyConstantColumnDete
 from .structural import (
     DuplicateNormalizedColumnNameDetector,
     EmptyColumnDetector,
+    EmptyDatasetDetector,
     ExactDuplicateRowsDetector,
+    ExcessiveParseFailuresDetector,
+    UnnamedColumnDetector,
 )
 from .validity import (
     FutureDatesDetector,
@@ -83,5 +88,8 @@ DETECTORS = register_detectors(
         NumericValuesStoredAsTextDetector(),
         NearDuplicateCategoriesDetector(),
         DuplicateNormalizedColumnNameDetector(),
+        EmptyDatasetDetector(),
+        UnnamedColumnDetector(),
+        ExcessiveParseFailuresDetector(),
     ]
 )

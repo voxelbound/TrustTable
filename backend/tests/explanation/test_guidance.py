@@ -87,6 +87,9 @@ def test_the_table_covers_every_registered_detector_exactly() -> None:
         "consistency.numeric_values_stored_as_text",
         "consistency.near_duplicate_categories",
         "structural.duplicate_normalized_column_name",
+        "structural.empty_dataset",
+        "structural.unnamed_column",
+        "structural.excessive_parse_failures",
     } <= GUIDED_DETECTOR_IDS
 
 
