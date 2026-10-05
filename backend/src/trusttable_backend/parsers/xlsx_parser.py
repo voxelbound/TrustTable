@@ -935,6 +935,7 @@ class _SheetHandler(_XmlHandler):
                             f"{self._formula_without_value} formula cell(s) had no stored "
                             "result and were read as empty; formulas are never evaluated"
                         ),
+                        count=self._formula_without_value,
                     )
                 )
             if self._error_values:
@@ -945,6 +946,7 @@ class _SheetHandler(_XmlHandler):
                             f"{self._error_values} cell(s) held a spreadsheet error value "
                             "and were read as that literal text"
                         ),
+                        count=self._error_values,
                     )
                 )
         return _SheetResult(

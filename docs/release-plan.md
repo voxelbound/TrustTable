@@ -228,6 +228,14 @@ Deliver:
 > after this documentation record, in the order the backlog records, and is not
 > claimed complete here. The unresolved decisions about a conflicting confirmation
 > and a withdrawn relationship stay open and are not decided by this change.
+>
+> **Update (2026-10-05, `docs/decision-log.md` D-062):** closure package 1 adds
+> `structural.empty_dataset`, `structural.unnamed_column` and
+> `structural.excessive_parse_failures`, bringing the built catalogue to 23
+> detectors. The investigation found the empty case is detector-owned, so the
+> closure target is 27 detectors covering 28 of 41 entries and the 26-detector
+> alternative no longer applies. `DET-03` is still in progress; the catalogue is not
+> complete; no scope is added to this milestone.
 
 Production definition:
 

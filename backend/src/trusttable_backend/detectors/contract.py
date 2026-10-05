@@ -25,6 +25,7 @@ from typing import Protocol
 from pydantic import BaseModel
 
 from ..domain.evidence import Evidence
+from ..domain.ingest_facts import IngestFacts
 from ..domain.value_objects import ColumnReference, RowReference, Severity
 from ..profiling.schemas import DatasetProfile, InferredColumnType
 
@@ -75,6 +76,11 @@ class DetectorMetadata:
     default_configuration: Mapping[str, object]
     performance_class: PerformanceClass
     documented_limitations: tuple[str, ...]
+    #: Additive, default off (`DET-03` closure package 1, D-061 item 8a): a
+    #: detector that sets this receives the in-memory `IngestFacts` projection
+    #: of four parser warnings. When the engine has no facts, the detector is
+    #: skipped, never run without them.
+    requires_ingest_facts: bool = False
 
     def __post_init__(self) -> None:
         if not self.detector_id:
@@ -143,6 +149,7 @@ class DetectorSupportRequest:
     dataset_profile: DatasetProfile
     confirmed_context: Mapping[str, object] | None
     security_exposure: SecurityExposureState
+    ingest_facts: IngestFacts | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,6 +167,7 @@ class DetectorRunRequest:
     configuration: Mapping[str, object]
     analysis_timestamp: datetime
     security_exposure: SecurityExposureState
+    ingest_facts: IngestFacts | None = None
 
     def __post_init__(self) -> None:
         if len(self.rows) != len(self.row_references):

@@ -15,6 +15,8 @@ from __future__ import annotations
 import re
 from datetime import date
 
+import pytest
+
 from trusttable_backend.detectors.contract import DetectorCategory, FindingCandidate
 from trusttable_backend.domain.evidence import Evidence, EvidenceType
 from trusttable_backend.domain.explanation import ValidationRuleType
@@ -458,6 +460,29 @@ def test_duplicate_normalized_column_name_not_available_and_never_ai_assisted() 
     assert reason is not None and "structural.duplicate_normalized_column_name" in reason
     assert "structural.duplicate_normalized_column_name" not in AI_ASSISTABLE_DETECTOR_IDS
     assert "structural.duplicate_normalized_column_name" not in GENERATABLE_DETECTOR_IDS
+    assert extract_ai_assist_candidates(finding, evidence) is None
+
+
+@pytest.mark.parametrize(
+    "detector_id",
+    [
+        "structural.empty_dataset",
+        "structural.unnamed_column",
+        "structural.excessive_parse_failures",
+    ],
+)
+def test_file_shape_structural_detectors_not_available_and_never_ai_assisted(
+    detector_id: str,
+) -> None:
+    """`DET-03` closure package 1: each describes the shape of the file as
+    exported, which no rule over row values can express."""
+    finding = make_finding(detector_id, category=DetectorCategory.STRUCTURAL, columns=())
+    evidence = make_evidence({})
+    proposal, reason = generate_rule_proposal(finding, evidence, ALL_COLUMNS)
+    assert proposal is None
+    assert reason is not None and detector_id in reason
+    assert detector_id not in AI_ASSISTABLE_DETECTOR_IDS
+    assert detector_id not in GENERATABLE_DETECTOR_IDS
     assert extract_ai_assist_candidates(finding, evidence) is None
 
 

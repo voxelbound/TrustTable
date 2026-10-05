@@ -1,6 +1,13 @@
-"""Structural detectors (`DET-02` partial, plus `DET-03` slice 4), matching
-`docs/detector-framework.md` §16's "Structural" category: exact
-duplicate rows, empty columns and duplicate normalized column names.
+"""Structural detectors (`DET-02` partial, `DET-03` slice 4 and `DET-03`
+closure package 1), matching `docs/detector-framework.md` §16's
+"Structural" category: exact duplicate rows, empty columns, duplicate
+normalized column names, an empty dataset, unnamed columns and excessive
+parse failures.
+
+The last two read only the in-memory `IngestFacts` projection of four
+parser warnings (`domain/ingest_facts.py`), behind
+`DetectorMetadata.requires_ingest_facts`; they never see a parser message
+or a cell value, and they are skipped when no facts are supplied.
 
 Both detectors reuse `PROF-03`'s already-computed profile facts as much
 as possible: `structural.empty_column` relies entirely on `PROF-02`'s
@@ -22,7 +29,7 @@ import unicodedata
 from collections import defaultdict
 from typing import Final
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..domain.evidence import Evidence, EvidenceType
 from ..domain.parsing import SamplingScope
@@ -366,6 +373,366 @@ class EmptyColumnDetector:
             status=DetectorRunStatus.SUCCESS,
             findings=tuple(findings),
             evidence=tuple(evidence),
+            warnings=(),
+            execution_metrics=ExecutionMetrics(duration_ms=0),
+        )
+
+
+def _no_findings(metadata: DetectorMetadata) -> DetectorRunResult:
+    return DetectorRunResult(
+        detector_id=metadata.detector_id,
+        detector_version=metadata.version,
+        status=DetectorRunStatus.SUCCESS,
+        findings=(),
+        evidence=(),
+        warnings=(),
+        execution_metrics=ExecutionMetrics(duration_ms=0),
+    )
+
+
+def _profile_row_count(request: DetectorRunRequest | DetectorSupportRequest) -> int:
+    """The number of data rows the profile was computed over.
+
+    Prefers the profile's own `row_count` metric and falls back to the
+    sampling population. `bool` is excluded on purpose: it is an `int`
+    subclass and must never be read as a count.
+    """
+    profile = request.dataset_profile
+    value = profile.dataset_metrics.get("row_count")
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return profile.sampling.population_size
+
+
+class EmptyDatasetDetector:
+    """`structural.empty_dataset` — flags a dataset that has a header but no
+    data rows (`DET-03` closure package 1).
+
+    The zero-row investigation found that the parsers accept a header-only
+    CSV or worksheet (row count zero, no warning), profiling computes an
+    all-unknown profile without error, and no stage before detection stops
+    the run, so detector execution is the correct owner of this case. Without
+    this detector the only signal was one misleading "column is empty in all
+    sampled rows" finding per column. One dataset-level finding states the
+    actual condition. It reads only the profile's row count, never a cell.
+    """
+
+    metadata = DetectorMetadata(
+        detector_id="structural.empty_dataset",
+        version="1",
+        name="Empty dataset",
+        category=DetectorCategory.STRUCTURAL,
+        description="Flags a dataset that has a header but no data rows.",
+        applicable_inferred_types=(),
+        required_profile_fields=("dataset_metrics.row_count",),
+        requires_raw_rows=False,
+        requires_confirmed_context=False,
+        default_configuration={},
+        performance_class=PerformanceClass.CONSTANT_OR_METADATA_ONLY,
+        documented_limitations=(
+            "A file with no content at all, or a worksheet with no header row, is "
+            "refused by the parser before detection and never reaches this detector.",
+            "A dataset whose only data rows are blank still has rows; "
+            "completeness.fully_empty_rows covers that case.",
+        ),
+    )
+    config_schema: type[BaseModel] = _EmptyConfig
+
+    def supports(self, request: DetectorSupportRequest) -> bool:
+        del request  # Dataset-level, structurally always applicable.
+        return True
+
+    def run(self, request: DetectorRunRequest) -> DetectorRunResult:
+        if _profile_row_count(request) != 0:
+            return _no_findings(self.metadata)
+
+        column_count = len(request.dataset_profile.column_profiles)
+        evidence_id = "structural.empty_dataset.evidence.1"
+        evidence = Evidence(
+            evidence_id=evidence_id,
+            evidence_type=EvidenceType.METRIC,
+            calculation_version="1",
+            structured_payload={"row_count": 0, "column_count": column_count},
+            affected_columns=(),
+            affected_row_references=(),
+            scope=SamplingScope.FULL,
+            display_safe_summary=(
+                f"The dataset has {column_count} column(s) in its header and no data rows."
+            ),
+        )
+        finding = FindingCandidate(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            category=self.metadata.category,
+            severity=Severity.HIGH,
+            confidence=1.0,
+            calculated_observation=(
+                "The dataset has a header but no data rows, so there is nothing to analyze."
+            ),
+            affected_columns=(),
+            affected_row_references=(),
+            evidence_ids=(evidence_id,),
+            default_remediation_template_key=None,
+            default_validation_rule_template_key=None,
+        )
+        return DetectorRunResult(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            status=DetectorRunStatus.SUCCESS,
+            findings=(finding,),
+            evidence=(evidence,),
+            warnings=(),
+            execution_metrics=ExecutionMetrics(duration_ms=0),
+        )
+
+
+class UnnamedColumnDetector:
+    """`structural.unnamed_column` — flags header cells that were blank
+    (`DET-03` closure package 1).
+
+    Reads only the `IngestFacts` projection of `parsing.empty_column_name`:
+    a count and at most `MAX_REFERENCES` example columns. Each blank header is
+    seen by every other detector under the parser-assigned `column_<n>`
+    placeholder, which is also what this finding names; the original header
+    cell was empty, so no user text is repeated. A header made only of spaces
+    is a name to the parser and is not flagged. One finding covers every
+    unnamed column.
+    """
+
+    metadata = DetectorMetadata(
+        detector_id="structural.unnamed_column",
+        version="1",
+        name="Unnamed column",
+        category=DetectorCategory.STRUCTURAL,
+        description="Flags columns whose header cell is blank.",
+        applicable_inferred_types=(),
+        required_profile_fields=(),
+        requires_raw_rows=False,
+        requires_confirmed_context=False,
+        default_configuration={},
+        performance_class=PerformanceClass.CONSTANT_OR_METADATA_ONLY,
+        documented_limitations=(
+            "A header cell holding only whitespace counts as a name and is not flagged.",
+            "Only up to 20 example columns are listed; the count is exact.",
+        ),
+        requires_ingest_facts=True,
+    )
+    config_schema: type[BaseModel] = _EmptyConfig
+
+    def supports(self, request: DetectorSupportRequest) -> bool:
+        return request.ingest_facts is not None
+
+    def run(self, request: DetectorRunRequest) -> DetectorRunResult:
+        facts = request.ingest_facts
+        if facts is None or facts.unnamed_column_count == 0:
+            return _no_findings(self.metadata)
+
+        columns = facts.unnamed_columns
+        shown = ", ".join(
+            f"'{column.original_name[:_MAX_NAME_DISPLAY]}'" for column in columns[:_MAX_NAMES_SHOWN]
+        )
+        if facts.unnamed_column_count > min(len(columns), _MAX_NAMES_SHOWN):
+            shown += f" and {facts.unnamed_column_count - min(len(columns), _MAX_NAMES_SHOWN)} more"
+        evidence_id = "structural.unnamed_column.evidence.1"
+        evidence = Evidence(
+            evidence_id=evidence_id,
+            evidence_type=EvidenceType.METRIC,
+            calculation_version="1",
+            structured_payload={
+                "unnamed_column_count": facts.unnamed_column_count,
+                "column_count": facts.column_count,
+                "ordinals": [column.ordinal for column in columns],
+            },
+            affected_columns=columns,
+            affected_row_references=(),
+            scope=SamplingScope.FULL,
+            display_safe_summary=(
+                f"{facts.unnamed_column_count} of {facts.column_count} column(s) have a blank "
+                f"header cell and were given placeholder names: {shown}."
+            ),
+        )
+        finding = FindingCandidate(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            category=self.metadata.category,
+            severity=Severity.MEDIUM,
+            confidence=1.0,
+            calculated_observation=(
+                f"{facts.unnamed_column_count} of {facts.column_count} column(s) have no header "
+                f"name and were given placeholder names: {shown}."
+            ),
+            affected_columns=columns,
+            affected_row_references=(),
+            evidence_ids=(evidence_id,),
+            default_remediation_template_key=None,
+            default_validation_rule_template_key=None,
+        )
+        return DetectorRunResult(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            status=DetectorRunStatus.SUCCESS,
+            findings=(finding,),
+            evidence=(evidence,),
+            warnings=(),
+            execution_metrics=ExecutionMetrics(duration_ms=0),
+        )
+
+
+class _ExcessiveParseFailuresConfig(BaseModel):
+    """Thresholds for `structural.excessive_parse_failures`.
+
+    A finding needs the share to reach the ratio *and* the count to reach
+    `minimum_count`, so one stray blank line in a short file is not enough.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    row_ratio_threshold: float = Field(default=0.05, gt=0.0, le=1.0, allow_inf_nan=False)
+    cell_ratio_threshold: float = Field(default=0.05, gt=0.0, le=1.0, allow_inf_nan=False)
+    minimum_count: int = Field(default=5, ge=1)
+
+
+#: At or above this share the finding is HIGH rather than MEDIUM.
+_HIGH_SEVERITY_RATIO: Final[float] = 0.5
+
+
+class ExcessiveParseFailuresDetector:
+    """`structural.excessive_parse_failures` — flags a file in which an
+    excessive share of rows or cells could not be read as intended
+    (`DET-03` closure package 1).
+
+    Two measures, both from the `IngestFacts` projection and both exact:
+
+    - rows that did not have the header's number of fields
+      (`parsing.ragged_row`), as a share of data rows;
+    - cells that were read as empty because a formula had no stored result
+      (`parsing.xlsx_formula_without_cached_value`) or that held a
+      spreadsheet error value (`parsing.xlsx_error_value`), as a share of all
+      data cells (`rows x columns`).
+
+    A finding needs a share at or above its configured ratio **and** at least
+    `minimum_count` affected items. Truncation caused by a TrustTable
+    processing limit (long values or names) is not one of the four projected
+    codes and can never count: it is not a defect in the user's data. A CSV
+    blank line is read by the parser as a ragged row, so blank lines count
+    here as well as under `completeness.fully_empty_rows`; the count floor
+    keeps a few trailing blank lines from firing it. One finding covers both
+    measures; its row references are the bounded ragged-row examples.
+    """
+
+    metadata = DetectorMetadata(
+        detector_id="structural.excessive_parse_failures",
+        version="1",
+        name="Excessive parse failures",
+        category=DetectorCategory.STRUCTURAL,
+        description=(
+            "Flags a file where an excessive share of rows had the wrong number of fields or "
+            "of cells could not be read as values."
+        ),
+        applicable_inferred_types=(),
+        required_profile_fields=(),
+        requires_raw_rows=False,
+        requires_confirmed_context=False,
+        default_configuration={
+            "row_ratio_threshold": 0.05,
+            "cell_ratio_threshold": 0.05,
+            "minimum_count": 5,
+        },
+        performance_class=PerformanceClass.CONSTANT_OR_METADATA_ONLY,
+        documented_limitations=(
+            "Truncation caused by a TrustTable processing limit is never counted.",
+            "A blank CSV line counts as a ragged row; a few such lines stay below the "
+            "minimum count.",
+            "Only up to 20 example rows are referenced; the counts are exact.",
+        ),
+        requires_ingest_facts=True,
+    )
+    config_schema: type[BaseModel] = _ExcessiveParseFailuresConfig
+
+    def supports(self, request: DetectorSupportRequest) -> bool:
+        return request.ingest_facts is not None
+
+    def run(self, request: DetectorRunRequest) -> DetectorRunResult:
+        facts = request.ingest_facts
+        if facts is None or facts.row_count == 0:
+            return _no_findings(self.metadata)
+
+        row_threshold = float(request.configuration["row_ratio_threshold"])  # type: ignore[arg-type]
+        cell_threshold = float(request.configuration["cell_ratio_threshold"])  # type: ignore[arg-type]
+        minimum = int(request.configuration["minimum_count"])  # type: ignore[call-overload]
+
+        ragged = facts.ragged_row_count
+        unreadable_cells = (
+            facts.formula_without_cached_value_cell_count + facts.error_value_cell_count
+        )
+        total_cells = facts.row_count * max(facts.column_count, 1)
+        row_ratio = min(ragged / facts.row_count, 1.0)
+        cell_ratio = min(unreadable_cells / total_cells, 1.0)
+        row_hit = ragged >= minimum and row_ratio >= row_threshold
+        cell_hit = unreadable_cells >= minimum and cell_ratio >= cell_threshold
+        if not (row_hit or cell_hit):
+            return _no_findings(self.metadata)
+
+        parts: list[str] = []
+        if row_hit:
+            parts.append(
+                f"{ragged} of {facts.row_count} data row(s) did not have the header's "
+                "number of fields"
+            )
+        if cell_hit:
+            parts.append(
+                f"{unreadable_cells} of {total_cells} cell(s) could not be read as values "
+                f"({facts.formula_without_cached_value_cell_count} formula(s) without a stored "
+                f"result, {facts.error_value_cell_count} spreadsheet error value(s))"
+            )
+        observation = "; ".join(parts) + "."
+        worst = max(row_ratio if row_hit else 0.0, cell_ratio if cell_hit else 0.0)
+        row_references = facts.ragged_rows if row_hit else ()
+
+        evidence_id = "structural.excessive_parse_failures.evidence.1"
+        evidence = Evidence(
+            evidence_id=evidence_id,
+            evidence_type=EvidenceType.METRIC,
+            calculation_version="1",
+            structured_payload={
+                "row_count": facts.row_count,
+                "column_count": facts.column_count,
+                "ragged_row_count": ragged,
+                "ragged_row_ratio": round(row_ratio, 4),
+                "unreadable_cell_count": unreadable_cells,
+                "formula_without_cached_value_cell_count": (
+                    facts.formula_without_cached_value_cell_count
+                ),
+                "error_value_cell_count": facts.error_value_cell_count,
+                "unreadable_cell_ratio": round(cell_ratio, 4),
+                "row_ratio_threshold": row_threshold,
+                "cell_ratio_threshold": cell_threshold,
+                "minimum_count": minimum,
+            },
+            affected_columns=(),
+            affected_row_references=row_references,
+            scope=SamplingScope.FULL,
+            display_safe_summary=observation,
+        )
+        finding = FindingCandidate(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            category=self.metadata.category,
+            severity=Severity.HIGH if worst >= _HIGH_SEVERITY_RATIO else Severity.MEDIUM,
+            confidence=1.0,
+            calculated_observation=observation,
+            affected_columns=(),
+            affected_row_references=row_references,
+            evidence_ids=(evidence_id,),
+            default_remediation_template_key=None,
+            default_validation_rule_template_key=None,
+        )
+        return DetectorRunResult(
+            detector_id=self.metadata.detector_id,
+            detector_version=self.metadata.version,
+            status=DetectorRunStatus.SUCCESS,
+            findings=(finding,),
+            evidence=(evidence,),
             warnings=(),
             execution_metrics=ExecutionMetrics(duration_ms=0),
         )

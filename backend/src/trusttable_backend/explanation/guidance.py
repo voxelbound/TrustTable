@@ -740,6 +740,118 @@ _TEMPLATES: Final[dict[str, _Template]] = {
             "column name is distinct, including {columns}."
         ),
     ),
+    "structural.empty_dataset": _Template(
+        impact=(
+            (
+                "A file with a header but no data rows gives nothing to check, so any report, "
+                "import or decision that relies on this file would rest on no records at all.",
+                "this file is expected to contain records that someone relies on",
+            ),
+        ),
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Find out why the export contains only its header row, then re-export the "
+                "data or confirm that an empty file is expected."
+            ),
+            responsible_role="The person who maintains the export or the source system",
+            urgency="Before this file is used in a report, import or decision",
+            historical_correction_guidance=(
+                "Re-run the export with the intended date range or filters, and confirm the "
+                "new file contains data rows."
+            ),
+            source_system_prevention_guidance=(
+                "Make the export fail or warn when a query returns no rows, rather than "
+                "writing a header-only file."
+            ),
+            risk_warning=(
+                "An empty result can be correct, for example a period with no activity; "
+                "confirm what the file should contain before treating it as an error."
+            ),
+            verification_step=(
+                "Re-run this check on the new file and confirm it contains data rows."
+            ),
+        ),
+        rule_type=ValidationRuleType.CONDITIONAL_RULE,
+        rule_description=(
+            "Once you know whether an empty file is ever valid, define a rule that an "
+            "export contains at least one data row."
+        ),
+    ),
+    "structural.unnamed_column": _Template(
+        impact=(
+            (
+                "A column without a header name cannot be identified by name, so a person "
+                "or tool that matches columns by name can skip it or mix it up with another.",
+                "people or tools refer to these columns by name",
+            ),
+        ),
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Find out what {columns} holds, then give it a clear header name in the "
+                "source system or the export."
+            ),
+            responsible_role="The person who maintains the export or the source system",
+            urgency="Before these columns are used in a report, join or import",
+            historical_correction_guidance=(
+                "Look at the values in {columns}, decide what each column is, and add a "
+                "header name for it."
+            ),
+            source_system_prevention_guidance=(
+                "Require a header name for every column in the export, so that no header "
+                "cell is left blank."
+            ),
+            risk_warning=(
+                "A blank header can mean a stray extra column or a real field whose name was "
+                "lost; confirm which before removing a column."
+            ),
+            verification_step=("Re-run this check and confirm every column now has a header name."),
+        ),
+        rule_type=ValidationRuleType.CONDITIONAL_RULE,
+        rule_description=(
+            "Once you have decided what each column is, define a rule that every column "
+            "has a header name, including {columns}."
+        ),
+    ),
+    "structural.excessive_parse_failures": _Template(
+        impact=(
+            (
+                "When many rows or cells could not be read as intended, values may be "
+                "missing, shifted or replaced, so totals and checks based on this file may "
+                "not reflect the real records.",
+                "figures from this file are reported or compared without checking the source",
+            ),
+        ),
+        remediation=_RemediationTemplate(
+            action_summary=(
+                "Find out why many rows or cells could not be read, such as stray delimiters "
+                "or quotes, formulas without stored results or spreadsheet errors, and fix "
+                "them at the source."
+            ),
+            responsible_role="The person who maintains the export or the spreadsheet",
+            urgency="Before figures from this file are reported or compared",
+            historical_correction_guidance=(
+                "Open the file at the referenced rows, correct the malformed rows or cells, "
+                "and export it again."
+            ),
+            source_system_prevention_guidance=(
+                "Export values rather than formulas, quote fields that contain delimiters, "
+                "and check the file for spreadsheet errors before sharing it."
+            ),
+            risk_warning=(
+                "A row with the wrong number of fields may have shifted values into the "
+                "wrong columns; check the source before deleting or editing a row."
+            ),
+            verification_step=(
+                "Re-run this check on the corrected file and confirm the share of unreadable "
+                "rows and cells is back below the threshold."
+            ),
+        ),
+        rule_type=ValidationRuleType.CONDITIONAL_RULE,
+        rule_description=(
+            "Once you know which rows and cells are malformed, define a rule that every row "
+            "has the same number of fields as the header."
+        ),
+    ),
     "security.possible_llm_prompt_injection": _Template(
         impact=(
             (

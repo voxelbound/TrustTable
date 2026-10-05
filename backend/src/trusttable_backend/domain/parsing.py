@@ -109,18 +109,27 @@ class ParsingWarning:
     `code` is a namespaced identifier following the same convention as
     `DetectorId` (`docs/domain-model.md` §3), e.g.
     `parsing.truncated_row`.
+
+    `count` is how many occurrences this one warning stands for. It is `1`
+    for a warning raised once per column or row, and the cell total for an
+    aggregate warning such as `parsing.xlsx_formula_without_cached_value`,
+    so a consumer never has to read the human-readable `message` to learn
+    the size of the problem (`DET-03` closure package 1).
     """
 
     code: str
     message: str
     column: ColumnReference | None = None
     row: RowReference | None = None
+    count: int = 1
 
     def __post_init__(self) -> None:
         if not self.message:
             raise ValueError("ParsingWarning.message must not be empty")
         if "." not in self.code:
             raise ValueError("ParsingWarning.code must be namespaced (contain '.')")
+        if self.count < 1:
+            raise ValueError("ParsingWarning.count must be at least 1")
 
 
 class SamplingScope(StrEnum):
