@@ -90,6 +90,13 @@ class AnalysisRecord(Base):
     existed (`0006_add_ai_enrichment_json.py`), decoded as `None`, i.e.
     *not recorded*, by `store._row_to_analysis`; never as a zero record."""
 
+    observations_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    """Neutral `value_evidence` observations (`DET-03` closure package 2,
+    `WP-109`) -- `NULL` for every analysis persisted before this column
+    existed (`0008_add_observations_json.py`), decoded as an empty tuple by
+    `store._row_to_analysis`, matching `rules_json`'s own
+    nullable-additive-column precedent (`0003`)."""
+
     context_version: Mapped[int] = mapped_column(nullable=False, default=0)
     context_finalized: Mapped[bool] = mapped_column(nullable=False, default=False)
 

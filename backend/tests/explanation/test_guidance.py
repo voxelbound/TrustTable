@@ -23,6 +23,7 @@ from trusttable_backend.detectors.contract import (
     SecurityExposureState,
 )
 from trusttable_backend.detectors.engine import run_detectors
+from trusttable_backend.detectors.value_evidence import OBSERVATION_ONLY_DETECTOR_IDS
 from trusttable_backend.domain.explanation import ImpactBasis, ValidationRuleType
 from trusttable_backend.domain.value_objects import ColumnReference, Severity
 from trusttable_backend.explanation.guidance import (
@@ -56,9 +57,14 @@ def finding_for(detector_id: str, columns: tuple[ColumnReference, ...] = ()) -> 
     )
 
 
+#: The finding-producing detectors of the real registered catalogue. The three
+#: observation-only producers (`DET-03` closure package 2) never emit a finding,
+#: so guidance and rules, which are written for findings, do not cover them.
 ALL_DETECTOR_IDS = sorted(
-    detector.metadata.detector_id for detector in DETECTORS
-)  # the real registered catalogue
+    detector.metadata.detector_id
+    for detector in DETECTORS
+    if detector.metadata.detector_id not in OBSERVATION_ONLY_DETECTOR_IDS
+)
 
 
 def remediation_texts(option: object) -> tuple[str, ...]:
@@ -75,10 +81,15 @@ def remediation_texts(option: object) -> tuple[str, ...]:
     )
 
 
-def test_the_table_covers_every_registered_detector_exactly() -> None:
-    # A registered detector without a dedicated template would silently get the
-    # generic guidance, so the table must match the registry exactly.
+def test_the_table_covers_every_finding_producing_detector_exactly() -> None:
+    # A registered finding-producing detector without a dedicated template would
+    # silently get the generic guidance, so the table must match exactly.
     assert frozenset(ALL_DETECTOR_IDS) == GUIDED_DETECTOR_IDS
+    # The three observation-only producers are the only registered detectors
+    # without guidance, by design: they emit no finding (D-061, package 2).
+    registered = {detector.metadata.detector_id for detector in DETECTORS}
+    assert registered - GUIDED_DETECTOR_IDS == OBSERVATION_ONLY_DETECTOR_IDS
+    assert OBSERVATION_ONLY_DETECTOR_IDS.isdisjoint(GUIDED_DETECTOR_IDS)
     assert {
         "completeness.fully_empty_rows",
         "consistency.inconsistent_booleans",

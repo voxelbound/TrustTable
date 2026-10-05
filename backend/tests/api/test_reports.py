@@ -117,6 +117,7 @@ def test_non_completed_analysis_cannot_be_reported(client: TestClient) -> None:
             trust_assessment=None,
             findings=(),
             evidence=(),
+            observations=(),
             priority_scores=(),
             context=None,
             guided_questions=(),

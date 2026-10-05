@@ -23,6 +23,7 @@ import {
   getAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGet,
   getAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGet,
   getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet,
+  getAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGet,
   getAnalysisProfileApiV1AnalysesAnalysisIdProfileGet,
   getAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGet,
   getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet,
@@ -54,6 +55,7 @@ import {
   type FindingReviewRequest,
   type FindingReviewResponse,
   type FindingsListResponse,
+  type ObservationsListResponse,
   type RowContextResponse,
   type UploadAnalysisResponse,
 } from '../../api'
@@ -220,6 +222,29 @@ export function useAnalysisFindings(
     queryFn: async () => {
       const result =
         await getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet({
+          path: { analysis_id: analysisId as string },
+        })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled: Boolean(analysisId) && (options?.enabled ?? true),
+  })
+}
+
+/** `GET .../observations` (`DET-03` closure package 2, provisional): the
+ * neutral, read-only data observations. Separate from findings on purpose;
+ * they carry no severity, confidence or priority. */
+export function useAnalysisObservations(
+  analysisId: string | undefined,
+  options?: QueryEnabledOption,
+) {
+  return useQuery<ObservationsListResponse, ApiCallError>({
+    queryKey: ['analysis-observations', analysisId],
+    queryFn: async () => {
+      const result =
+        await getAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGet({
           path: { analysis_id: analysisId as string },
         })
       if (result.error) {

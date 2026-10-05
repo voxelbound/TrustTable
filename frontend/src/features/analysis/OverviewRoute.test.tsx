@@ -107,6 +107,7 @@ describe('OverviewRoute', () => {
       'Top findings',
       'Immediate actions',
       'All findings',
+      'Data observations',
       'Dataset summary',
       'Technical details',
     ])

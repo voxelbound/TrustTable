@@ -59,7 +59,7 @@ def test_a_row_written_before_the_column_existed_reads_back_as_not_recorded(
     settings = _settings(tmp_path)
     engine = build_engine(settings)
     config = _config(settings)
-    command.upgrade(config, "0006")
+    command.upgrade(config, "head")
     store = SqlAnalysisStore(engine)
     analysis = create_analysis(AnalysisStore())
     store.add(analysis)

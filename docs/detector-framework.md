@@ -364,6 +364,18 @@ The latter two may initially map to one detector with evidence subtypes.
 > nothing is persisted or exposed, and no detector reads a parser message or a cell
 > value. None proposes a validation rule. **`DET-03` is in progress, not complete**;
 > the catalogue is not complete.
+>
+> **Annotation (2026-10-05, `DET-03` closure package 2; `docs/decision-log.md`
+> D-063):** the minimal Observation foundation and three observation-only
+> producers are built and registered, bringing the catalogue to 26:
+> `structural.mixed_types` (the count of values per shape in a column the profile
+> classed as mixed), `consistency.inconsistent_date_formats` (the count per
+> recognised date format family in a mostly date-like column) and
+> `completeness.concentrated_missingness` (most of a column's missing values in one
+> unbroken run of rows). They state neutral `value_evidence` observations, never a
+> finding, so they have no severity, no built-in guidance and no proposed rule, and
+> they never change the trust score or priority. **`DET-03` is in progress, not
+> complete**; the catalogue is not complete.
 
 ### Design outcome (2026-10-02, documentation only)
 
@@ -551,9 +563,10 @@ No entry is dropped.
 
 **Dispositions.** BUILT: registered before closure (20). BUILT BY CLOSURE: planned
 for `DET-03` closure (8 entries, 7 detectors), of which closure package 1 has built 3
-entries and 3 detectors (D-062) and 5 entries and 4 detectors are **still not built**.
+entries and 3 detectors (D-062), closure package 2 has built 3 entries and 3 detectors
+(D-063), and 2 entries and 1 detector are **still not built**.
 MOVED: carried by a named successor item (11). MOVED PREVIOUSLY: moved by D-057 (2).
-20 + 8 + 11 + 2 = 41. **Registered today: 23 detectors.** Names of detectors not yet
+20 + 8 + 11 + 2 = 41. **Registered today: 26 detectors.** Names of detectors not yet
 built below are working names; each is fixed in its own package.
 
 | # | Catalogue entry | Disposition | Detector or carrier |
@@ -564,19 +577,19 @@ built below are working names; each is fixed in its own package.
 | 4 | duplicate normalized column name | BUILT | `structural.duplicate_normalized_column_name` |
 | 5 | exact duplicate rows | BUILT | `structural.exact_duplicate_rows` |
 | 6 | probable duplicate identifier | MOVED | DET-04 (observation form), DET-05 (finding form) |
-| 7 | mixed types | BUILT BY CLOSURE | `structural.mixed_types` (observation) |
+| 7 | mixed types | BUILT BY CLOSURE (built, package 2) | `structural.mixed_types` (observation; D-063) |
 | 8 | excessive parse failures | BUILT BY CLOSURE (built, package 1) | `structural.excessive_parse_failures` |
 | 9 | excessive missing values | BUILT | `completeness.excessive_missing_values` |
 | 10 | missing likely identifier | BUILT | `completeness.missing_likely_identifier` |
 | 11 | fully empty rows | BUILT | `completeness.fully_empty_rows` |
-| 12 | concentrated missingness | BUILT BY CLOSURE | `completeness.concentrated_missingness` (observation) |
+| 12 | concentrated missingness | BUILT BY CLOSURE (built, package 2) | `completeness.concentrated_missingness` (observation; D-063) |
 | 13 | completeness change over time | MOVED | DET-06 |
 | 14 | leading/trailing whitespace | BUILT | `consistency.leading_trailing_whitespace` |
 | 15 | inconsistent capitalization | BUILT | `consistency.inconsistent_capitalization` |
 | 16 | near-duplicate categories | BUILT | `consistency.near_duplicate_categories` |
 | 17 | inconsistent booleans | BUILT | `consistency.inconsistent_booleans` |
 | 18 | numeric values stored as text | BUILT | `consistency.numeric_values_stored_as_text` |
-| 19 | inconsistent date formats | BUILT BY CLOSURE | `consistency.inconsistent_date_formats` (observation) |
+| 19 | inconsistent date formats | BUILT BY CLOSURE (built, package 2) | `consistency.inconsistent_date_formats` (observation; D-063) |
 | 20 | conflicting stable attributes | MOVED | DET-05 |
 | 21 | future dates | BUILT | `validity.future_dates` |
 | 22 | implausibly old dates | BUILT | `validity.implausibly_old_dates` |
@@ -601,12 +614,12 @@ built below are working names; each is fixed in its own package.
 | 41 | suspicious secret-request text | BUILT BY CLOSURE | the same detector as #40 (evidence subtype) |
 
 Counts: BUILT 20 entries and 20 detectors; BUILT BY CLOSURE 8 entries and 7
-detectors (3 entries and 3 detectors built by package 1, 5 entries and 4 detectors
-not yet built); MOVED 11; MOVED PREVIOUSLY 2. Entries #6 and #32 each have an observation
+detectors (3 entries and 3 detectors built by package 1, 3 entries and 3 detectors
+built by package 2, 2 entries and 1 detector not yet built); MOVED 11; MOVED PREVIOUSLY 2. Entries #6 and #32 each have an observation
 form (DET-04) and a later confirmed-finding form (DET-05); they are counted once, as
 MOVED.
 
-**Closure packages (package 1 built, packages 2 to 4 planned).** Package 1,
+**Closure packages (packages 1 and 2 built, packages 3 and 4 planned).** Package 1,
 structural and ingest closure, **built** (D-062): the zero-row and header-only
 investigation, then `structural.empty_dataset`; an immutable, in-memory parser-warning projection limited to four
 codes (`parsing.empty_column_name`, `parsing.ragged_row`,
@@ -617,10 +630,12 @@ to off (facts absent means the detector is skipped, never passed);
 `structural.unnamed_column`; `structural.excessive_parse_failures`, which excludes
 truncation caused by a TrustTable processing limit because that is not a defect in
 the user's data. No persisted ingest-facts record. Package 2, observation and
-value-evidence slice: the minimal Observation foundation (a type with no severity,
+value-evidence slice, **built** (D-063): the minimal Observation foundation (a type with no severity,
 confidence or priority, one closed kind `value_evidence`, an additive stored list on
 the analysis record, a read-only route and a read-only results-UI list) and its three
-producers. Package 3, security detector slice: the adversarial suite is extended
+producers `structural.mixed_types`, `consistency.inconsistent_date_formats` and
+`completeness.concentrated_missingness`, which emit observations only and no finding.
+Package 3, security detector slice: the adversarial suite is extended
 first, then one detector with two evidence subtypes, bounded and redacted evidence,
 "possible risk" wording and a recorded Security Reviewer approval. Package 4,
 closure: an executable catalogue-status check against the table above, document

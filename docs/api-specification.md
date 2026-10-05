@@ -627,6 +627,38 @@ Returns:
 Raises `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` per the sibling finding
 routes.
 
+### GET `/analyses/{analysis_id}/observations` (`DET-03` closure package 2; provisional, read-only; `docs/decision-log.md` D-063)
+
+Returns the neutral observations detectors stated about the analysis, separate
+from findings. An observation is not a finding: it has no severity, confidence,
+priority or review state, never affects the trust assessment, and is not part of any
+AI payload, export or report.
+
+```json
+{
+  "items": [
+    {
+      "observation_id": "structural.mixed_types.observation.amount",
+      "kind": "value_evidence",
+      "producer_detector_id": "structural.mixed_types",
+      "summary": "Column 'amount' has 12 non-blank value(s) of more than one shape: 9 numeric-like, 3 text-like.",
+      "affected_columns": [{"original_name": "amount", "internal_key": "amount", "ordinal": 1}],
+      "affected_row_numbers": [4, 7, 9],
+      "scope": "full"
+    }
+  ],
+  "total_items": 1
+}
+```
+
+`kind` is a closed vocabulary with one value, `value_evidence`; a later kind is
+added and never changes this one. `affected_row_numbers` are at most 20 example row
+numbers, never cell values. The detector's structured payload is not exposed,
+matching finding evidence. An unknown analysis returns `404 ANALYSIS_NOT_FOUND`; a
+known analysis that is not completed, or has none, returns an empty `items` list.
+There is no write route. The response shape is provisional so that later dismissal,
+suppression, history and further kinds can be added without a breaking change.
+
 ## 11. Validation rules
 
 ### GET `/analyses/{analysis_id}/rules`

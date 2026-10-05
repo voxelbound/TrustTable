@@ -236,6 +236,15 @@ Deliver:
 > closure target is 27 detectors covering 28 of 41 entries and the 26-detector
 > alternative no longer applies. `DET-03` is still in progress; the catalogue is not
 > complete; no scope is added to this milestone.
+>
+> **Update (2026-10-05, `docs/decision-log.md` D-063):** closure package 2 adds the
+> minimal Observation foundation (a neutral, non-scoring record, one kind, stored with
+> the analysis, read through a read-only route and listed read-only on the Overview
+> screen) and three observation-only producers, `structural.mixed_types`,
+> `consistency.inconsistent_date_formats` and `completeness.concentrated_missingness`,
+> bringing the built catalogue to 26 detectors. `DET-03` is still in progress; the
+> security detector slice and the closure package remain; no scope is added to this
+> milestone.
 
 Production definition:
 
