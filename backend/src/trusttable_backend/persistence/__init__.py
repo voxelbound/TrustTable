@@ -18,12 +18,14 @@ from .database import (
     run_migrations,
 )
 from .reconciliation import INTERRUPTED_BY_RESTART_CODE, reconcile_interrupted_analyses
+from .relationship_store import SqlRelationshipStore
 from .report_store import SqlReportStore
 from .store import SqlAnalysisStore
 
 __all__ = [
     "INTERRUPTED_BY_RESTART_CODE",
     "SqlAnalysisStore",
+    "SqlRelationshipStore",
     "SqlReportStore",
     "build_engine",
     "build_session_factory",

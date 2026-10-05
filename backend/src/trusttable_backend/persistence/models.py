@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import JSON, Index, Integer, LargeBinary, String, Text
+from sqlalchemy import JSON, Index, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -98,6 +98,43 @@ class AnalysisRecord(Base):
     slice 2, `WP-076`, `DEC-013`) -- `NULL` for every analysis that is not
     itself a retry, including every row persisted before this column
     existed (`0002_add_retry_source_analysis_id.py`)."""
+
+
+class ConfirmedRelationshipVersionRecord(Base):
+    """One immutable version of one user-stated relationship
+    (`DET-03`, `docs/decision-log.md` D-059).
+
+    Stores data only; the rules live in `domain.confirmed_relationship`.
+    Rows are inserted once and never updated or individually deleted; they
+    end with their analysis. The unique key is the backstop that makes two
+    writers holding the same expected version impossible to both succeed.
+    No column name and no cell value is stored, only the internal key and
+    ordinal of each role's `ColumnReference`.
+    """
+
+    __tablename__ = "confirmed_relationship_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "analysis_id",
+            "relationship_id",
+            "version",
+            name="uq_confirmed_relationship_version",
+        ),
+        Index("ix_confirmed_relationship_versions_analysis_id", "analysis_id"),
+    )
+
+    seq: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    analysis_id: Mapped[str] = mapped_column(String, nullable=False)
+    relationship_id: Mapped[str] = mapped_column(String, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    transition: Mapped[str] = mapped_column(String, nullable=False)
+    start_key: Mapped[str] = mapped_column(String, nullable=False)
+    start_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_key: Mapped[str] = mapped_column(String, nullable=False)
+    end_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    recorded_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class ReportRecord(Base):

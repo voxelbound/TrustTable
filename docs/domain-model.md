@@ -288,8 +288,9 @@ Each field contains:
 
 ### Target design: confirmed context (proposed, not built; `docs/decision-log.md` D-057)
 
-This subsection states approved target direction, not current behavior; nothing
-in it is built. The current context model has only all-date-columns,
+This subsection states approved target direction. Only the stored
+confirmed-relationship record is built (see "Built" below); the gate, observations
+and detectors are not. The current context model has only all-date-columns,
 all-numeric-columns and one dataset-level currency value. The confirmed-context
 foundation design is recorded in `docs/decision-log.md` D-059, which amends D-057
 on provenance and answers its open question about `DatasetContext`:
@@ -339,16 +340,20 @@ Layers, kept distinct:
   organization-level configuration) is considered, not adopted; the model must
   stay extensible to it without changing detector contracts.
 
-**Open gate on the foundation package.** Package 1 is not fully design-complete and
-cannot be authorized until the owner decides whether a withdrawal is allowed when
-the relationship has already reached the 50-version cap (as recorded, such a
-relationship can no longer be replaced or withdrawn, and only deleting the analysis
-recovers it). This is undecided here.
+**Built (package 1, `docs/decision-log.md` D-060).** The stored record exists:
+immutable versions of a user-stated `start_end_date` relationship, with a stable
+relationship id, a server-assigned version and timestamp with a client-asserted,
+unverified `source`, version-aware confirm, replace and
+withdraw writes, a read of the current projection and history, the three limits,
+and deletion with the analysis. Nothing reads it yet: there is no gate, no
+observation and no detector, and `check_status` is always `not_active`, which
+never means a check passed. **Withdrawal** is exempt from the 50-version and
+500-version caps (owner decision) and is final for its relationship; a later
+confirmation is a new relationship with a new id.
 
 Still open after D-059: what counts as a *conflicting* confirmation and how the
 gate treats a *withdrawn* relationship (both to be decided before the execution
-package is authorized), whether withdrawal is exempt from the per-relationship
-version cap, role kinds beyond `start_end_date`,
+package is authorized), role kinds beyond `start_end_date`,
 the expectation-capture mechanism, a durable cross-parse column identity, and how
 tests and documents migrate if the two context models are ever merged.
 

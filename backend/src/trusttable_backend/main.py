@@ -40,6 +40,7 @@ from trusttable_backend.errors import AppError
 from trusttable_backend.jobs import JobPool
 from trusttable_backend.persistence import (
     SqlAnalysisStore,
+    SqlRelationshipStore,
     SqlReportStore,
     build_engine,
     reconcile_interrupted_analyses,
@@ -206,5 +207,6 @@ def create_app() -> FastAPI:
     app.state.analysis_engine = engine
     app.state.analysis_store = store
     app.state.report_store = SqlReportStore(engine)
+    app.state.relationship_store = SqlRelationshipStore(engine)
     app.state.job_pool = job_pool
     return app

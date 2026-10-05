@@ -28,7 +28,7 @@ from ..analysis.service import Analysis, AnalysisState
 from ..domain.ai_enrichment import AiEnrichmentRecord
 from . import serializers
 from .database import build_session_factory
-from .models import AnalysisRecord, ReportRecord
+from .models import AnalysisRecord, ConfirmedRelationshipVersionRecord, ReportRecord
 
 #: `AnalysisState` values `Analysis.__post_init__` never leaves pending
 #: further pipeline work — used by `reconciliation.py` to find every
@@ -167,11 +167,17 @@ class SqlAnalysisStore:
                 setattr(existing, key, value)
 
     def delete(self, analysis_id: str) -> bool:
-        """Remove the analysis and all of its reports in one transaction
-        (`DEL-01`). Returns whether the analysis existed; either both
-        deletions commit or neither does."""
+        """Remove the analysis, all of its reports and all of its confirmed
+        relationship versions in one transaction (`DEL-01`, `DET-03`).
+        Returns whether the analysis existed; every deletion commits or none
+        does."""
         with self._session_factory() as session:
             session.execute(delete(ReportRecord).where(ReportRecord.analysis_id == analysis_id))
+            session.execute(
+                delete(ConfirmedRelationshipVersionRecord).where(
+                    ConfirmedRelationshipVersionRecord.analysis_id == analysis_id
+                )
+            )
             result = session.execute(
                 delete(AnalysisRecord).where(AnalysisRecord.analysis_id == analysis_id)
             )
