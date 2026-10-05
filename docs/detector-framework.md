@@ -517,6 +517,121 @@ role, unconfirmed interpretation) asserting zero findings, unchanged score and a
 NOT EVALUATED record; a scoring-boundary regression test over the
 observation-kind registry; and a migration plan for demo and benchmark fixtures.
 
+### Closure boundary (2026-10-05, `docs/decision-log.md` D-061; documentation only)
+
+`DET-03` is retitled **Core detector catalogue**. This subsection records the
+approved closure boundary. It supersedes the "planned (stays in `DET-03`)" column
+of the table above wherever the two differ; the table above is history for the
+2026-10-02 design. Nothing marked planned here is built, and no document may say
+detection is active for it.
+
+**Target:** 27 registered detectors covering 28 of the 41 catalogue entries. One
+planned security detector covers two entries (data-exfiltration instruction and
+suspicious secret-request text), which is why detectors and entries differ. If the
+empty-dataset case is conclusively parser-owned and terminal before detector
+execution, the target is 26 registered detectors covering 27 entries; that outcome
+is decided by the package-1 investigation and this document stays conditional until
+then. 13 entries are carried by named successor items. No entry is dropped.
+
+**Dispositions.** BUILT: registered today (20). BUILT BY CLOSURE: planned for
+`DET-03` closure, not built (8 entries, 7 detectors). MOVED: carried by a named
+successor item (11). MOVED PREVIOUSLY: moved by D-057 (2). 20 + 8 + 11 + 2 = 41.
+Planned detector names below are working names; each is fixed in its own package.
+
+| # | Catalogue entry | Disposition | Detector or carrier |
+|---|---|---|---|
+| 1 | empty dataset | BUILT BY CLOSURE (conditional) | `structural.empty_dataset`; if parser-owned, a regression-tested pre-detection outcome and no detector |
+| 2 | empty column | BUILT | `structural.empty_column` |
+| 3 | unnamed column | BUILT BY CLOSURE | `structural.unnamed_column` |
+| 4 | duplicate normalized column name | BUILT | `structural.duplicate_normalized_column_name` |
+| 5 | exact duplicate rows | BUILT | `structural.exact_duplicate_rows` |
+| 6 | probable duplicate identifier | MOVED | DET-04 (observation form), DET-05 (finding form) |
+| 7 | mixed types | BUILT BY CLOSURE | `structural.mixed_types` (observation) |
+| 8 | excessive parse failures | BUILT BY CLOSURE | `structural.excessive_parse_failures` |
+| 9 | excessive missing values | BUILT | `completeness.excessive_missing_values` |
+| 10 | missing likely identifier | BUILT | `completeness.missing_likely_identifier` |
+| 11 | fully empty rows | BUILT | `completeness.fully_empty_rows` |
+| 12 | concentrated missingness | BUILT BY CLOSURE | `completeness.concentrated_missingness` (observation) |
+| 13 | completeness change over time | MOVED | DET-06 |
+| 14 | leading/trailing whitespace | BUILT | `consistency.leading_trailing_whitespace` |
+| 15 | inconsistent capitalization | BUILT | `consistency.inconsistent_capitalization` |
+| 16 | near-duplicate categories | BUILT | `consistency.near_duplicate_categories` |
+| 17 | inconsistent booleans | BUILT | `consistency.inconsistent_booleans` |
+| 18 | numeric values stored as text | BUILT | `consistency.numeric_values_stored_as_text` |
+| 19 | inconsistent date formats | BUILT BY CLOSURE | `consistency.inconsistent_date_formats` (observation) |
+| 20 | conflicting stable attributes | MOVED | DET-05 |
+| 21 | future dates | BUILT | `validity.future_dates` |
+| 22 | implausibly old dates | BUILT | `validity.implausibly_old_dates` |
+| 23 | negative likely non-negative values | BUILT | `validity.negative_likely_non_negative_values` |
+| 24 | invalid percentages | BUILT | `validity.invalid_percentages` (name-based; migration is DET-05) |
+| 25 | invalid country/region values | MOVED PREVIOUSLY | STD-01 and HARM-01 (D-057) |
+| 26 | invalid email shape | BUILT | `validity.invalid_email_shape` (name-based; review is DET-05) |
+| 27 | extreme outliers | BUILT | `statistical.extreme_outliers` |
+| 28 | suspiciously constant columns | BUILT | `statistical.suspiciously_constant_column` |
+| 29 | high-cardinality categories | MOVED | DET-04 |
+| 30 | unexpected rarity | MOVED | DET-04 |
+| 31 | distribution shift | MOVED | DET-06 |
+| 32 | identifier-like measure | MOVED | DET-04 (observation form), DET-05 (finding form) |
+| 33 | line total mismatch | BUILT | `cross_field.line_total_mismatch` (name-based; migration is DET-05) |
+| 34 | discount inconsistency | MOVED | DET-05 |
+| 35 | tax inconsistency | MOVED | DET-05 |
+| 36 | start date after end date | MOVED | CCX-01 (first consumer of the confirmed-relationship record) |
+| 37 | status/date conflict | MOVED PREVIOUSLY | RULE-03 (D-057) |
+| 38 | missing currency in multi-currency data | MOVED | DET-05 |
+| 39 | possible prompt injection | BUILT | `security.possible_llm_prompt_injection` |
+| 40 | possible data-exfiltration instruction | BUILT BY CLOSURE | `security.possible_exfiltration_or_secret_request` (evidence subtype) |
+| 41 | suspicious secret-request text | BUILT BY CLOSURE | the same detector as #40 (evidence subtype) |
+
+Counts: BUILT 20 entries and 20 detectors; BUILT BY CLOSURE 8 entries and 7
+detectors; MOVED 11; MOVED PREVIOUSLY 2. Entries #6 and #32 each have an observation
+form (DET-04) and a later confirmed-finding form (DET-05); they are counted once, as
+MOVED.
+
+**Closure packages (planned).** Package 1, structural and ingest closure: the
+zero-row and header-only investigation, then `structural.empty_dataset` or its
+regression proof; an immutable, in-memory parser-warning projection limited to four
+codes (`parsing.empty_column_name`, `parsing.ragged_row`,
+`parsing.xlsx_formula_without_cached_value`, `parsing.xlsx_error_value`) carrying
+counts and bounded references only, never a message or a cell value, and reaching a
+detector only through an additive optional input behind a metadata flag that defaults
+to off (facts absent means the detector is skipped, never passed);
+`structural.unnamed_column`; `structural.excessive_parse_failures`, which excludes
+truncation caused by a TrustTable processing limit because that is not a defect in
+the user's data. No persisted ingest-facts record. Package 2, observation and
+value-evidence slice: the minimal Observation foundation (a type with no severity,
+confidence or priority, one closed kind `value_evidence`, an additive stored list on
+the analysis record, a read-only route and a read-only results-UI list) and its three
+producers. Package 3, security detector slice: the adversarial suite is extended
+first, then one detector with two evidence subtypes, bounded and redacted evidence,
+"possible risk" wording and a recorded Security Reviewer approval. Package 4,
+closure: an executable catalogue-status check against the table above, document
+reconciliation and the closure report.
+
+**Observation boundary for package 2.** Observations stay neutral and are never
+counted by trust scoring or priority, never enter an AI payload, and are excluded
+from exports and reports for now. That exclusion is an invariant enforced by a
+negative allowlist test that fails if an Observation field reaches score, priority,
+an AI payload, an export or a report; it does not rely on the absence of wiring. The
+extension seam is that a later kind, such as the `NOT_CHECKED` kind CCX-01 adds, is a
+new kind and never a change to `value_evidence`. The package also records the
+provisional Observation API in the API specification and the domain model, so later
+dismissal, suppression, history and further kinds can be added without a breaking
+change. No `DET-03` detector reads confirmed relationships.
+
+**Carried by successors (placement open).** DET-04: value-distribution
+observations (high-cardinality categories, unexpected rarity, and the observation
+forms of probable duplicate identifier and identifier-like measure). CCX-01:
+confirmed-context execution, which includes the gate, the durable scheduler, stale-run
+recovery, the awaiting-confirmation summary, `NOT_CHECKED` and the start-date-after-
+end-date detector, and which owns the two open decisions (a conflicting
+confirmation; a withdrawn relationship). CCX-02: the confirmation screen. DET-05:
+context-bound detectors (discount, tax, missing currency, conflicting stable
+attributes, the confirmed-finding forms of #6 and #32) and the migration of the
+name-based detectors. DET-06: time-based observations (completeness change over
+time, distribution shift). OBS-02: observation dismissal, suppression, history,
+export inclusion and further kinds. ING-04: a persisted ingest-facts record and
+processing-limit facts. STD-01, HARM-01 and RULE-03: as already named.
+
 ## 17. Detector lifecycle
 
 ```text
