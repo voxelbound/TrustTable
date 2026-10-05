@@ -738,7 +738,7 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 
 ## D-061 — `DET-03` re-scoped to the Core detector catalogue: closure boundary, successor items and an ordering amendment of D-059 (documentation only)
 
-**Decision (2026-10-05, owner-approved; recorded in the private change record CHG-005; this entry documents it and changes no code, tests, schemas or behavior; everything below marked planned is not built):**
+**Decision (2026-10-05, owner-approved; this entry documents it and changes no code, tests, schemas or behavior; everything below marked planned is not built):**
 
 1. **Retitle.** `DET-03` is retitled **Core detector catalogue**. It no longer claims that every historical catalogue idea is implemented. History is not edited: earlier entries and annotations keep the title they were written under.
 2. **Closure target.** `DET-03` closes at **27 registered detectors covering 28 of the 41 catalogue entries** (`docs/detector-framework.md` §16 carries the entry-to-detector mapping table). The count is 27 because one security detector covers two entries. It is **26 registered detectors** only if the empty-dataset case is conclusively parser-owned and terminal before detector execution. 13 entries are carried by named successor items: 11 moved by this decision and 2 moved earlier (D-057). No catalogue idea is dropped.
