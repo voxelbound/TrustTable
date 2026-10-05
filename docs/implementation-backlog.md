@@ -763,9 +763,15 @@ Worksheet selection, stored values, macro rejection, expansion limits.
 > `POST /datasets/inspect`, date interpretation, and the Playwright worksheet
 > selection scenario (`REL-04`).
 
-## DET-03 — Complete detector catalogue
+## DET-03 — Core detector catalogue
 
 Add remaining structural, completeness, consistency, validity, statistical, and cross-field detectors.
+
+> **Retitled 2026-10-05 (`docs/decision-log.md` D-061):** this item was titled
+> "Complete detector catalogue" and is now the **Core detector catalogue**. The
+> annotations below were written under the earlier title and are kept as history;
+> where they place work in this item that D-061 moves out, the "Closure boundary"
+> annotation at the end of this section governs.
 
 > **Annotation (2026-10-02, slice 1 of `DET-03`, item still in progress):**
 > `completeness.fully_empty_rows` and `consistency.inconsistent_booleans` are
@@ -947,6 +953,119 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > with a mandatory `NOT_CHECKED` observation, or the same as never confirmed),
 > and the migration of the name-based shipped detectors.
 
+> **Annotation (2026-10-05, closure boundary; `docs/decision-log.md` D-061;
+> documentation only, `DET-03` still in progress): PLAN CHANGE.** The owner
+> approved an explicit closure boundary. **Nothing here is built except what the
+> earlier annotations already record, and only the documentation record of this
+> change is authorized.** This annotation supersedes the working-title table, the
+> `dependency_graph` and the `dependency_graph_amendment` blocks above as the
+> *current* plan; those blocks stay as history.
+>
+> **Retitle.** `DET-03` is the **Core detector catalogue**. It closes at **27
+> registered detectors covering 28 of the 41 catalogue entries** (one security
+> detector covers two entries), or **26 registered detectors** only if empty
+> dataset is conclusively parser-owned and terminal before detector execution;
+> that is decided by package 1 and this text stays conditional until then. 13
+> entries are carried by named successors. The 41-entry mapping table is in
+> `docs/detector-framework.md` §16 ("Closure boundary"); 20 are built, 8 are
+> planned to be built by closure, 11 are moved to named successors and 2 were
+> moved by D-057.
+>
+> **What changed.** The confirmed-context execution engine (the former "package
+> 2": gate, durable second pass, scheduler, stale-run recovery, the
+> awaiting-confirmation summary and `NOT_CHECKED`) leaves `DET-03` and becomes
+> CCX-01. The Observation foundation and the ingest-warning support stay in
+> `DET-03` only in the minimal, bounded form below. **`WP-106` is preserved**: it
+> is delivered history under `DET-03` and is recorded as CCX-01 package 1. **D-059
+> ordering amendment:** the minimal Observation foundation ships first, with a
+> value-evidence producer, and CCX-01 later adds `NOT_CHECKED` as a new kind;
+> D-059 items 11 and 15 are superseded on ordering only.
+>
+> **Closure packages (finite; none beyond the documentation record authorized):**
+>
+> | # | Package | Delivers | Count after |
+> |---|---|---|---|
+> | 0 | Re-scope materialization (documentation only) | This record | 20 |
+> | 1 | Structural and ingest closure | Zero-row and header-only investigation, then `structural.empty_dataset` or a regression proof that it is parser-owned; an immutable in-memory parser-warning projection limited to four warning codes; `structural.unnamed_column`; `structural.excessive_parse_failures`. No persisted ingest-facts record | 23 (22 if parser-owned) |
+> | 2 | Observation and value-evidence slice | The minimal Observation foundation, a read-only API and a read-only results-UI list; `structural.mixed_types`, `consistency.inconsistent_date_formats`, `completeness.concentrated_missingness` | 26 (25) |
+> | 3 | Security detector slice | The adversarial suite extended first; one detector for possible data-exfiltration instruction and suspicious secret-request text as two evidence subtypes; bounded, redacted evidence; "possible risk" wording; the Security Reviewer review | 27 (26) |
+> | 4 | `DET-03` closure | An executable catalogue-status check against the 41-entry table; document and count reconciliation; the closure report | 27 (26) |
+>
+> Packages 1, 2 and 3 are technically independent of each other and may run in
+> any order after package 0; package 4 follows all three. Each package has its own
+> acceptance criteria, reviews and evidence.
+>
+> **Boundaries that hold for packages 1 to 3.** The parser-warning projection is
+> in memory, limited to `parsing.empty_column_name`, `parsing.ragged_row`,
+> `parsing.xlsx_formula_without_cached_value` and `parsing.xlsx_error_value`,
+> carries counts and bounded references and never a message or a cell value, and
+> reaches detectors through an additive optional input behind a flag that defaults
+> to off. Observations are neutral, have no severity, confidence or priority, have
+> one closed kind (`value_evidence`), are never counted by trust scoring or
+> priority, never enter an AI payload, and are excluded from exports and reports
+> for now. A negative allowlist test fails if an Observation field reaches score,
+> priority, an AI payload, an export or a report. The extension seam is that a
+> later kind is a new kind, never a change to `value_evidence`. Package 2 records
+> the provisional Observation API in the API specification and the domain model.
+> There is no dismissal, suppression, history, scheduling, `NOT_CHECKED`, scheduler,
+> second-pass machinery or stale-run recovery in `DET-03`, and **no `DET-03`
+> detector reads confirmed relationships**. The two unresolved CCX decisions
+> (what counts as a *conflicting* confirmation; how a *withdrawn* relationship is
+> gated) stay open and belong to CCX-01.
+>
+> **`DET-03` is COMPLETE when** (finite definition): (1) the title and scope are
+> reconciled and no document assigns confirmed context, a scheduler,
+> `NOT_CHECKED`, persisted ingest facts or Observation workflow to it; (2) the
+> registry holds exactly 27 detectors (26 only under the parser-owned empty-dataset
+> condition) and the original 20 remain registered and green; (3) empty dataset is
+> terminal, as a registered detector or as an evidenced, regression-tested outcome
+> before detection; (4) unnamed column and excessive parse failures read only the
+> four-code projection, with nothing persisted or exposed; (5) the three
+> observation detectors are readable through the API and visible in the results
+> UI, never change score or priority, and never enter an AI payload; (6) the
+> security detector exists with an extended adversarial suite, bounded and redacted
+> evidence and a recorded Security Reviewer approval; (7) the executable
+> catalogue-status check passes: every one of the 41 entries is built, built by
+> closure, moved to a named existing successor, or moved previously, and moved
+> entries are never counted as built; (8) documents are reconciled with the wording
+> "27 detectors covering 28 of 41 catalogue entries; 13 carried by named
+> successors", never "complete catalogue built"; (9) CI is green on the final
+> fingerprint with no stale verification and no unresolved blocking finding; (10)
+> the owner records the item complete.
+>
+> **Successor items** are listed in the group "Successor items carried out of
+> `DET-03`" at the end of this file. Their milestone placement is open.
+>
+> ```yaml
+> dependency_graph_closure:
+>   schema: 1
+>   status: design-recorded-not-implemented
+>   supersedes: [dependency_graph, dependency_graph_amendment]   # history is not edited; this is the current plan
+>   nodes:
+>     det03_p0: {title: "DET-03 re-scope materialization", kind: documentation}
+>     det03_p1: {title: "Structural and ingest closure"}
+>     det03_p2: {title: "Observation and value-evidence slice"}
+>     det03_p3: {title: "Security detector slice"}
+>     det03_p4: {title: "DET-03 closure"}
+>     wp106:    {title: "Confirmed-relationship foundation (delivered; CCX-01 package 1)", id: WP-106, state: delivered}
+>   edges:
+>     - {id: C1, from: det03_p0, to: [det03_p1, det03_p2, det03_p3]}
+>     - {id: C2, from: [det03_p1, det03_p2, det03_p3], to: det03_p4}
+>     - {id: C3, from: det03_p2, to: [DET-04, OBS-02, CCX-01]}   # CCX-01 adds NOT_CHECKED to the existing observation record
+>     - {id: C4, from: det03_p1, to: ING-04}
+>     - {id: C5, from: [wp106, det03_p2], to: CCX-01}
+>     - {id: C6, from: CCX-01, to: [CCX-02, DET-05, DET-06]}
+>     - {id: C7, from: CCX-02, to: DET-05}
+>   no_edge:
+>     - "no DET-03 package depends on CCX-01, CCX-02, DET-05 or DET-06"
+>     - "no DET-03 detector reads confirmed relationships"
+>   notes:
+>     - "E4 (migration of line_total_mismatch and invalid_percentages, review of invalid_email_shape) moves to DET-05."
+>     - "E5 (standards policy and category harmonization) is unchanged and remains outside DET-03; STD-01, HARM-01 and RULE-03 are working titles."
+>     - "E6 (zero-row verification) and E7 (date-pattern vocabulary) become investigation steps inside packages 1 and 2; E8 (security review) is inside package 3."
+>     - "The two open CCX decisions gate CCX-01 only."
+> ```
+
 ## PRIV-01 — Sensitive sample redaction
 
 Redact before prompt construction.
@@ -1004,3 +1123,79 @@ Blocked unless all requirements in `testing-strategy.md` pass.
 Evaluate value, cost, operations, abuse, privacy, retention, and inference.
 
 No implementation occurs until this decision is approved.
+
+# Successor items carried out of DET-03 (milestone placement open)
+
+These items were created by `docs/decision-log.md` D-061 so that no catalogue idea
+is dropped when `DET-03` closes as the Core detector catalogue. Each is **planned,
+not authorized and not built**, and none is placed in a milestone: placement is a
+separate owner decision. `docs/detector-framework.md` §16 ("Closure boundary") maps
+each catalogue entry to its carrier. Dependencies are in the `dependency_graph_closure`
+block of the `DET-03` section.
+
+## DET-04 — Value-distribution observations
+
+Carries from `DET-03`: high-cardinality categories, unexpected rarity, and the
+observation forms of probable duplicate identifier and identifier-like measure.
+Each is a neutral observation that never affects trust scoring. Depends on the
+`DET-03` observation foundation (package 2). Thresholds and evidence caps are
+specified in the item's own design.
+
+## CCX-01 — Confirmed-context execution
+
+The former `DET-03` "package 2" (`docs/decision-log.md` D-059). Delivers the
+applicability gate, the durable idempotent bounded second pass and its scheduler
+(with the justification D-059 requires beside the existing job pool), stale-run
+recovery, the derived awaiting-confirmed-context summary, finding and run
+provenance bound to the confirmation version, the `NOT_CHECKED` observation kind
+added to the existing observation record as a new kind, and the
+start-date-after-end-date detector as its first consumer. **`WP-106`, the
+confirmed-relationship foundation (D-060), is delivered and is this item's package
+1.** Owns two open decisions that must be made before it is authorized: what counts
+as a *conflicting* confirmation, and how the gate and summary treat a *withdrawn*
+relationship. Depends on `WP-106` and on the `DET-03` observation foundation.
+
+## CCX-02 — Confirmation screen
+
+The user interface for stating, changing and withdrawing confirmed relationships.
+Until it ships there is no end-user path to context-bound detection. Depends on
+CCX-01.
+
+## DET-05 — Context-bound detectors
+
+Carries from `DET-03`: discount inconsistency, tax inconsistency, missing currency
+in multi-currency data, conflicting stable attributes, and the confirmed-finding
+forms of probable duplicate identifier and identifier-like measure. Also carries the
+migration of the name-based shipped detectors (`cross_field.line_total_mismatch`,
+`validity.invalid_percentages`) and the review of `validity.invalid_email_shape`,
+with a compatibility window and a measurable exit condition (open). Each detector
+adds its own relationship kind through its own design. Depends on CCX-01 and
+CCX-02.
+
+## DET-06 — Time-based observations
+
+Carries from `DET-03`: completeness change over time and distribution shift. A
+confirmed time axis, disclosed period construction and a minimum sample per period
+are required; a change is never a defect by itself. Comparison with a previous
+upload stays out until durable dataset identity exists. Depends on CCX-01.
+
+## OBS-02 — Observation workflow
+
+Observation dismissal, suppression, history, inclusion in exports and reports,
+further observation kinds (processing-limit, standards-advisory,
+equivalence-suggestion), and any opt-in to AI payloads. Depends on the `DET-03`
+observation foundation.
+
+## ING-04 — Persisted ingest facts
+
+A persisted, immutable, parser-neutral ingest-facts record and TrustTable
+processing-limit facts, building on the in-memory four-code projection that `DET-03`
+package 1 delivers. Depends on `DET-03` package 1.
+
+## STD-01, HARM-01 and RULE-03 — previously named, unchanged
+
+*Standards policy* (STD-01) and *semantic category harmonization* (HARM-01) carry
+the moved entry "invalid country/region values"; the *business-rule follow-up*
+(RULE-03) carries the moved entry "status/date conflict" (`docs/decision-log.md`
+D-057). They remain proposed capabilities with no implementation commitment and no
+milestone placement; this decision gives them identifiers only.

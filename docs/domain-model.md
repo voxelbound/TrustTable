@@ -491,6 +491,23 @@ never confirmed; the analysis summary then carries a derived count that is not
 persisted and is not an observation. Every other kind, and dismissal and
 suppression, remain open.
 
+**Ordering amendment (2026-10-05, `docs/decision-log.md` D-061; planned, not
+built):** the first kind to ship is `value_evidence`, not `NOT_CHECKED`. The
+minimal Observation foundation is built first, inside the Core detector catalogue
+(`DET-03`), with value-evidence producers (mixed types, inconsistent date formats,
+concentrated missingness); `NOT_CHECKED` is added later as a new kind by the
+confirmed-context execution item, never by changing `value_evidence`. This
+supersedes D-059 items 11 and 15 on ordering only. An observation carries no
+severity, confidence or priority, is never counted by trust scoring, never enters an
+AI payload, and is excluded from exports and reports for now; a negative test
+enforces that exclusion. Dismissal, suppression, history and every other kind stay
+open. The route and response schema the foundation adds are provisional and are
+recorded in `docs/api-specification.md` by that package.
+
+The ingest-facts record below stays proposed and not built. `DET-03` delivers only
+an immutable, in-memory projection of four existing parser-warning codes for two
+detectors; it is not persisted, not exposed and not the record described below.
+
 ### Target design: ingest-facts record (proposed, not built)
 
 A typed, parser-neutral, immutable record with a fixed vocabulary and consistent

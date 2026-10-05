@@ -211,6 +211,23 @@ Deliver:
 > relationship is treated. The confirmation screen and
 > any further relationship kinds are later work with no milestone placement.
 > `DET-03` is still in progress and is not claimed complete.
+>
+> **Annotation (2026-10-05, `docs/decision-log.md` D-061, documentation only):
+> PLAN CHANGE; an owner-approved narrowing of what one `v1.0` bullet means.** The
+> `v1.0` bullet "complete detector catalogue" is **reinterpreted as the Core
+> detector catalogue closure**. `DET-03` is retitled the Core detector catalogue and
+> closes at 27 registered detectors covering 28 of the 41 catalogue entries (26
+> registered detectors only if empty dataset is conclusively parser-owned and
+> terminal before detector execution). The other 13 entries are carried by named
+> successor items listed in the "Successor items carried out of `DET-03`" group of
+> `docs/implementation-backlog.md`, **none of which is placed in this milestone or
+> in any other: their milestone placement is an open owner decision**, and until it
+> is made they are not `v1.0` scope and not claimed delivered. The confirmed-context
+> execution work formerly called package 2 leaves `DET-03`; the confirmed-relationship
+> record already built stays built. `DET-03` closes through four more packages
+> after this documentation record, in the order the backlog records, and is not
+> claimed complete here. The unresolved decisions about a conflicting confirmation
+> and a withdrawn relationship stay open and are not decided by this change.
 
 Production definition:
 

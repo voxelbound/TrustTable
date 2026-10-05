@@ -1012,8 +1012,27 @@ and finding and run provenance bound to the confirmation version. Package 2 is
 not authorized until two open decisions are made: what counts as a *conflicting*
 confirmation, and how the gate and the summary treat a *withdrawn* relationship.
 
+**Plan change (2026-10-05, `docs/decision-log.md` D-061; documentation only):**
+in this section "package 1" and "package 2" are the two D-059 packages; the
+`DET-03` closure packages are numbered separately in D-061. D-059 package 2 is no
+longer part of `DET-03`. It is carried by the successor item
+CCX-01 (confirmed-context execution), together with the two open decisions above;
+package 1 above stays built and is recorded as that item's first package. The
+ordering of the observation record changes: a minimal Observation foundation (one
+closed kind `value_evidence`, an additive stored list on the analysis record, a
+read-only route, neutral and never counted by trust scoring, priority, AI payloads,
+exports or reports) is built first inside `DET-03` with value-evidence producers,
+and CCX-01 later adds `NOT_CHECKED` as a new kind rather than changing
+`value_evidence`. This supersedes D-059 items 11 and 15 on ordering only. The
+execution paragraphs below (the durable second pass, `check_status` values, the
+scheduler and its provisional internals) are unchanged target behavior for CCX-01
+and are not part of `DET-03`. No `DET-03` detector reads the confirmed-relationship
+record.
+
 **Routes:** `POST` and `GET .../confirmed-relationships` are built (package 1);
-`GET .../observations` is planned (package 2). Both are separate from the existing
+`GET .../observations` is planned as part of the `DET-03` observation foundation
+(`DET-03` package 2 in D-061, not the CCX-01 work above; it ships only the
+`value_evidence` kind). Both are separate from the existing
 `.../context` routes, with the
 same access model as the existing analysis routes. Writes reject only
 structurally impossible input (malformed body, unknown kind, invalid transition,
