@@ -15,7 +15,10 @@ of this detector, not by a second detector. The two heightened families
 (`exfiltrate_data`, `disclose_secrets`) gain extended phrasings, matching adds
 compatibility normalization and removal of invisible format characters, and the
 stored excerpt is bounded and redacted. Finding identity, text, confidence,
-severity and the trust score are unchanged for every value version 1 matched.
+severity and the trust score are unchanged for every column in which version 2
+matches nothing that version 1 missed. Newly recognised phrasings count wherever
+they appear (owner decision SD-0cc2de8a9889, option A), so a column version 1
+already flagged can rise in confidence and severity when it also contains one.
 
 Restricted to text-family columns (`TEXT`/`CATEGORICAL`/`IDENTIFIER`),
 the same scope `consistency.py` already uses for its own detectors — the

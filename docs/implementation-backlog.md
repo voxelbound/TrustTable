@@ -1080,7 +1080,10 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > bounded redacted evidence (never text after a secret or exfiltration request) and an
 > extended adversarial suite, with a recorded Security Reviewer approval. Still one
 > finding per column; identity, severity and trust-score effect are unchanged for
-> everything version 1 matched. Only package 4 (executable catalogue-status check,
+> every column in which nothing newly recognised appears, and newly recognised
+> phrasings count wherever they appear, so a column version 1 already flagged can
+> rise in severity and priority (owner decision SD-0cc2de8a9889, option A). Only
+> package 4 (executable catalogue-status check,
 > document and count reconciliation, closure report) remains and is not authorized by
 > this package. The catalogue is not complete.
 >

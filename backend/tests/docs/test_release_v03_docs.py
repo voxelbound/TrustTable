@@ -152,7 +152,17 @@ def test_det_03_security_subtype_decision_is_recorded_consistently() -> None:
     log = _flat("docs/decision-log.md")
     assert "## D-064" in log
     assert "SD-989e7edf3d5a" in log
+    # The exception (owner decision SD-0cc2de8a9889, option A) is stated, not hidden.
+    assert "SD-0cc2de8a9889" in log
+    assert "Newly recognised phrasings count wherever they appear" in log
+    assert "every value version 1 matched" not in log
     framework = _flat("docs/detector-framework.md")
+    assert "Documented exception (owner decision SD-0cc2de8a9889, option A)" in framework
+    assert "every value version 1 matched" not in framework
+    assert "already flagged column can rise in severity" in _flat(
+        "docs/implementation-backlog.md"
+    ) or ("can rise in severity" in _flat("docs/implementation-backlog.md"))
+    assert "can now rise in severity" in _flat("README.md")
     for term in ("exfiltration_instruction", "secret_request", "prompt_injection"):
         assert term in framework, term
     assert "26 registered detectors covering 28 of the 41" in framework
