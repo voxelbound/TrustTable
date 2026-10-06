@@ -1294,3 +1294,38 @@ Core rules:
 - deletable local data
 - pinned dependencies and images
 - generated SBOM
+
+## 12. Planned architecture for the UI/UX redesign (planned, not built; D-066)
+
+> Nothing in this section exists. These are requirements the owner-confirmed redesign
+> places on the architecture. Where more than one valid mechanism exists, none is
+> approved here; each slice specification chooses and is reviewed independently.
+
+- **Staging.** A temporary record in the existing SQLite store, not a durable Dataset,
+  consumed atomically into an analysis at Run, with bounded count, bytes and expiry and
+  cleanup at startup and on use. The direct-upload route and the staged Run share one
+  ingestion path so validation, limits and integrity logic are not duplicated.
+  Content is stored in the database today (`Analysis.content`); documentation that says
+  a file is stored is to be read accordingly.
+- **Settings.** Effective value = explicit deployment override, then stored setting,
+  then default, computed on the server. Override detection never compares a value with
+  a default; packaging must not set a managed key. Deployment configuration and security
+  or resource limits stay in environment configuration and are never overridable by a
+  stored value.
+- **AI enrichment.** Persisted per finding, bound to finding identity, confirmed-context
+  version, model identity and prompt or contract version, with a status that survives
+  restart (a result must not stay "preparing" after a restart), bounded start and
+  status, and no dependency on one long browser request. The existing job facility is
+  reused where it fits. A future user-initiated batch is an interface only.
+- **Inspector.** A data path separate from canonical evidence, AI payload assembly and
+  report assembly, with bounded server-side windows and a performance spike on the real
+  parse path (the stored file is re-parsed on every row-context call today) before any
+  limit is set.
+- **Local AI status (`UX-09`).** Defined against an abstract provider and readiness
+  contract that does not assume where a runtime runs, so the unapproved S8b choice
+  (`LAI-01`) is not made implicitly. The runtime is currently provisioned outside the
+  application on the host and reached over the container bridge.
+- **Deployment boundary.** The frontend proxy currently sets no read timeout or request
+  body size; limits must be consistent across proxy, backend and interface, with the
+  backend as the authority, and long AI work must not depend on one long-lived proxy
+  request.

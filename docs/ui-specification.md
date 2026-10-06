@@ -488,3 +488,122 @@ frontend/
 │   └── test/
 └── e2e/
 ```
+
+## 12. Planned redesign — target behavior (planned, not built)
+
+> **Status.** Sections 1 to 11 describe the interface as it is built. This section
+> records the owner-confirmed target of the UI/UX redesign (`UX-01`,
+> `docs/decision-log.md` D-066, D-067). **Nothing in this section is built, and
+> nothing here may be presented in the interface as available until its slice ships.**
+> Proposal-level designs are marked as such and are to be confirmed in each slice's
+> specification, which needs a fresh, substantive independent review before
+> implementation.
+
+### 12.1 Principles
+
+- Business language first, technical detail second; technical detail through
+  progressive disclosure and an Advanced mode.
+- The scored result is called a **Finding**; neutral pattern results are
+  **Observations** ("Worth knowing"). Findings are not described as faults or alarms;
+  severity, category, evidence and guidance explain seriousness.
+- Every provenance is shown in business wording and distinguished: deterministic
+  analysis, built-in guidance, user-confirmed context, and local AI interpretation.
+- No capability that does not exist is shown as active. A planned capability may be
+  shown only as disabled with a statement that it is planned.
+- Raw internal values (category and severity identifiers), content hashes and
+  similar identifiers do not appear in the normal interface; they appear only in
+  Advanced or diagnostic views where technically useful.
+
+### 12.2 Workflow and navigation (confirmed)
+
+Choose data, Configure, Run, Review, Act and Export. Choosing a file never starts an
+analysis.
+
+- **Workspace (landing page):** upload of a CSV or XLSX file, the sales demo, recent
+  analyses with reopen, rerun and delete, a notice when a chosen file exactly matches
+  a previously analysed file, and a visible but disabled *Compare datasets* area that
+  states comparison is planned and not implemented.
+- **Configure:** file facts, worksheet choice where relevant, known readability
+  problems (including an unsupported encoding) reported before Run, a short grouped
+  business-language summary of what TrustTable will check (no detector names; more
+  detail by progressive disclosure), Local AI status noting that AI assistance is
+  optional and separate, a privacy statement, and one *Run analysis* action. There are
+  no category or detector on/off controls: the standard analysis always runs and the
+  trust assessment means that it ran.
+- **Review:** Overview, Findings (with previous, next and next-unreviewed navigation
+  and review-state filtering), the finding-scoped inspector, Observations, and About
+  this data (context). There is **no separate Data tab**.
+- **Act and Export:** Reports and the Rules hand-off area (12.7). Technical details
+  are shown in Advanced mode.
+- Persistent workspace navigation: Home, Analyses, Compare (disabled), Settings
+  (Normal and Advanced), Help. Existing routes remain reachable.
+
+### 12.3 Analysis progress
+
+Stages in business wording for the deterministic analysis. "Results ready" means the
+deterministic result is ready. Optional AI work is shown separately, per finding, and
+never blocks or delays the deterministic result. No time estimate is shown unless
+measured.
+
+### 12.4 Findings review and the data inspector (confirmed boundaries)
+
+The inspector is **finding-scoped**: it is reached from a finding, or from an
+observation that carries example rows. It offers scrolling in both directions, sticky
+headers, highlighted affected cells and columns, previous and next affected row, and a
+return-to-the-issue control. For a column-wide finding it prefers existing, safe
+evidence or example-row anchors and otherwise a deterministic bounded window such as
+the head of the dataset; there is no arbitrary sampling and no general dataset browser.
+Navigation never implies that every affected row can be visited unless the complete set
+is retained, and says so honestly when only a bounded subset exists. Cell values are
+rendered as inert text, and suspicious values stay truncated until the user chooses to
+reveal them (section 8). Window sizes and paging limits are set only after a parse and
+caching performance measurement on the real product path. Making row data visible does
+not by itself expand what is sent to AI, promote row context into canonical finding
+evidence, or add row data to reports or exports; existing, explicitly requested,
+bounded report and evidence examples keep their existing contracts.
+
+### 12.5 AI enrichment
+
+On demand, persisted and non-blocking per finding. Deterministic content, evidence and
+built-in guidance render immediately. The AI area has its own state: preparing, ready,
+unavailable or failed, and marks a result stale when the finding, the confirmed
+context, the model or the prompt contract it was bound to has changed. There are no
+automatic explanations for every finding.
+
+### 12.6 Settings
+
+Normal settings each state what they control, why a normal user might change them and
+the consequences. Technical and AI implementation detail (provider, runtime location,
+model identity, timeouts) is only in Advanced. A setting managed by the installation
+is shown read-only with its effective value and a plain explanation; the product never
+edits deployment configuration. Display preferences are browser-local. No auto-delete
+setting is offered.
+
+### 12.7 Rules (secondary hand-off area)
+
+Placed under Act and Export. States that these are executable validation rules for the
+current analysis, that they can be validated and exported for the team responsible for
+the data source or pipeline, and that TrustTable does not currently apply them
+automatically to later files or other datasets. Listing, running, deleting and export
+remain. There is no creation from Findings and no manual authoring or editing. The
+terms "Rules", "Checks" and "Expectations" are not settled for a future persistent
+capability (`RULE-04`).
+
+### 12.8 Local AI
+
+The normal interface shows whether AI assistance is enabled, whether the local runtime
+is ready, which model is active, that processing stays local, what AI adds and what
+works without it. The first stage (`UX-09`) is honest status, guided setup,
+compatibility and readiness checks and connection testing; it performs no download or
+installation. Product-managed setup of a small curated range of hardware-appropriate
+profiles is the approved goal, but its mechanism is not approved (`LAI-01`). Profiles
+are capability tiers, not hardware requirements. No hardware, performance, quality or
+memory claim is shown without qualification evidence. There is no unrestricted
+model-repository browsing; downloads, storage, licences and network egress always need
+explicit consent.
+
+### 12.9 Proposal-level designs (not yet confirmed)
+
+Dashboard metrics and visualizations, progress stage wording, the provenance and help
+model, the empty, loading and error pattern, the contents of Normal and Advanced,
+and curated profile names are proposals, to be confirmed in the slice specifications.

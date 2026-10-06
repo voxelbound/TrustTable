@@ -235,3 +235,54 @@ Logs may contain:
 - no high or critical vulnerability left unreviewed
 - deletion verified
 - supported deployment boundary documented
+
+## 7. Planned redesign: threat considerations (planned, not built; D-066)
+
+> These are requirements from a conditional, direction-level review that did not
+> verify code. Each slice specification needs its own substantive security and privacy
+> review against its actual contracts; a suggested mechanism is an option, not approved
+> architecture.
+
+- **Staged uploads.** Untrusted bytes are stored at rest before an analysis exists.
+  Requirements: unguessable single-use reference with a stated trust model for who may
+  use it; atomic consume and a fail-closed outcome for expiry racing Run and for second
+  use; hard caps on count and bytes and bounded inspection time and memory; the same
+  type, size and parser limits as direct upload; the hash recomputed at consume; the
+  reference never in logs, URLs or shareable responses; cleanup that survives a crash.
+- **"This exact file was analysed before."** This is a content-hash oracle. State the
+  single-user and local trust assumption, or scope the lookup; never show the hash to a
+  normal user; keep it a lookup, not an identity.
+- **Settings write path.** Allowlisted, typed, versioned; unknown keys and
+  out-of-range values rejected; protection suitable for a local-first application
+  against forged or cross-origin writes; fail closed on a corrupt or unknown-version
+  store; the effective value computed on the server so a stored value never exceeds a
+  deployment override or a security or resource limit, including any setting that
+  enables network egress; effective-source reporting tested against reality. The
+  Advanced exception that returns runtime and model configuration is an explicit field
+  allowlist, tested separately, and raw paths and URLs stay out of analysis, finding,
+  report and other shareable responses.
+- **Inspector.** Row data is rendered as inert text (no HTML or formula
+  interpretation), windows are bounded on the server, responses are not stored by
+  shared caches, and it stays out of AI payloads, canonical evidence, reports and
+  exports unless an existing, explicitly requested, bounded contract says otherwise.
+  Retaining the complete affected-row set would be new retention of raw data and needs a
+  retention and deletion rule.
+- **Persisted AI output.** Derived from user data: it follows its analysis's deletion,
+  is rendered as inert text, stays out of reports, exports and canonical evidence unless
+  explicitly allowed, falls back to deterministic content when stale or failed, and its
+  start and status endpoints need bounded concurrency and rate.
+- **Local AI connection test (`UX-09`).** A request to a configured endpoint is a
+  forged-request and egress vector: restrict targets to the configured local endpoint,
+  no redirects, bounded time and size, no reflected response body, no path or address in
+  messages. Hardware detection output is local-only and is not stored as a fingerprint
+  beyond need. No download, model pull or egress without explicit consent.
+- **Documented controls must work.** `PROMPT_INJECTION_DETECTION_ENABLED` is documented
+  as a gate and consumed by nothing; fix it or correct the claim before AI enrichment
+  expands. Proxy limits must not leave oversize input buffered or accepted.
+- **Local AI managed provisioning (`LAI-01`, not approved).** Downloads, pinned
+  checksums, licences, consent and egress, download integrity and recovery, and process
+  supervision privileges all need independent security and privacy and licensing review
+  before any mechanism is chosen. The model-file formats are themselves a parser attack
+  surface (`D-031`).
+- **Public record.** Machine-specific owner hardware descriptions are withdrawn from the
+  live documentation (`D-067`); published history keeps them.

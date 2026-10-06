@@ -156,7 +156,10 @@ No durable source in this repository names a specific larger
 accelerated-tier candidate (for example, a particular ~27B-parameter-
 class model) for this or any planned round. What is durably documented
 is more general: `D-029` establishes a separate accelerated hardware
-profile (RTX 3090-class, 24GB VRAM) as a real, distinct evaluation
+profile (a more capable, hardware-accelerated machine; the specific
+machine example in the original wording was withdrawn from this live
+text by `D-067` and was never a requirement or qualification evidence)
+as a real, distinct evaluation
 target, and earlier design work defers "dedicated reasoning-mode
 variants" and larger releases in the same families (e.g. Qwen3.8) to a
 second round.

@@ -1266,3 +1266,165 @@ the moved entry "invalid country/region values"; the *business-rule follow-up*
 (RULE-03) carries the moved entry "status/date conflict" (`docs/decision-log.md`
 D-057). They remain proposed capabilities with no implementation commitment and no
 milestone placement; this decision gives them identifiers only.
+
+# UI/UX redesign (`UX-01`) — planned, not built; the next `v1.0` work, ahead of `DET-04`
+
+Recorded by `docs/decision-log.md` D-066 (PLAN CHANGE, owner-confirmed) and D-067.
+**Every item below is planned and not built, and none is authorized by that
+record.** Slice identifiers are working identifiers. Placement of `DET-04` and the
+other `DET-03` successor items is unchanged and open. Each slice needs its own
+specification and a fresh, substantive independent review against its actual
+proposed contracts before implementation; the architecture and the security and
+privacy reviews of the design were conditional, direction-level reviews only.
+Reviewer notes are requirements to address or consciously decline in a slice
+specification, and a reviewer-suggested mechanism is an option, not approved
+architecture, where more than one valid mechanism remains.
+
+## UX-01 — UI/UX redesign (umbrella)
+
+Redesign the interface from an engineering-oriented prototype into a business
+application: "business language first, technical detail second", progressive
+disclosure and an Advanced mode, with working capabilities, local-first operation,
+deterministic authority and provenance preserved. Target behavior is described in
+`docs/ui-specification.md` section 12 and `docs/decision-log.md` D-066. Capability
+tiers: **exists, needs better presentation** (findings list, review controls,
+evidence, reports, rules listing, observations, trust assessment, context, profile
+data); **exists partly** (worksheet choice only after a refusal, history reopen by
+URL only, retry only for failed analyses, per-analysis AI exposure only, row context
+for row-anchored findings only); **does not exist** (staging and inspection,
+listing analyses, a settings store, an AI status route, persisted AI enrichment and
+its status, product-managed Local AI); **future, accommodate but never present as
+active** (Compare, confirmed-relationship screen, further observation kinds,
+observation workflow, context-bound detectors, a Rules and Expectations capability).
+
+Implementation defects and drift tracked under this item, to verify and resolve
+inside the relevant slice and not to be presented as decisions:
+
+- `PROMPT_INJECTION_DETECTION_ENABLED` is documented as the gate of the prompt-injection
+  detector and is consumed by nothing; a setting must not be presented that does not
+  control the behavior it claims to control.
+- The frontend proxy sets no read timeout or request-body size, so upload limits and
+  long AI requests may be inconsistent with the backend limits and with
+  `LLM_TIMEOUT_SECONDS`; to be verified, with server-side enforcement as the authority.
+- The Start screen states that AI is disabled regardless of configuration, and a
+  documented `GET /ai/status` route does not exist.
+- Raw internal values (categories, severities) appear in the interface.
+- Placeholder text on the Overview ("coming soon") describes capabilities that exist.
+- `ANALYSIS_RETENTION_HOURS` is declared and consumed by nothing.
+- `docs/api-specification.md` says the source file is stored; the code stores the
+  content in the database with a nominal storage location.
+- The explanation route calls the model on every request and stores nothing, and the
+  finding screen waits for it.
+
+## UX-02 — S1: workspace and a deliberate start
+
+Workspace landing page; file choice that never starts an analysis; a Configure step
+with file facts, worksheet choice, known readability problems reported before Run
+(including an unsupported encoding), a short grouped business-language summary of
+what will be checked, honest Local AI status and a privacy statement; Run analyses
+exactly the staged and inspected bytes; a disabled Compare datasets area stating it
+is planned. Backend: temporary staging in the existing SQLite store with a
+single-use opaque reference, server-computed integrity hash verified end to end,
+atomic consume at Run, bounded count, bytes and expiry, startup and lazy cleanup,
+and the direct-upload route preserved (D-066 item 4); an AI status route. Specification
+must settle: staging caps and expiry, the trust model of the reference, behavior on
+expiry and double use, one shared ingestion path with direct upload, and the proxy
+limits. No durable Dataset entity.
+
+## UX-03 — S2: history, reopen and rerun
+
+Recent analyses, reopen, rerun (a new analysis made from stored content, as retry
+does), delete, and a notice that this exact file was analysed before. Backend: an
+analysis list, a rerun route, and a lookup by content hash that stays a lookup and
+never becomes a dataset identity. Specification must settle the index and the effect
+of deletion on the lookup. "Differs from a previous version" is limited to a
+filename-based hint without a diff.
+
+## UX-04 — S3: dashboard and progress
+
+Business-oriented Overview (trust verdict, severity and category distribution,
+columns with most findings, rows affected, completeness, review progress,
+observations as "worth knowing") and business-language progress that distinguishes
+the deterministic result from optional AI work. Visualizations are chosen only where
+they answer a concrete question. Backend: an aggregate summary where client
+derivation is insufficient. The metrics and visualizations are proposals to be
+confirmed in the slice specification.
+
+## UX-05 — S4: findings review workspace
+
+Previous, next and next-unreviewed navigation, review-state filtering, keyboard
+support, display labels instead of raw internal values, and non-blocking AI
+enrichment: deterministic content never waits for a model call, and AI results are
+persisted, bound to finding identity, confirmed-context version, model identity and
+prompt or contract version, and stale when the binding changes (D-066 item 7).
+Specification must settle the execution model and restart behavior of enrichment,
+retention and deletion of persisted output, bounded start and status, and a future
+batch seam as an interface only.
+
+## UX-06 — S5: finding-scoped data inspector
+
+Scrollable grid with sticky headers, affected-cell highlighting, previous and next
+affected row and a return-to-issue control, reached from findings and from
+observations with example rows; column-wide findings use existing safe anchors or a
+deterministic bounded window (D-066 item 6). **A parse and caching performance spike
+on the real product path at representative sizes precedes any window or paging
+limit.** Specification must settle whether the complete affected-row set is retained
+(navigation must not imply otherwise), inert rendering, cache behavior, and tests
+that opening the inspector changes no AI payload, canonical evidence, report or
+export.
+
+## UX-07 — S6: supporting areas and help
+
+Context ("About this data"), Rules as a secondary hand-off area under Act and Export,
+Reports, Observations and Details, with purpose, availability, why it matters and
+next-step wording; provenance and "what does this mean" help; empty, loading and
+error states. Rules keep listing, execution, deletion and export, state that they are
+associated with the current analysis and are not applied to later files, and gain no
+creation, authoring or editing. Vocabulary uses **Findings**.
+
+## UX-08 — S7: settings
+
+Normal and Advanced settings with an explanation for every normal setting;
+precedence explicit deployment override, then stored setting, then built-in default
+(D-066 item 5). Specification must settle the allowlist (excluding secrets, paths,
+URLs and security or resource limits from normal settings), how an explicit override
+is detected without comparing with defaults, write-path protection and fail-closed
+behavior, the narrow Advanced exception, commenting out UI-managed settings in
+`.env.example` with the tests that pin it, a test that packaging creates no explicit
+override, and the plain explanation for installations that copied the old file.
+
+## UX-09 — S8a: Local AI status and guided setup
+
+Honest status, compatibility and readiness checks, connection testing and guided
+setup, behind an abstract status contract that does not assume where a runtime runs.
+No download, installation or model management. The connection test must be bounded
+against forged requests and leak no path or address.
+
+## LAI-01 — S8b: product-managed Local AI architecture (design track, not approved)
+
+Design the safest and most maintainable architecture before any implementation:
+runtime placement and application or container boundaries, non-accelerated and
+hardware-accelerated execution, hardware capability detection, curated hardware-appropriate
+profiles, model storage, runtime and model upgrades, integrity and pinned checksums,
+licences, explicit egress and consent, download and install progress and recovery,
+switching and removal, uninstall and reclaim space. Then independent architecture,
+security and privacy, and licensing review. The earlier evidence (the AI-06 screening,
+the baseline selection, the waived qualification) is reused only as what it is: one
+baseline model was selected on one runtime, no accelerated profile was evaluated, and
+no hardware requirement was validated. Qualification evidence is required before any
+profile claim.
+
+## RULE-04 — Rules and Expectations design track (design only, not blocking)
+
+A persistent expectation that a user confirms or refines, that survives its source
+analysis, that TrustTable conservatively and with confirmation can recognize as
+applicable to later data, and that is evaluated again. Must cover data-kind
+association rather than exact-byte identity, applicability and false-match
+protection, editing and versioning, provenance after modification, explicit versus
+automatic application, results per analysis, trust-score implications, retention of
+data-derived parameters after the source analysis is deleted, and terminology.
+
+## ING-05 — file-reading options (follow-up, not approved)
+
+Encoding selection and other parser controls, designed separately with the parser
+behavior and its security implications.

@@ -100,3 +100,37 @@ prevents the process from starting (see above), this check can only be
 observed as `"ok"` once the application is serving requests — it exists
 as a real, extensible check for future in-process reconfiguration paths,
 not a constant.
+
+## Planned: product-managed settings and deployment overrides (planned, not built)
+
+> Nothing in this section exists today. Every setting above is read from the
+> environment and cached for the life of the process. This section records the
+> owner-confirmed target (`docs/decision-log.md` D-066) and two facts a reader needs.
+
+- **Precedence.** For the small allowlist of user-manageable product settings (for
+  example whether AI assistance is enabled and the active supported AI profile), the
+  effective value will be: an explicit deployment override, then a stored user setting,
+  then the built-in default. An *explicit deployment override* is a value an operator
+  configured. It is not a default that packaging or a container supplies, and it is never
+  detected by comparing a value with the default.
+- **Managed by the installation.** A setting that has an explicit override is shown
+  read-only with its effective value and a plain explanation. The product never edits
+  `.env` or deployment configuration. *Reset to default* removes the stored value.
+- **What stays here.** Deployment configuration (database, data directory, log level,
+  worker count) and the security and resource limits stay installation-controlled and are
+  never overridable by a stored value. Display preferences stay in the browser.
+- **`.env.example`.** The settings slice will comment out UI-managed settings in
+  `.env.example` instead of setting them to their defaults (copying a file that sets every
+  value would otherwise look like an explicit override), will test that packaging sets none
+  of them, and will explain in plain language which explicit settings prevent in-product
+  management for installations that copied the old file. This documentation change does
+  not alter `.env.example`, which the existing documentation tests pin to the real defaults.
+- **Known defects, tracked and not decisions.** `PROMPT_INJECTION_DETECTION_ENABLED` is
+  documented above as the gate of the prompt-injection detector but no code consumes it,
+  and `ANALYSIS_RETENTION_HOURS` is likewise consumed by nothing; neither may be offered to
+  users as a control until it controls what it claims to. No auto-delete setting is part of
+  the redesign: retention is destructive behavior that needs its own design.
+- **Advanced exception.** A settings-only response may expose the effective runtime and
+  model configuration needed to administer an installation. Raw paths, URLs and other
+  technical configuration stay out of analysis, finding, report and other shareable
+  responses.

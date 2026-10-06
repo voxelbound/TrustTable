@@ -842,3 +842,43 @@ The Dataset lifecycle can outlive or contain multiple analyses only when explici
 8. Exported rules must execute.
 9. Deleted analyses and artifacts are inaccessible.
 10. All externally visible references resolve.
+
+## 24. Target design: UI/UX redesign records (proposed, not built; `docs/decision-log.md` D-066)
+
+> Nothing in this section exists. It records the shape the owner-confirmed redesign
+> needs, as requirements. Mechanisms are fixed in each slice specification after a
+> fresh independent review.
+
+- **Staged upload (temporary; not a Dataset).** An implementation record that holds
+  untrusted uploaded bytes between choosing a file and Run: an opaque single-use
+  reference, the sanitized filename, the format, the worksheet names found by
+  inspection, a server-computed integrity hash, a creation time and an expiry. It is
+  consumed atomically into an `Analysis` at Run and is otherwise removed at expiry,
+  with startup and lazy cleanup and bounded count and bytes. It is **not** a durable
+  `Dataset`, has no identity beyond its lifetime and is never listed. A `Dataset` stays
+  per analysis (section 4); durable dataset identity remains future work tied to
+  Compare. The exact-file lookup is a lookup over retained analyses and creates no
+  identity.
+- **Persisted AI enrichment per finding.** An additive record, separate from the
+  deterministic `Finding`, that stores a validated AI interpretation (this is the
+  convergence `D-037` scheduled toward `AIInterpretation`, section 14) together with a
+  **binding**: the finding identity, the confirmed-context version, the model identity
+  and the prompt or contract version. A result whose current binding differs is stale
+  and is never presented as current. It has a status (preparing, ready, unavailable,
+  failed), is deleted with its analysis, and never alters a finding, evidence, a score
+  or a priority.
+- **Stored settings.** A small allowlisted, typed and versioned set of user-facing
+  product settings with the precedence explicit deployment override, then stored value,
+  then built-in default. The source of each effective value (override, stored, default)
+  is reported. It is not a general key and value configuration surface.
+- **Inspector windows** are read-only views over stored content, bound to a finding or
+  an observation's example rows, and are not `Evidence`. Section 13's rules stand.
+
+New invariants:
+
+11. Choosing a file never starts an analysis; Run analyses exactly the staged bytes.
+12. Deterministic results never depend on a model call or on an enrichment record.
+13. A stale enrichment is never shown as current.
+14. A stored setting never exceeds a deployment override or a security or resource limit.
+15. Making row data visible in the inspector does not by itself add it to AI input,
+    canonical evidence, reports or exports.
