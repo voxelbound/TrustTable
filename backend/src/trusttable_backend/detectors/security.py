@@ -320,11 +320,12 @@ def _truncated_sample(value: str) -> str:
 
     Text after the first secret-request or exfiltration-request phrase is never
     kept: whatever follows such a request (a password, a destination, a token)
-    is exactly the sensitive part. Token-like strings, URLs and e-mail
-    addresses in what remains are masked, and the result is cut to
-    `_TRUNCATED_SAMPLE_LENGTH`. A value with no such phrase keeps the version 1
-    excerpt (its first characters). Short secrets written *before* a request are
-    not recognizable and are a documented limit."""
+    is exactly the sensitive part. In **every** excerpt, whichever families
+    matched, token-like strings, URLs and e-mail addresses are masked before the
+    result is cut to `_TRUNCATED_SAMPLE_LENGTH`. A value with no secret or
+    exfiltration phrase otherwise keeps the version 1 excerpt (its first
+    characters). A short secret written in plain words (for example after "the
+    password is") is not recognizable and is a documented limit."""
     normalized = _normalize(value)
     ends = [
         match.end()
@@ -332,9 +333,9 @@ def _truncated_sample(value: str) -> str:
         if family in _FAMILY_SUBTYPE
         and (match := _family_matches(family, pattern, normalized)) is not None
     ]
-    if not ends:
-        return normalized[:_TRUNCATED_SAMPLE_LENGTH]
-    kept = normalized[: min(ends)]
+    kept = normalized[: min(ends)] if ends else normalized
+    # Masking runs on every excerpt, before it is cut to length, so a token that
+    # straddles the length bound is never stored as a recognizable fragment.
     for masker in (_URL, _EMAIL, _KNOWN_TOKEN, _TOKEN_RUN):
         kept = masker.sub(_REDACTION, kept)
     return kept[:_TRUNCATED_SAMPLE_LENGTH]
@@ -380,8 +381,9 @@ class PossiblePromptInjectionDetector:
             "Evidence subtypes (prompt_injection, exfiltration_instruction, secret_request) "
             "label what was matched; they say nothing about intent. Text after a secret or "
             "exfiltration request is never stored, and token-like strings, URLs and e-mail "
-            "addresses in the stored excerpt are masked; a short secret written before a request "
-            "is not recognizable and may remain in the excerpt.",
+            "addresses in every stored excerpt are masked; a short secret written in plain "
+            "words (for example after 'the password is') is not recognizable and may remain "
+            "in the excerpt.",
             "Severity reflects only the current SecurityExposureState "
             "(model-provider/sample-transmission enabled), not an actual "
             "per-analysis 'sent to model' or 'model output rejected' fact — those "

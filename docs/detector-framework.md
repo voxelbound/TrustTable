@@ -256,9 +256,10 @@ controls, soft hyphen, byte-order mark). These can match text version 1 missed.
 
 Evidence is bounded and redacted: the stored excerpt is at most 80 characters, never
 includes text after the first secret or exfiltration request (the part most likely to
-hold a password, destination or token), and masks token-like strings, URLs and e-mail
-addresses in what remains. A short secret written *before* a request is not
-recognizable and can remain in the excerpt.
+hold a password, destination or token). In **every** stored excerpt, whichever
+families matched, token-like strings, URLs and e-mail addresses are masked before the
+excerpt is cut to length. A short secret written in plain words (for example after
+"the password is") is not recognizable and can remain in the excerpt.
 
 Documented limits (pinned by tests, not claimed as detected): homoglyphs from other
 scripts, leetspeak, encodings such as base64, reversed text, a word split by a space,
