@@ -1116,6 +1116,22 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 >     - "E6 (zero-row verification) and E7 (date-pattern vocabulary) become investigation steps inside packages 1 and 2; E8 (security review) is inside package 3."
 >     - "The two open CCX decisions gate CCX-01 only."
 > ```
+>
+> **Annotation (2026-10-06, closure package 4 built; `docs/decision-log.md` D-065;
+> `DET-03` closed as the Core detector catalogue):** the closure definition above is met
+> as **26 detectors covering 28 of 41 catalogue entries; 13 carried by named
+> successors.** (Item 2 reads 26 rather than 27 by D-064.) An executable
+> catalogue-status check (`backend/tests/detectors/test_catalogue_status.py`) compares the
+> 41-entry table in `docs/detector-framework.md` section 16 with the real registry and
+> with the successor items in this file, so a dropped row, an unknown detector, an
+> unknown successor or a moved entry counted as built fails the test run. This is a
+> closure of the Core detector catalogue, not a claim that every catalogue idea is
+> implemented: the 13 moved entries are not built, and their successor items (DET-04,
+> CCX-01, CCX-02, DET-05, DET-06, STD-01, HARM-01, RULE-03) remain planned with no
+> milestone placement, which is still an open owner decision. Still open and not
+> decided here: the two CCX-01 decisions and whether `structural.empty_column` should
+> skip a zero-row dataset (D-062 item 9). No detector, finding, score, API or UI
+> behavior changed in this package.
 
 ## PRIV-01 — Sensitive sample redaction
 

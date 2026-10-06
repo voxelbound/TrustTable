@@ -114,11 +114,12 @@ def test_docs_say_the_configured_limits_are_consumed_and_ing_03_is_complete() ->
     assert (_ROOT / "backend/src/trusttable_backend/analysis/parse_limits.py").is_file()
 
 
-def test_no_readme_line_contradicts_the_completed_ing_03_or_the_open_det_03() -> None:
+def test_no_readme_line_contradicts_the_completed_ing_03_or_the_closed_det_03() -> None:
     """Every README mention is checked, not only the status block: a stale
     "ING-03 (in progress)" in the delivered-work list contradicted the status
-    block after `ING-03` completed. `DET-03` must stay in progress until the
-    whole catalogue is built."""
+    block after `ING-03` completed. `DET-03` is closed only as the Core detector
+    catalogue (closure package 4, D-065): the README never says it is complete,
+    and never says the full catalogue is built."""
     lines = _text("README.md").splitlines()
     for line in lines:
         if "ING-03" in line:
@@ -128,10 +129,14 @@ def test_no_readme_line_contradicts_the_completed_ing_03_or_the_open_det_03() ->
             assert "DET-03` is complete" not in line and "DET-03 (complete)" not in line, line
     readme = _flat("README.md")
     assert "**ING-03 (complete)**" in readme
-    assert "**DET-03 (in progress)**" in readme
-    assert "**In progress — detector catalogue (`DET-03`):**" in readme
-    assert "the catalogue is not complete" in readme
-    assert "26 detectors are built" in readme
+    assert "**DET-03 (closed as the Core detector catalogue)**" in readme
+    assert "**DET-03 (in progress)**" not in readme
+    assert "**Done — Core detector catalogue (`DET-03`" in readme
+    assert (
+        "26 detectors covering 28 of 41 catalogue entries; 13 carried by named successors" in readme
+    )
+    assert "the full catalogue is not built" in readme
+    assert "What the 26 detectors are" in readme
     assert "bringing it to 17" in readme
     assert "bringing it to 19" in readme
     assert "bringing it to 20" in readme
