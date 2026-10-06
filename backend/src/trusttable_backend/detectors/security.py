@@ -250,7 +250,7 @@ _URL: Final[re.Pattern[str]] = re.compile(r"\bhttps?://\S+", re.IGNORECASE)
 #: Bounded on purpose (RFC 5321 limits: 64 local part, 255 domain label run): the
 #: lookbehind anchors each attempt at the start of a token, so a long run of
 #: non-space characters is never rescanned from every position.
-_EMAIL: Final[re.Pattern[str]] = re.compile(r"(?<![^\s@])[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{1,63}")
+_EMAIL: Final[re.Pattern[str]] = re.compile(r"(?<![^\s@])[^\s@]{1,64}@[^\s@]{1,255}")
 _REDACTION: Final[str] = "[redacted]"
 
 
@@ -330,11 +330,15 @@ def _truncated_sample(value: str) -> str:
     characters). A short secret written in plain words (for example after "the
     password is") is not recognizable and is a documented limit."""
     normalized = _normalize(value)
+    # The cut is the end of the *earliest-ending* heightened phrase over the base
+    # **and every extended** pattern of both families, not the first pattern that
+    # happens to match: an extended phrasing that comes first must cut first.
     ends = [
         match.end()
         for family, pattern in _PATTERN_FAMILIES
         if family in _FAMILY_SUBTYPE
-        and (match := _family_matches(family, pattern, normalized)) is not None
+        for candidate in (pattern, *_EXTENDED_PATTERNS.get(family, ()))
+        if (match := candidate.search(normalized)) is not None
     ]
     kept = normalized[: min(ends)] if ends else normalized
     # Masking runs on every excerpt, before it is cut to length, so a token that
