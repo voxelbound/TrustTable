@@ -279,6 +279,11 @@ Returns:
 
 It must not execute formulas or macros.
 
+> **Planned, not built.** The redesign replaces this stateless description with a
+> staging capability that inspects a file once and lets Run analyse the exact staged
+> bytes (section 16, `docs/decision-log.md` D-066). Until a slice specification edits
+> this section, read it as superseded in intent.
+
 ## 8. Profile
 
 ### GET `/analyses/{analysis_id}/profile`
