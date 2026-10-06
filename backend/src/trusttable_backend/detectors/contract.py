@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 from ..domain.evidence import Evidence
 from ..domain.ingest_facts import IngestFacts
+from ..domain.observation import Observation
 from ..domain.value_objects import ColumnReference, RowReference, Severity
 from ..profiling.schemas import DatasetProfile, InferredColumnType
 
@@ -294,6 +295,11 @@ class DetectorRunResult:
     warnings: tuple[DetectorWarning, ...]
     execution_metrics: ExecutionMetrics
     safe_failure: SafeFailure | None = None
+    #: Additive, default empty (`DET-03` closure package 2, D-061): neutral
+    #: observations a detector states alongside, or instead of, findings. An
+    #: observation has no severity, confidence or priority and never enters
+    #: scoring; see `domain.observation`.
+    observations: tuple[Observation, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.detector_id:
@@ -303,9 +309,10 @@ class DetectorRunResult:
         if self.status is DetectorRunStatus.FAILED:
             if self.safe_failure is None:
                 raise ValueError("DetectorRunResult.safe_failure is required when status is FAILED")
-            if self.findings or self.evidence:
+            if self.findings or self.evidence or self.observations:
                 raise ValueError(
-                    "DetectorRunResult.findings and evidence must be empty when status is FAILED"
+                    "DetectorRunResult.findings, evidence and observations must be empty "
+                    "when status is FAILED"
                 )
         elif self.status is DetectorRunStatus.SUCCESS and self.safe_failure is not None:
             raise ValueError("DetectorRunResult.safe_failure must be None when status is SUCCESS")

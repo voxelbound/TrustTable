@@ -388,6 +388,39 @@ class FindingEvidenceListResponse(BaseModel):
     total_items: int
 
 
+class ObservationItem(BaseModel):
+    """One neutral observation in `GET /analyses/{analysis_id}/observations`
+    (`DET-03` closure package 2, `WP-109`; provisional API).
+
+    Mirrors `domain.observation.Observation`. It deliberately has **no**
+    severity, confidence, priority or review field: an observation is not a
+    finding and never affects the trust score or priority. `structured_payload`
+    is excluded, like `FindingEvidenceItem`'s, so no open-ended raw payload is
+    exposed; `summary` already states the counts. `affected_row_numbers` are
+    the bounded example row numbers (at most 20), never cell values.
+    `kind` is the closed kind name (`value_evidence` is the only one today); a
+    later kind is added, never a change to this one.
+    """
+
+    observation_id: str
+    kind: str
+    producer_detector_id: str
+    summary: str
+    affected_columns: list[ColumnReferenceResponse]
+    affected_row_numbers: list[int]
+    scope: str
+
+
+class ObservationsListResponse(BaseModel):
+    """Body for `GET /analyses/{analysis_id}/observations`. Read-only. Returns
+    an empty `items` list (not an error) for a known analysis that is not
+    `COMPLETED` or that has no observations, matching
+    `FindingsListResponse`'s convention."""
+
+    items: list[ObservationItem]
+    total_items: int
+
+
 class RowContextEntryResponse(BaseModel):
     """One row in a `RowContextResponse` window (`FIND-01`, `WP-038`).
     Mirrors `domain.row_context.RowContextEntry`. `values` is positional,

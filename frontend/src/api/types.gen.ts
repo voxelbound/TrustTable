@@ -1275,6 +1275,71 @@ export type LivenessResponse = {
 };
 
 /**
+ * ObservationItem
+ *
+ * One neutral observation in `GET /analyses/{analysis_id}/observations`
+ * (`DET-03` closure package 2, `WP-109`; provisional API).
+ *
+ * Mirrors `domain.observation.Observation`. It deliberately has **no**
+ * severity, confidence, priority or review field: an observation is not a
+ * finding and never affects the trust score or priority. `structured_payload`
+ * is excluded, like `FindingEvidenceItem`'s, so no open-ended raw payload is
+ * exposed; `summary` already states the counts. `affected_row_numbers` are
+ * the bounded example row numbers (at most 20), never cell values.
+ * `kind` is the closed kind name (`value_evidence` is the only one today); a
+ * later kind is added, never a change to this one.
+ */
+export type ObservationItem = {
+    /**
+     * Affected Columns
+     */
+    affected_columns: Array<ColumnReferenceResponse>;
+    /**
+     * Affected Row Numbers
+     */
+    affected_row_numbers: Array<number>;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Observation Id
+     */
+    observation_id: string;
+    /**
+     * Producer Detector Id
+     */
+    producer_detector_id: string;
+    /**
+     * Scope
+     */
+    scope: string;
+    /**
+     * Summary
+     */
+    summary: string;
+};
+
+/**
+ * ObservationsListResponse
+ *
+ * Body for `GET /analyses/{analysis_id}/observations`. Read-only. Returns
+ * an empty `items` list (not an error) for a known analysis that is not
+ * `COMPLETED` or that has no observations, matching
+ * `FindingsListResponse`'s convention.
+ */
+export type ObservationsListResponse = {
+    /**
+     * Items
+     */
+    items: Array<ObservationItem>;
+    /**
+     * Total Items
+     */
+    total_items: number;
+};
+
+/**
  * ProfilingTimingResponse
  *
  * Mirrors `profiling.schemas.ProfilingTiming`.
@@ -2599,6 +2664,36 @@ export type GetAnalysisFindingRuleProposalApiV1AnalysesAnalysisIdFindingsFinding
 };
 
 export type GetAnalysisFindingRuleProposalApiV1AnalysesAnalysisIdFindingsFindingIdRuleProposalGetResponse = GetAnalysisFindingRuleProposalApiV1AnalysesAnalysisIdFindingsFindingIdRuleProposalGetResponses[keyof GetAnalysisFindingRuleProposalApiV1AnalysesAnalysisIdFindingsFindingIdRuleProposalGetResponses];
+
+export type GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/observations';
+};
+
+export type GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetError = GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetErrors[keyof GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetErrors];
+
+export type GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ObservationsListResponse;
+};
+
+export type GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetResponse = GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetResponses[keyof GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetResponses];
 
 export type GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData = {
     body?: never;

@@ -105,6 +105,7 @@ from ..domain.context import ConfirmationState, ContextField, ContextFieldValue,
 from ..domain.evidence import Evidence
 from ..domain.explanation import ValidationRuleType
 from ..domain.ingest_facts import project_ingest_facts
+from ..domain.observation import Observation
 from ..domain.parsing import Dataset, DatasetFormat, DatasetSourceType
 from ..domain.review import FindingReview, FindingReviewState
 from ..domain.row_context import RowContextEntry, RowContextWindow
@@ -304,6 +305,13 @@ class Analysis:
     analysis starts with the zero record; `None` means the analysis was
     persisted before recording existed, i.e. *not recorded* (never *no
     calls*). Updated only by `record_ai_enrichment_call`."""
+    observations: tuple[Observation, ...] = ()
+    """Neutral `value_evidence` observations the detectors stated
+    (`DET-03` closure package 2, D-061). Empty unless `state is COMPLETED`.
+    Separate from `findings` on purpose: no severity, confidence or priority,
+    never read by trust scoring or priority, never sent in an AI payload and
+    never part of an export or report. An analysis persisted before this field
+    existed reads as no observations."""
 
     def __post_init__(self) -> None:
         if not self.analysis_id:
@@ -326,6 +334,8 @@ class Analysis:
                 raise ValueError("Analysis: findings must be empty unless state is COMPLETED")
             if self.evidence:
                 raise ValueError("Analysis: evidence must be empty unless state is COMPLETED")
+            if self.observations:
+                raise ValueError("Analysis: observations must be empty unless state is COMPLETED")
             if self.trust_assessment is not None:
                 raise ValueError(
                     "Analysis: trust_assessment must be None unless state is COMPLETED"
@@ -857,6 +867,9 @@ def run_analysis(
         )
         findings = tuple(finding for result in results for finding in result.findings)
         evidence = tuple(item for result in results for item in result.evidence)
+        # Observations are collected beside, never into, the findings: scoring and
+        # priority below read only `findings`.
+        observations = tuple(item for result in results for item in result.observations)
         priority_scores = calculate_finding_priority_scores(
             findings, dataset_profile=dataset_profile
         )
@@ -876,6 +889,7 @@ def run_analysis(
             findings=(),
             priority_scores=(),
             evidence=(),
+            observations=(),
             trust_assessment=None,
             failure=AnalysisFailure(code=_FAILURE_CODE, message=_FAILURE_MESSAGE),
             started_at=started_at,
@@ -892,6 +906,7 @@ def run_analysis(
         findings=findings,
         priority_scores=priority_scores,
         evidence=evidence,
+        observations=observations,
         trust_assessment=trust_assessment,
         started_at=started_at,
         completed_at=completed_at,

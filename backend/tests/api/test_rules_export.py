@@ -166,6 +166,7 @@ def test_a_not_completed_analysis_is_409_for_both_formats(client: TestClient) ->
             trust_assessment=None,
             findings=(),
             evidence=(),
+            observations=(),
             priority_scores=(),
             context=None,
             guided_questions=(),

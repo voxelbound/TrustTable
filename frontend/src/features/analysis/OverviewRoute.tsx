@@ -3,6 +3,7 @@ import { FindingSeverityBadge } from '../../components/provenance/FindingSeverit
 import { TrustAssessment } from '../../components/provenance/TrustAssessment'
 import { countBySeverity, sortFindingsByPriority } from '../../domain/finding'
 import { useAnalysisFindings, useAnalysisResource } from './api'
+import { ObservationsList } from './ObservationsList'
 
 /** The Overview screen (`docs/ui-specification.md` §4.5). Section order
  * matches the specification exactly: trust assessment, top three
@@ -133,6 +134,8 @@ export function OverviewRoute() {
           View all findings
         </Link>
       </section>
+
+      <ObservationsList analysisId={analysisId} />
 
       <section aria-labelledby="dataset-heading">
         <h2

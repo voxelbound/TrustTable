@@ -491,8 +491,8 @@ never confirmed; the analysis summary then carries a derived count that is not
 persisted and is not an observation. Every other kind, and dismissal and
 suppression, remain open.
 
-**Ordering amendment (2026-10-05, `docs/decision-log.md` D-061; planned, not
-built):** the first kind to ship is `value_evidence`, not `NOT_CHECKED`. The
+**Ordering amendment (2026-10-05, `docs/decision-log.md` D-061; the foundation is
+now built, D-063, below):** the first kind to ship is `value_evidence`, not `NOT_CHECKED`. The
 minimal Observation foundation is built first, inside the Core detector catalogue
 (`DET-03`), with value-evidence producers (mixed types, inconsistent date formats,
 concentrated missingness); `NOT_CHECKED` is added later as a new kind by the
@@ -503,6 +503,21 @@ AI payload, and is excluded from exports and reports for now; a negative test
 enforces that exclusion. Dismissal, suppression, history and every other kind stay
 open. The route and response schema the foundation adds are provisional and are
 recorded in `docs/api-specification.md` by that package.
+
+**Built: the minimal Observation foundation (2026-10-05, `docs/decision-log.md`
+D-063; provisional).** `domain/observation.py` defines an immutable `Observation`
+with an id, one closed `ObservationKind` (`value_evidence` is the only member), the
+producing detector id and version, a short display summary, at most 50 affected
+columns and at most 20 example row references, a sampling scope, and a structured
+payload of counts, ratios, ordinals and fixed labels. It has no severity, no
+confidence, no priority, no review state and no dismissal; a later kind is a new
+member of the enum and never a change to `value_evidence`. `Analysis.observations`
+(default empty, empty unless the analysis is completed) is stored in a nullable
+`observations_json` column and ends with the analysis. Detectors state observations
+through an additive `DetectorRunResult.observations`; scoring and priority read only
+findings, and the exclusion from trust scoring, AI payloads, exports and reports is
+enforced by a negative allowlist test. Dismissal, suppression, history, export or
+report inclusion, `NOT_CHECKED` and every other kind remain open.
 
 The ingest-facts record below stays proposed and not built. `DET-03` closure package 1
 delivered only an immutable, in-memory projection of four existing parser-warning

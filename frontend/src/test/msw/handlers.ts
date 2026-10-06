@@ -10,6 +10,7 @@ import type {
   FindingEvidenceListResponse,
   FindingExplanationResponse,
   FindingsListResponse,
+  ObservationsListResponse,
   RowContextResponse,
   UploadAnalysisResponse,
 } from '../../api'
@@ -56,6 +57,15 @@ export function makeAnalysisResource(
     cancelled_at: null,
     ...overrides,
   }
+}
+
+/** Observations default to none, so a screen that lists them shows its
+ * empty state unless a test supplies items (`DET-03` closure package 2). */
+export function makeObservationsListResponse(
+  overrides: Partial<ObservationsListResponse> = {},
+): ObservationsListResponse {
+  const items = overrides.items ?? []
+  return { items, total_items: overrides.total_items ?? items.length }
 }
 
 export function makeFindingsListResponse(
@@ -417,6 +427,9 @@ export const handlers = [
   }),
   http.get(`${BASE}/analyses/:analysisId/findings`, () => {
     return HttpResponse.json(makeFindingsListResponse())
+  }),
+  http.get(`${BASE}/analyses/:analysisId/observations`, () => {
+    return HttpResponse.json(makeObservationsListResponse())
   }),
   http.get(`${BASE}/analyses/:analysisId/findings/:findingId`, () => {
     return HttpResponse.json(makeFindingDetailResponse())

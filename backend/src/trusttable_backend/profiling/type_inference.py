@@ -92,6 +92,24 @@ def _is_numeric(value: str) -> bool:
     return True
 
 
+VALUE_SHAPES: Final[tuple[str, ...]] = ("boolean", "date", "numeric", "text")
+"""The closed set of shapes `classify_value_shape` returns, in precedence order."""
+
+
+def classify_value_shape(value: str) -> str:
+    """Classify one non-blank value with the exact predicates and precedence
+    column type inference uses (boolean, then ISO date, then numeric, else
+    text), so a detector counting shapes agrees with the profile's `MIXED`
+    verdict. Returns one member of `VALUE_SHAPES`."""
+    if _is_boolean_token(value):
+        return "boolean"
+    if _is_iso_date(value):
+        return "date"
+    if _is_numeric(value):
+        return "numeric"
+    return "text"
+
+
 def _infer_column_profile(column: ColumnReference, values: tuple[str | None, ...]) -> ColumnProfile:
     non_blank = [value for value in values if value is not None and value != ""]
     null_count = len(values) - len(non_blank)

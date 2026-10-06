@@ -426,7 +426,7 @@ def test_detector_run_result_failed_requires_safe_failure() -> None:
 
 
 def test_detector_run_result_failed_rejects_nonempty_findings() -> None:
-    with pytest.raises(ValueError, match="findings and evidence"):
+    with pytest.raises(ValueError, match="findings, evidence and observations"):
         DetectorRunResult(
             detector_id="structural.exact_duplicate_rows",
             detector_version="1",

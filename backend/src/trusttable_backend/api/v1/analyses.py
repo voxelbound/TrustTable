@@ -102,6 +102,7 @@ from trusttable_backend.domain.clarification import ClarificationAnswer, Clarifi
 from trusttable_backend.domain.context import ContextField, ContextFieldValue, DatasetContext
 from trusttable_backend.domain.evidence import Evidence
 from trusttable_backend.domain.explanation import FindingExplanation, ValidationRuleType
+from trusttable_backend.domain.observation import Observation
 from trusttable_backend.domain.parsing import Dataset, DatasetFormat
 from trusttable_backend.domain.review import FindingReview, FindingReviewState
 from trusttable_backend.domain.row_context import RowContextWindow
@@ -160,6 +161,8 @@ from trusttable_backend.schemas.analysis import (
     FindingReviewRequest,
     FindingReviewResponse,
     FindingsListResponse,
+    ObservationItem,
+    ObservationsListResponse,
     ProfilingTimingResponse,
     ProposedValidationRuleResponse,
     RemediationOptionResponse,
@@ -614,6 +617,20 @@ def _evidence_item(evidence: Evidence) -> FindingEvidenceItem:
         affected_columns=[_column_reference(column) for column in evidence.affected_columns],
         affected_row_count=len(evidence.affected_row_references),
         scope=evidence.scope.value,
+    )
+
+
+def _observation_item(observation: Observation) -> ObservationItem:
+    return ObservationItem(
+        observation_id=observation.observation_id,
+        kind=observation.kind.value,
+        producer_detector_id=observation.producer_detector_id,
+        summary=observation.summary,
+        affected_columns=[_column_reference(column) for column in observation.affected_columns],
+        affected_row_numbers=[
+            reference.row_number for reference in observation.affected_row_references
+        ],
+        scope=observation.scope.value,
     )
 
 
@@ -1372,6 +1389,21 @@ def get_analysis_findings(analysis_id: str, request: Request) -> FindingsListRes
         )
     ]
     return FindingsListResponse(items=items, total_items=len(items))
+
+
+@router.get("/analyses/{analysis_id}/observations", response_model=ObservationsListResponse)
+def get_analysis_observations(analysis_id: str, request: Request) -> ObservationsListResponse:
+    """Return the neutral observations of an analysis (`DET-03` closure
+    package 2; provisional, read-only; `docs/api-specification.md`).
+
+    Observations are separate from findings: they carry no severity,
+    confidence or priority and never affect the trust assessment. Returns an
+    empty `items` list (not an error) for a known analysis that is not yet
+    `completed` or has none, like `get_analysis_findings`.
+    """
+    analysis = _get_or_404(get_analysis_store(request), analysis_id)
+    items = [_observation_item(observation) for observation in analysis.observations]
+    return ObservationsListResponse(items=items, total_items=len(items))
 
 
 @router.get("/analyses/{analysis_id}/findings/{finding_id}", response_model=FindingDetailResponse)

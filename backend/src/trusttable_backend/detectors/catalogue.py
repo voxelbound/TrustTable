@@ -28,8 +28,11 @@ it to 17; slice 3 (`WP-102`) adds `NumericValuesStoredAsTextDetector` and
 `DuplicateNormalizedColumnNameDetector`, bringing it to 20. Closure package 1
 (`WP-108`, D-061) adds `EmptyDatasetDetector`, `UnnamedColumnDetector` and
 `ExcessiveParseFailuresDetector`, bringing it to 23; the last two read only the
-in-memory ingest-facts projection. `DET-03` is delivered in packages; the rest
-of `docs/detector-framework.md` §16 is not built yet.
+in-memory ingest-facts projection. Closure package 2 (`WP-109`, D-061) adds
+`MixedTypesDetector`, `InconsistentDateFormatsDetector` and
+`ConcentratedMissingnessDetector`, bringing it to 26; these three state neutral
+`value_evidence` observations and never produce a finding. `DET-03` is delivered
+in packages; the rest of `docs/detector-framework.md` §16 is not built yet.
 """
 
 from __future__ import annotations
@@ -65,6 +68,11 @@ from .validity import (
     InvalidPercentagesDetector,
     NegativeLikelyNonNegativeValuesDetector,
 )
+from .value_evidence import (
+    ConcentratedMissingnessDetector,
+    InconsistentDateFormatsDetector,
+    MixedTypesDetector,
+)
 
 DETECTORS = register_detectors(
     [
@@ -91,5 +99,8 @@ DETECTORS = register_detectors(
         EmptyDatasetDetector(),
         UnnamedColumnDetector(),
         ExcessiveParseFailuresDetector(),
+        MixedTypesDetector(),
+        InconsistentDateFormatsDetector(),
+        ConcentratedMissingnessDetector(),
     ]
 )
