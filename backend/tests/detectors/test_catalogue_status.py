@@ -191,7 +191,7 @@ def test_the_disposition_counts_add_up_to_41() -> None:
     assert counts["MOVED"] + counts["MOVED PREVIOUSLY"] == EXPECTED_MOVED_ENTRIES
 
 
-def test_entries_40_and_41_are_carried_by_the_existing_detector_not_a_new_one() -> None:
+def test_entries_39_to_41_are_carried_by_the_one_existing_security_detector() -> None:
     rows, _ = parse_table(_framework())
     by_number = {row.number: row for row in rows}
     for number in (39, 40, 41):
@@ -321,26 +321,29 @@ def _normalised(text: str) -> str:
 
 
 def _complete_claims(text: str) -> list[str]:
-    """Paragraphs that claim a complete catalogue without negating the claim."""
+    """Sentences that claim a complete catalogue without negating it in the same sentence."""
     claims: list[str] = []
-    for paragraph in re.split(r"\n\s*\n", text):
-        flattened = _normalised(paragraph)
-        if _COMPLETE_CLAIM.search(flattened) and not _NEGATION.search(flattened):
-            claims.append(flattened[:120])
+    for sentence in re.split(r"(?<=[.;!?])\s+", _normalised(text)):
+        if _COMPLETE_CLAIM.search(sentence) and not _NEGATION.search(sentence):
+            claims.append(sentence[:120])
     return claims
 
 
-def test_the_framework_states_the_exact_closure_wording() -> None:
-    assert CLOSURE_WORDING in _normalised(_framework())
+DOCUMENTS = [
+    FRAMEWORK,
+    BACKLOG,
+    README,
+    REPO_ROOT / "docs" / "release-plan.md",
+    REPO_ROOT / "docs" / "decision-log.md",
+]
 
 
-def test_the_backlog_states_the_exact_closure_wording() -> None:
-    assert CLOSURE_WORDING in _normalised(_backlog())
+@pytest.mark.parametrize("path", DOCUMENTS, ids=lambda path: path.name)
+def test_every_closure_document_states_the_exact_closure_wording(path: Path) -> None:
+    assert CLOSURE_WORDING in _normalised(path.read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize(
-    "path", [FRAMEWORK, BACKLOG, README, REPO_ROOT / "docs" / "release-plan.md"]
-)
+@pytest.mark.parametrize("path", DOCUMENTS, ids=lambda path: path.name)
 def test_no_document_claims_a_complete_catalogue_was_built(path: Path) -> None:
     assert _complete_claims(path.read_text(encoding="utf-8")) == []
 
@@ -349,3 +352,7 @@ def test_the_wording_guard_catches_a_positive_complete_catalogue_claim() -> None
     assert _complete_claims("The complete detector catalogue is built.")
     assert _complete_claims("The full catalogue delivered in v1.0.")
     assert not _complete_claims('Never write "complete catalogue built" here.')
+    # A negation elsewhere in the paragraph does not excuse a positive claim.
+    assert _complete_claims(
+        "The complete catalogue is built. Nothing else changed, not even tests."
+    )
