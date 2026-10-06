@@ -860,7 +860,7 @@ The screen runs inside the single validator seam, so it applies uniformly to eve
 
 **Explicit non-scope:** no slice is built, authorized or scheduled in detail; the S8b mechanism is not approved; no successor item of `DET-03` is placed; no behavior, API, schema, setting or default changes; `.env.example` and the tests that pin it are unchanged by this entry.
 
-**Decided by:** the human owner, through the confirmed design session (strategic decisions SD-20e781fa4862, SD-6094567bfa15, SD-25130baeef1e, SD-7930cee56de4, SD-a9132caa8fa3, SD-b74611062cc6, SD-687b3a0ecbbe, SD-86075b3c0b89, SD-890ff7d409b5). Recorded under work package WP-112 with the private change record CHG-006.
+**Decided by:** the human owner, through the confirmed design session (strategic decisions SD-20e781fa4862, SD-6094567bfa15, SD-25130baeef1e, SD-7930cee56de4, SD-a9132caa8fa3, SD-b74611062cc6, SD-687b3a0ecbbe, SD-86075b3c0b89, SD-890ff7d409b5). Recorded under work package WP-112.
 
 ## D-067 — Machine-specific hardware wording is withdrawn from the live documentation by visible supersession
 
