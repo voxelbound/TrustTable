@@ -253,6 +253,15 @@ Deliver:
 > covering 28 of 41 entries** (amended from 27), the registry stays at 26, and only
 > the closure package remains. `DET-03` is still in progress; no scope is added to
 > this milestone.
+>
+> **Update (2026-10-06, `docs/decision-log.md` D-065):** closure package 4 adds an
+> executable catalogue-status check and closes `DET-03` as the Core detector catalogue:
+> 26 detectors covering 28 of 41 catalogue entries; 13 carried by named successors.
+> The `v1.0` bullet "complete detector catalogue" is therefore met only in the narrowed
+> sense D-061 recorded. The 13 carried entries are not built, and their successor
+> items (DET-04, CCX-01, CCX-02, DET-05, DET-06, STD-01, HARM-01, RULE-03) are planned
+> with no milestone placement, which remains an open owner decision. No scope is added
+> to or removed from this milestone.
 
 Production definition:
 

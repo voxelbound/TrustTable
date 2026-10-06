@@ -676,7 +676,19 @@ MOVED PREVIOUSLY 2. Entries #6 and #32 each have an observation
 form (DET-04) and a later confirmed-finding form (DET-05); they are counted once, as
 MOVED.
 
-**Closure packages (packages 1 to 3 built, package 4 planned).** Package 1,
+**Closure result (package 4, D-065).** The Core detector catalogue closes as
+**26 detectors covering 28 of 41 catalogue entries; 13 carried by named successors.**
+The 41-entry table above is held by an executable check
+(`backend/tests/detectors/test_catalogue_status.py`) that compares it with the real
+registry and with the successor items in `docs/implementation-backlog.md`: every
+entry has exactly one valid disposition, every built entry names a registered
+detector, every registered detector is mapped to a built entry, every moved entry names
+an existing successor item, and the counts above must hold. A moved entry is never
+counted as built. This is a closure of the Core detector catalogue, not a statement
+that every catalogue idea is implemented; the 13 moved entries are not built and
+detection is not active for them.
+
+**Closure packages (packages 1 to 4 built).** Package 1,
 structural and ingest closure, **built** (D-062): the zero-row and header-only
 investigation, then `structural.empty_dataset`; an immutable, in-memory parser-warning projection limited to four
 codes (`parsing.empty_column_name`, `parsing.ragged_row`,
@@ -698,8 +710,9 @@ explicit evidence subtypes (`prompt_injection`, `exfiltration_instruction`,
 `secret_request`), extended phrasings for the two heightened families, bounded and
 redacted evidence and "possible risk" wording, with a recorded Security Reviewer
 approval. There is still one finding per column and no second detector. Package 4,
-closure: an executable catalogue-status check against the table above, document
-reconciliation and the closure report.
+closure, **built** (D-065): the executable catalogue-status check against the table
+above, document reconciliation and the closure report. No detector, finding, score, API
+or UI behavior changed.
 
 **Observation boundary for package 2.** Observations stay neutral and are never
 counted by trust scoring or priority, never enter an AI payload, and are excluded
