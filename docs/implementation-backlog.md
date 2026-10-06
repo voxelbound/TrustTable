@@ -988,7 +988,7 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > | 0 | Re-scope materialization (documentation only) | This record | 20 |
 > | 1 | Structural and ingest closure | Zero-row and header-only investigation, then `structural.empty_dataset` or a regression proof that it is parser-owned; an immutable in-memory parser-warning projection limited to four warning codes; `structural.unnamed_column`; `structural.excessive_parse_failures`. No persisted ingest-facts record | 23 (22 if parser-owned) — **built; the empty case is detector-owned, so 23 (D-062)** |
 > | 2 | Observation and value-evidence slice | The minimal Observation foundation, a read-only API and a read-only results-UI list; `structural.mixed_types`, `consistency.inconsistent_date_formats`, `completeness.concentrated_missingness` | 26 (25) — **built; 26 registered (D-063)** |
-> | 3 | Security detector slice | The adversarial suite extended first; one detector for possible data-exfiltration instruction and suspicious secret-request text as two evidence subtypes; bounded, redacted evidence; "possible risk" wording; the Security Reviewer review | 27 (26) |
+> | 3 | Security detector slice | The adversarial suite extended first; one detector for possible data-exfiltration instruction and suspicious secret-request text as two evidence subtypes; bounded, redacted evidence; "possible risk" wording; the Security Reviewer review | 27 (26) — **built as subtypes of the existing detector; no detector added, 26 registered (D-064)** |
 > | 4 | `DET-03` closure | An executable catalogue-status check against the 41-entry table; document and count reconciliation; the closure report | 27 (26) |
 >
 > Packages 1, 2 and 3 are technically independent of each other and may run in
@@ -1065,6 +1065,27 @@ Add remaining structural, completeness, consistency, validity, statistical, and 
 > suppression, history, `NOT_CHECKED`, scheduler, persisted ingest-facts record or
 > confirmed-relationship read was built. Packages 3 and 4 remain planned and are not
 > authorized by this package. The catalogue is not complete.
+>
+> **Annotation (2026-10-06, closure package 3 built; `docs/decision-log.md`
+> D-064; `DET-03` still in progress): PLAN CHANGE within the closure plan, by owner
+> decision (SD-989e7edf3d5a, option R).** Catalogue entries 40 (possible
+> data-exfiltration instruction) and 41 (suspicious secret-request text) are covered
+> as **evidence subtypes of the existing `security.possible_llm_prompt_injection`**
+> (version 2), not by a second detector. The closure target is amended from 27 to
+> **26 registered detectors covering the same 28 of 41 entries**, and the finite
+> `DET-03` COMPLETE definition above changes its detector count from 27 to 26;
+> package 3 adds no detector, so **registered today: 26**. Built: closed subtype
+> vocabulary and per-subtype row counts in the evidence, extended phrasings for the
+> two heightened families, invisible-character and compatibility normalization,
+> bounded redacted evidence (never text after a secret or exfiltration request) and an
+> extended adversarial suite, with a recorded Security Reviewer approval. Still one
+> finding per column; identity, severity and trust-score effect are unchanged for
+> every column in which nothing newly recognised appears, and newly recognised
+> phrasings count wherever they appear, so a column version 1 already flagged can
+> rise in severity and priority (owner decision SD-0cc2de8a9889, option A). Only
+> package 4 (executable catalogue-status check,
+> document and count reconciliation, closure report) remains and is not authorized by
+> this package. The catalogue is not complete.
 >
 > ```yaml
 > dependency_graph_closure:

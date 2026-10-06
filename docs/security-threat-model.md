@@ -117,6 +117,17 @@ Mitigations:
 - rejected-output audit event
 - report disclosure
 
+**Scanner coverage (`docs/decision-log.md` D-064).** The deterministic scanner
+(`security.possible_llm_prompt_injection`, version 2) labels what it matches as
+`prompt_injection`, `exfiltration_instruction` or `secret_request`, folds compatibility
+forms and removes invisible format characters before matching, and stores only a
+bounded excerpt that stops at a secret or exfiltration request and masks token-like
+strings, URLs and e-mail addresses. It is bounded literal matching: look-alike letters
+from other scripts, leetspeak, encodings such as base64, reversed text, a word split
+by a space and a request split across cells are **not** detected, so the scanner is a
+risk signal and never a guarantee; the untrusted-data envelope and output validation
+remain the controls that do not depend on detection.
+
 ### 3.4 Model hallucination
 
 Mitigations:

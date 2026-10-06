@@ -859,6 +859,13 @@ _TEMPLATES: Final[dict[str, _Template]] = {
                 "tool that later reads this data.",
                 "an AI tool or assistant reads values from this column",
             ),
+            (
+                "Text that asks for a password, key or other secret, or for data to be sent "
+                "elsewhere, could lead an AI tool that later reads this data to reveal or pass "
+                "on information.",
+                "an AI tool or assistant that can reach secrets or send data reads values from "
+                "this column",
+            ),
         ),
         remediation=_RemediationTemplate(
             action_summary=(
