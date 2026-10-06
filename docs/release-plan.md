@@ -245,6 +245,14 @@ Deliver:
 > bringing the built catalogue to 26 detectors. `DET-03` is still in progress; the
 > security detector slice and the closure package remain; no scope is added to this
 > milestone.
+>
+> **Update (2026-10-06, `docs/decision-log.md` D-064):** closure package 3 covers
+> catalogue entries 40 and 41 as evidence subtypes of the existing
+> `security.possible_llm_prompt_injection` (version 2) instead of a second detector,
+> by owner decision. The closure target is therefore **26 registered detectors
+> covering 28 of 41 entries** (amended from 27), the registry stays at 26, and only
+> the closure package remains. `DET-03` is still in progress; no scope is added to
+> this milestone.
 
 Production definition:
 

@@ -137,6 +137,8 @@ def test_no_readme_line_contradicts_the_completed_ing_03_or_the_open_det_03() ->
     assert "bringing it to 23" in readme
     assert "bringing it to 26" in readme
     assert "data observations" in readme
+    assert "closure target is amended from 27 to 26" in readme
+    assert "stays 26" in readme
     assert "never changes the trust assessment" in readme
     assert "Zero-padded codes and phone numbers are never reported" in readme
     assert "never an address" in readme

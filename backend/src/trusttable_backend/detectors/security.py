@@ -8,6 +8,15 @@ evidence. Never executes or interprets matched text as an instruction
 module only reads and pattern-matches text; it contains no `eval`/`exec`
 or other dynamic-code-execution of any scanned or matched value.
 
+`DET-03` closure package 3 (`WP-110`, D-061, owner decision SD-989e7edf3d5a
+option R; version 2): catalogue entries 40 (data-exfiltration instruction) and
+41 (suspicious secret-request text) are covered by explicit **evidence subtypes**
+of this detector, not by a second detector. The two heightened families
+(`exfiltrate_data`, `disclose_secrets`) gain extended phrasings, matching adds
+compatibility normalization and removal of invisible format characters, and the
+stored excerpt is bounded and redacted. Finding identity, text, confidence,
+severity and the trust score are unchanged for every value version 1 matched.
+
 Restricted to text-family columns (`TEXT`/`CATEGORICAL`/`IDENTIFIER`),
 the same scope `consistency.py` already uses for its own detectors — the
 only inferred types free-text/categorical instruction-like content can
@@ -32,6 +41,7 @@ empty) `config_schema`.
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Final
 
 from pydantic import BaseModel
@@ -163,19 +173,123 @@ simple alternation with small, fixed quantifiers only — no unbounded
 nested quantifiers/catastrophic-backtracking shapes."""
 
 
+_MAX_RAW_LENGTH: Final[int] = 16_000
+"""A value is cut to this many characters **before** normalization so the
+(linear) Unicode normalization below can never be driven by an arbitrarily long
+cell. Always larger than `_MAX_INSPECTED_LENGTH`, so it never changes what is
+inspected for ordinary text."""
+
+SUBTYPE_PROMPT_INJECTION: Final[str] = "prompt_injection"
+SUBTYPE_EXFILTRATION_INSTRUCTION: Final[str] = "exfiltration_instruction"
+SUBTYPE_SECRET_REQUEST: Final[str] = "secret_request"
+
+#: The closed, ordered subtype vocabulary (`DET-03` closure package 2 of the
+#: Core detector catalogue, D-061 with owner decision SD-989e7edf3d5a option R).
+#: Catalogue entry 39 is `prompt_injection`, entry 40 `exfiltration_instruction`
+#: and entry 41 `secret_request`: one detector, one finding per column, explicit
+#: evidence subtypes.
+RISK_SUBTYPES: Final[tuple[str, ...]] = (
+    SUBTYPE_PROMPT_INJECTION,
+    SUBTYPE_EXFILTRATION_INSTRUCTION,
+    SUBTYPE_SECRET_REQUEST,
+)
+
+_FAMILY_SUBTYPE: Final[dict[str, str]] = {
+    "exfiltrate_data": SUBTYPE_EXFILTRATION_INSTRUCTION,
+    "disclose_secrets": SUBTYPE_SECRET_REQUEST,
+}
+"""Every family not listed here is a `prompt_injection` family."""
+
+_SECRET_NOUN: Final[str] = (
+    r"(api[\s_-]?keys?|access\s+tokens?|auth(entication)?\s+tokens?|bearer\s+tokens?"
+    r"|passwords?|passphrases?|secret\s+keys?|private\s+keys?|ssh\s+keys?|credentials?"
+    r"|connection\s+strings?)"
+)
+_EXTENDED_PATTERNS: Final[dict[str, tuple[re.Pattern[str], ...]]] = {
+    # Extended phrasings of the two heightened families. They are *additional*
+    # patterns under the same family name, so every version 1 match still
+    # matches. Each is a short alternation with fixed small quantifiers only.
+    "disclose_secrets": (
+        re.compile(
+            r"\b(tell|provide|show|print|display|paste|send|email|output|return|list|dump"
+            r"|expose|leak|hand\s+over|read\s+out)\s+(me\s+|us\s+)?"
+            r"(the\s+|your\s+|all\s+the\s+|all\s+of\s+the\s+|all\s+|any\s+)?"
+            + _SECRET_NOUN
+            + r"\b",
+            re.IGNORECASE,
+        ),
+        re.compile(r"\bwhat(\s+is|'s|s)\s+(the\s+|your\s+)" + _SECRET_NOUN + r"\b", re.IGNORECASE),
+    ),
+    "exfiltrate_data": (
+        re.compile(
+            r"\b(send|email|mail|post|upload|export|forward|transmit|copy|leak|sync|stream)\s+"
+            r"(all\s+|any\s+)?(of\s+)?(this\s+|the\s+|these\s+|that\s+|my\s+|our\s+)?"
+            r"(data|dataset|records|rows|table|file|spreadsheet|information)\s+"
+            r"((to|into|onto)\s+(an?\s+|the\s+|my\s+|this\s+|that\s+)?"
+            r"(external|outside|remote|third[\s-]party|unknown|public|personal|private"
+            r"|attacker|own)\b"
+            r"|externally\b|off[\s-]?site\b|outside\s+(the\s+)?(company|organi[sz]ation|network)\b)",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(exfiltrate|leak)\s+(all\s+)?(of\s+)?(the\s+|this\s+|these\s+)?"
+            r"(data|dataset|records|rows|information)\b",
+            re.IGNORECASE,
+        ),
+    ),
+}
+
+_TOKEN_RUN: Final[re.Pattern[str]] = re.compile(
+    r"(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{20,}(?![A-Za-z0-9+/=_-])"
+)
+_KNOWN_TOKEN: Final[re.Pattern[str]] = re.compile(
+    r"\b(sk|pk|rk)-[A-Za-z0-9_-]{8,}|\bAKIA[0-9A-Z]{8,}|\bgh[pousr]_[A-Za-z0-9]{8,}"
+    r"|\bxox[abpr]-[A-Za-z0-9-]{8,}"
+)
+_URL: Final[re.Pattern[str]] = re.compile(r"\bhttps?://\S+", re.IGNORECASE)
+_EMAIL: Final[re.Pattern[str]] = re.compile(r"\S+@\S+\.\S+")
+_REDACTION: Final[str] = "[redacted]"
+
+
 def _normalize(value: str) -> str:
-    """Collapse whitespace runs to a single space and strip, then
-    truncate to `_MAX_INSPECTED_LENGTH` before matching. Case
-    normalization is handled by `re.IGNORECASE` on every pattern."""
-    collapsed = re.sub(r"\s+", " ", value).strip()
+    """Normalize for matching: compatibility-normalize (NFKC, which folds
+    full-width and other compatibility forms to plain letters), drop invisible
+    format characters (zero-width and bidirectional controls, soft hyphen,
+    byte-order mark), collapse whitespace runs to a single space and strip, then
+    truncate to `_MAX_INSPECTED_LENGTH`. Case normalization is handled by
+    `re.IGNORECASE` on every pattern. Homoglyphs from other scripts, leetspeak,
+    encodings and words split by a space are deliberately **not** normalized: a
+    documented limit of bounded literal matching."""
+    folded = unicodedata.normalize("NFKC", value[:_MAX_RAW_LENGTH])
+    visible = "".join(ch for ch in folded if unicodedata.category(ch) != "Cf")
+    collapsed = re.sub(r"\s+", " ", visible).strip()
     return collapsed[:_MAX_INSPECTED_LENGTH]
+
+
+def _family_matches(family: str, pattern: re.Pattern[str], normalized: str) -> re.Match[str] | None:
+    match = pattern.search(normalized)
+    if match is not None:
+        return match
+    for extended in _EXTENDED_PATTERNS.get(family, ()):
+        match = extended.search(normalized)
+        if match is not None:
+            return match
+    return None
 
 
 def _matched_families(value: str) -> frozenset[str]:
     normalized = _normalize(value)
     if not normalized:
         return frozenset()
-    return frozenset(family for family, pattern in _PATTERN_FAMILIES if pattern.search(normalized))
+    return frozenset(
+        family
+        for family, pattern in _PATTERN_FAMILIES
+        if _family_matches(family, pattern, normalized) is not None
+    )
+
+
+def _subtypes_of(families: frozenset[str]) -> frozenset[str]:
+    return frozenset(_FAMILY_SUBTYPE.get(family, SUBTYPE_PROMPT_INJECTION) for family in families)
 
 
 def _confidence_for(matched_families: frozenset[str]) -> float:
@@ -202,8 +316,28 @@ def _severity_for(
 
 
 def _truncated_sample(value: str) -> str:
+    """The bounded, redacted excerpt stored as evidence.
+
+    Text after the first secret-request or exfiltration-request phrase is never
+    kept: whatever follows such a request (a password, a destination, a token)
+    is exactly the sensitive part. Token-like strings, URLs and e-mail
+    addresses in what remains are masked, and the result is cut to
+    `_TRUNCATED_SAMPLE_LENGTH`. A value with no such phrase keeps the version 1
+    excerpt (its first characters). Short secrets written *before* a request are
+    not recognizable and are a documented limit."""
     normalized = _normalize(value)
-    return normalized[:_TRUNCATED_SAMPLE_LENGTH]
+    ends = [
+        match.end()
+        for family, pattern in _PATTERN_FAMILIES
+        if family in _FAMILY_SUBTYPE
+        and (match := _family_matches(family, pattern, normalized)) is not None
+    ]
+    if not ends:
+        return normalized[:_TRUNCATED_SAMPLE_LENGTH]
+    kept = normalized[: min(ends)]
+    for masker in (_URL, _EMAIL, _KNOWN_TOKEN, _TOKEN_RUN):
+        kept = masker.sub(_REDACTION, kept)
+    return kept[:_TRUNCATED_SAMPLE_LENGTH]
 
 
 class PossiblePromptInjectionDetector:
@@ -216,7 +350,7 @@ class PossiblePromptInjectionDetector:
 
     metadata = DetectorMetadata(
         detector_id="security.possible_llm_prompt_injection",
-        version="1",
+        version="2",
         name="Possible LLM prompt injection",
         category=DetectorCategory.AI_PROCESSING_SECURITY,
         description=(
@@ -239,6 +373,15 @@ class PossiblePromptInjectionDetector:
             "negative-control list.",
             "Restricted to text-family columns (TEXT/CATEGORICAL/IDENTIFIER); "
             "values in NUMERIC/DATE/BOOLEAN/MIXED/UNKNOWN columns are not scanned.",
+            "Normalization is compatibility folding (NFKC) and removal of invisible format "
+            "characters only; homoglyphs from other scripts, leetspeak, encodings (such as "
+            "base64), reversed text and words split by a space are not detected, and a request "
+            "split across cells is not combined.",
+            "Evidence subtypes (prompt_injection, exfiltration_instruction, secret_request) "
+            "label what was matched; they say nothing about intent. Text after a secret or "
+            "exfiltration request is never stored, and token-like strings, URLs and e-mail "
+            "addresses in the stored excerpt are masked; a short secret written before a request "
+            "is not recognizable and may remain in the excerpt.",
             "Severity reflects only the current SecurityExposureState "
             "(model-provider/sample-transmission enabled), not an actual "
             "per-analysis 'sent to model' or 'model output rejected' fact — those "
@@ -262,6 +405,7 @@ class PossiblePromptInjectionDetector:
 
             affected_indices: list[int] = []
             column_matched_families: set[str] = set()
+            subtype_row_counts: dict[str, int] = {}
             first_matched_value: str | None = None
             for index, row in enumerate(request.rows):
                 value = row.get(profile.column.internal_key)
@@ -272,6 +416,8 @@ class PossiblePromptInjectionDetector:
                     continue
                 affected_indices.append(index)
                 column_matched_families.update(matched)
+                for subtype in _subtypes_of(matched):
+                    subtype_row_counts[subtype] = subtype_row_counts.get(subtype, 0) + 1
                 if first_matched_value is None:
                     first_matched_value = value
 
@@ -289,14 +435,17 @@ class PossiblePromptInjectionDetector:
                 f"security.possible_llm_prompt_injection.evidence.{profile.column.internal_key}"
             )
             family_count = len(matched_families)
+            risk_subtypes = tuple(s for s in RISK_SUBTYPES if s in subtype_row_counts)
             column_evidence = Evidence(
                 evidence_id=evidence_id,
                 evidence_type=EvidenceType.SECURITY_PATTERN,
-                calculation_version="1",
+                calculation_version="2",
                 structured_payload={
                     "matched_pattern_categories": tuple(sorted(matched_families)),
                     "affected_row_count": len(affected_indices),
                     "truncated_sample_prefix": _truncated_sample(first_matched_value),
+                    "risk_subtypes": risk_subtypes,
+                    "subtype_row_counts": {s: subtype_row_counts[s] for s in risk_subtypes},
                 },
                 affected_columns=(profile.column,),
                 affected_row_references=affected_row_references,
@@ -306,7 +455,8 @@ class PossiblePromptInjectionDetector:
                     f"{len(affected_indices)} value(s) with possible instruction-like "
                     f"content matching {family_count} pattern "
                     f"categor{'y' if family_count == 1 else 'ies'} that could attempt "
-                    "to influence downstream LLM processing."
+                    "to influence downstream LLM processing "
+                    f"(subtypes: {', '.join(risk_subtypes)})."
                 ),
             )
             finding = FindingCandidate(

@@ -137,7 +137,7 @@ def test_metadata() -> None:
     detector = PossiblePromptInjectionDetector()
     assert detector.metadata.detector_id == "security.possible_llm_prompt_injection"
     assert detector.metadata.category is DetectorCategory.AI_PROCESSING_SECURITY
-    assert detector.metadata.version == "1"
+    assert detector.metadata.version == "2"  # DET-03 closure package 3 (D-061, option R)
     assert detector.metadata.applicable_inferred_types == (
         InferredColumnType.TEXT,
         InferredColumnType.CATEGORICAL,
@@ -401,6 +401,9 @@ def test_evidence_shape_and_truncation() -> None:
         "matched_pattern_categories",
         "affected_row_count",
         "truncated_sample_prefix",
+        # Additive in version 2 (DET-03 closure package 3).
+        "risk_subtypes",
+        "subtype_row_counts",
     }
     assert evidence.structured_payload["affected_row_count"] == 1
     truncated = evidence.structured_payload["truncated_sample_prefix"]
