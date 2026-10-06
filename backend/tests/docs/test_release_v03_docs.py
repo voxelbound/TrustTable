@@ -9,6 +9,7 @@ prove a release exists; they prove the docs say what was reported and no more.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -143,6 +144,25 @@ def test_no_readme_line_contradicts_the_completed_ing_03_or_the_open_det_03() ->
     assert "Zero-padded codes and phone numbers are never reported" in readme
     assert "never an address" in readme
     assert "never an email value" in readme
+
+
+def test_det_03_security_subtype_decision_is_recorded_consistently() -> None:
+    """D-064 (closure package 3): entries 40 and 41 are evidence subtypes of the
+    existing detector, there is no second detector, and the closure count reads 26."""
+    log = _flat("docs/decision-log.md")
+    assert "## D-064" in log
+    assert "SD-989e7edf3d5a" in log
+    framework = _flat("docs/detector-framework.md")
+    for term in ("exfiltration_instruction", "secret_request", "prompt_injection"):
+        assert term in framework, term
+    assert "26 registered detectors covering 28 of the 41" in framework
+    table = re.findall(r"\| (?:40|41) \|[^|]+\|[^|]+\|[^|]+\|", framework)
+    assert len(table) == 2
+    for row in table:
+        assert "security.possible_llm_prompt_injection" in row
+        assert "possible_exfiltration_or_secret_request" not in row
+    backlog = _flat("docs/implementation-backlog.md")
+    assert "no detector added, 26 registered (D-064)" in backlog
 
 
 def test_the_workflow_acceptance_test_named_in_the_docs_exists() -> None:

@@ -247,7 +247,10 @@ _KNOWN_TOKEN: Final[re.Pattern[str]] = re.compile(
     r"|\bxox[abpr]-[A-Za-z0-9-]{8,}"
 )
 _URL: Final[re.Pattern[str]] = re.compile(r"\bhttps?://\S+", re.IGNORECASE)
-_EMAIL: Final[re.Pattern[str]] = re.compile(r"\S+@\S+\.\S+")
+#: Bounded on purpose (RFC 5321 limits: 64 local part, 255 domain label run): the
+#: lookbehind anchors each attempt at the start of a token, so a long run of
+#: non-space characters is never rescanned from every position.
+_EMAIL: Final[re.Pattern[str]] = re.compile(r"(?<![^\s@])[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{1,63}")
 _REDACTION: Final[str] = "[redacted]"
 
 
