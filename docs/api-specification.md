@@ -279,6 +279,11 @@ Returns:
 
 It must not execute formulas or macros.
 
+> **Planned, not built.** The redesign replaces this stateless description with a
+> staging capability that inspects a file once and lets Run analyse the exact staged
+> bytes (section 16, `docs/decision-log.md` D-066). Until a slice specification edits
+> this section, read it as superseded in intent.
+
 ## 8. Profile
 
 ### GET `/analyses/{analysis_id}/profile`
@@ -933,3 +938,32 @@ call's own status via its own `ai_call_status` field.
 - OpenAPI drift checked in CI
 - delete semantics tested
 - all mutation lifecycle transitions tested
+
+## 16. Planned API additions for the UI/UX redesign (provisional; planned, not built)
+
+> **Status.** Nothing in this section exists. It records what the owner-confirmed
+> redesign (`docs/decision-log.md` D-066) needs, so that no screen is designed on an
+> assumed capability. Routes, field names and mechanisms are provisional and are
+> fixed in each slice's specification, after a fresh independent review. Where more
+> than one valid mechanism exists, none is approved here.
+
+Existing routes, including direct upload `POST /analyses`, keep their contracts.
+
+| Need | Planned capability | Notes (requirements, not mechanisms) |
+|---|---|---|
+| Configure step (`UX-02`) | Stage a file once, inspect it, then Run the analysis over the exact staged bytes | Single-use opaque reference; server-computed integrity hash verified at consume; bounded count, bytes and expiry; startup and lazy cleanup; atomic consume; no durable Dataset; the same validation and parser limits as direct upload through one shared ingestion path; inspection returns worksheets, shape, readability problems and warnings, never cell values; this supersedes the unbuilt `POST /datasets/inspect` description in section 7 |
+| AI status (`UX-02`, `UX-09`) | `GET /ai/status` (section 4 describes it and it is not built) | Honest enabled, ready and model-identity state; path-free and address-free labels; an abstract status that does not assume where a runtime runs |
+| History (`UX-03`) | List analyses; rerun as a new analysis from stored content; look up whether the exact same file was analysed before | The lookup is not a dataset identity; it reflects only analyses that still exist; no integrity hash in normal-user responses |
+| Dashboard (`UX-04`) | Aggregates where client derivation from existing data is insufficient | Proposal-level |
+| Persisted AI enrichment (`UX-05`) | Start or resume, read status and read a saved result per finding, split from the deterministic explanation | Deterministic content never waits for a model call; the result is bound to the finding, confirmed-context version, model identity and prompt or contract version and is reported stale when the binding changes; start and status must not depend on one long request; bounded concurrency; saved output is deleted with its analysis |
+| Inspector (`UX-06`) | Bounded, finding-scoped row windows, including observation example rows | Server-side bounds; no shared-cache storage; unchanged privacy boundary (D-025); window and paging limits are set only after the performance spike |
+| Settings (`UX-08`) | Read effective settings with their source (deployment override, stored, default); write allowlisted, typed, versioned stored settings; reset to default | Computed server-side; a stored value never exceeds a deployment override or a security or resource limit; unknown keys and values rejected; write-path protection and fail-closed behavior; a narrow Advanced response may expose effective runtime and model configuration and raw paths and URLs never appear in analysis, finding, report or other shareable responses |
+
+Behavior preserved: `GET .../findings/{finding_id}/explanation` and
+`GET .../findings/{finding_id}/rule-proposal` currently perform a model call per
+request where configured; the redesign must not make a screen depend on that, and the
+existing contracts stay until a slice specification changes them deliberately.
+
+Not planned in this redesign: file-reading options (`ING-05`), rule creation, editing
+or reuse across analyses (`RULE-04`), selectable analysis methods, a general dataset
+browser, and any product-managed model or runtime management (`LAI-01`, not approved).

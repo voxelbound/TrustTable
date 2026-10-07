@@ -73,8 +73,10 @@ so plainly rather than supplying a plausible-sounding reason.
    enough to compare real behavior differences, not an attempt to
    survey the broader model landscape.
 3. **Sizing targeted practical deployment tiers.** `D-029` defines two
-   explicit hardware profiles — a CPU-only baseline business/evaluator
-   profile (16GB RAM minimum) and a GPU-accelerated developer profile.
+   explicit hardware profiles — a broadly accessible baseline profile
+   and a higher-capability, hardware-accelerated profile (the original
+   specific hardware wording was withdrawn from the live text by `D-067`;
+   no hardware requirement is established).
    The executed candidates (3B–9B parameters) are sized toward the
    CPU-oriented baseline tier rather than beginning with very large,
    accelerated-only models.
@@ -156,7 +158,10 @@ No durable source in this repository names a specific larger
 accelerated-tier candidate (for example, a particular ~27B-parameter-
 class model) for this or any planned round. What is durably documented
 is more general: `D-029` establishes a separate accelerated hardware
-profile (RTX 3090-class, 24GB VRAM) as a real, distinct evaluation
+profile (a more capable, hardware-accelerated machine; the specific
+machine example in the original wording was withdrawn from this live
+text by `D-067` and was never a requirement or qualification evidence)
+as a real, distinct evaluation
 target, and earlier design work defers "dedicated reasoning-mode
 variants" and larger releases in the same families (e.g. Qwen3.8) to a
 second round.

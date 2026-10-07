@@ -186,6 +186,11 @@ LLM_TIMEOUT_SECONDS=300
   `LLM_MAX_SAMPLE_VALUES` are not applied by the backend today
   ([`docs/configuration.md`](configuration.md)). Dataset sample values are never
   sent to a model.
+- *Planned, not built:* when in-product settings ship, a value you set explicitly in
+  `.env` will be treated as managed by your installation and shown read-only in the
+  interface, and `.env.example` will then ship with those settings commented out.
+  Until then nothing changes: the file above is the only way to configure AI
+  ([`docs/configuration.md`](configuration.md), `docs/decision-log.md` D-066).
 
 Restart the backend so it reads the file:
 

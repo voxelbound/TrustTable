@@ -262,6 +262,17 @@ Deliver:
 > items (DET-04, CCX-01, CCX-02, DET-05, DET-06, STD-01, HARM-01, RULE-03) are planned
 > with no milestone placement, which remains an open owner decision. No scope is added
 > to or removed from this milestone.
+>
+> **Annotation (2026-10-06, `docs/decision-log.md` D-066, documentation only):
+> PLAN CHANGE, owner-confirmed.** A UI/UX redesign (`UX-01`, planned slices S1 to
+> S8a, **none built or authorized by this entry**) becomes the next `v1.0` work,
+> ahead of `DET-04`. This does not place `DET-04`, `CCX-01`, `CCX-02`, `DET-05`,
+> `DET-06`, `OBS-02`, `ING-04`, `STD-01`, `HARM-01` or `RULE-03` in any milestone;
+> their placement remains an open owner decision. Nothing is removed from `v1.0`.
+> The sequencing of accessibility, browser-matrix and performance work relative to
+> the redesign is not decided. The Local AI managed-provisioning architecture
+> (`S8b`), a Rules and Expectations design track and file-reading options are
+> recorded as open, unapproved design tracks with no milestone placement.
 
 Production definition:
 
