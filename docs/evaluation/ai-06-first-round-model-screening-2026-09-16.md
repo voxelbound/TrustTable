@@ -73,8 +73,10 @@ so plainly rather than supplying a plausible-sounding reason.
    enough to compare real behavior differences, not an attempt to
    survey the broader model landscape.
 3. **Sizing targeted practical deployment tiers.** `D-029` defines two
-   explicit hardware profiles — a CPU-only baseline business/evaluator
-   profile (16GB RAM minimum) and a GPU-accelerated developer profile.
+   explicit hardware profiles — a broadly accessible baseline profile
+   and a higher-capability, hardware-accelerated profile (the original
+   specific hardware wording was withdrawn from the live text by `D-067`;
+   no hardware requirement is established).
    The executed candidates (3B–9B parameters) are sized toward the
    CPU-oriented baseline tier rather than beginning with very large,
    accelerated-only models.
