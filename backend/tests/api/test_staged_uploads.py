@@ -531,6 +531,34 @@ def test_run_of_a_worksheet_with_a_blocking_problem_is_refused_and_keeps_the_fil
     assert _run(client, ref, "Data").status_code == 202
 
 
+def test_a_failure_after_the_file_is_consumed_spends_the_reference_and_creates_no_analysis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The documented fail-closed behavior (`docs/decision-log.md` D-068 item 5):
+    if creating the analysis fails after the row was consumed, the reference stays
+    spent, nothing half-created is left behind, and a retry cannot run the file."""
+    import trusttable_backend.api.v1.staged_uploads as routes
+
+    def explode(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("simulated failure while creating the analysis")
+
+    monkeypatch.setattr(routes, "start_analysis_from_content", explode)
+    with TestClient(create_app(), raise_server_exceptions=False) as client:
+        ref = _stage(client).json()["staging_ref"]
+
+        failed = _run(client, ref)
+
+        assert failed.status_code == 500
+        assert failed.json()["error"]["code"] == "INTERNAL_ERROR"
+        assert "simulated failure" not in failed.text  # no raw exception text
+        assert _analysis_count(client) == 0
+        assert _staged_count(client) == 0
+        retry = _run(client, ref)
+        assert retry.status_code == 410
+        assert retry.json()["error"]["code"] == "STAGED_UPLOAD_UNAVAILABLE"
+        assert _inspect(client, ref).status_code == 410
+
+
 def test_a_second_run_of_the_same_reference_is_410_and_adds_no_analysis(
     client: TestClient,
 ) -> None:
