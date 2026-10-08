@@ -28,6 +28,51 @@
 - no unsafe logging
 - no unrelated infrastructure
 
+## How to read this catalogue
+
+This file is the current implementation catalogue, grouped by milestone. Each item states
+what it is, its scope and acceptance, its current status where the item has progressed, and
+references to the decisions and work that shaped it. It is not a progress log: status is
+stated in place on the item, and the reasoning behind each change is in
+`docs/decision-log.md`. Superseded wording is preserved in Git history.
+
+| Group | Milestone (`docs/release-plan.md`) |
+|---|---|
+| Foundation; Deterministic vertical slice | v0.1 |
+| Investigation UX | v0.1.1 |
+| Local AI beta | v0.2 |
+| Complete manager workflow | v0.3 |
+| Production completion | v1.0 |
+| Post-v1 optional deployment | Post-v1 |
+| Successor items carried out of `DET-03` | No milestone placement (open owner decision) |
+| UI/UX redesign (`UX-01`) | The next `v1.0` work; planned, not built |
+
+## Documentation responsibilities
+
+Each kind of fact has one owning document. Update the owner and link to it rather than
+restating the fact elsewhere.
+
+| Document | Owns |
+|---|---|
+| `docs/implementation-backlog.md` | The implementation catalogue: item identity, scope, acceptance, current status and provenance references |
+| `docs/release-plan.md` | Milestone scope and current milestone status |
+| `docs/decision-log.md` | The reasoning and consequences of each consequential decision; amended by new entries, not rewritten |
+| Specifications (API, UI, domain model, detector framework, configuration and similar) | Current behavior, approved target behavior and future ideas, kept distinct |
+| `README.md` | Orientation for users and contributors |
+
+Conventions:
+
+- State an item's current status in place. When the status changes, replace the status text
+  instead of appending a dated annotation.
+- Keep items concise and reference decisions and delivered work by identifier instead of
+  retelling them.
+- Condensing never deletes a fact: every item identifier, decision reference and delivered
+  scope stays referenced.
+- Preserve history in Git, and record a change of direction as a visible new decision, not as
+  accumulated superseded prose.
+- Private delivery records are kept outside this repository and are not referenced by path in
+  public documents.
+
 # Foundation
 
 ## FND-01 — Repository foundation
@@ -260,8 +305,7 @@ Physical-neighborhood inspection around a row a finding already
 references: whole row, all columns, file-order adjacency, bounded
 default window with explicit expand. Not an Evidence type, not
 included in Report/export output, never automatic AI-prompt input.
-See `docs/decision-log.md` D-025 and
-`project-ops/changes/CHG-001-investigation-ux-row-context.md`.
+See `docs/decision-log.md` D-025.
 
 # Local AI beta
 
@@ -293,11 +337,9 @@ and practical usefulness. Not product UI; not the production AI
 provider integration. Runtime and model selection follow from this
 harness's results (D-032), not from generic public benchmarks.
 
-> Annotation (2026-09-13, `CHG-003` sequencing): `AI-06` depends only on
-> `AI-01`/`AI-02` (the already-merged provider seam and mock/disabled
-> providers) and the committed demo fixture — it has no architectural
-> dependency on `AI-03`'s real-runtime implementation. It is sequenced
-> here, ahead of `AI-03`, per `docs/decision-log.md` D-032/D-033.
+Sequencing: `AI-06` depends only on `AI-01`/`AI-02` (the merged provider seam and the
+mock and disabled providers) and the committed demo fixture, not on `AI-03`'s real-runtime
+implementation, so it is sequenced ahead of `AI-03` (`docs/decision-log.md` D-032, D-033).
 
 ## Human decision gate — runtime, model, and quantization
 
@@ -308,67 +350,43 @@ model differs by hardware tier (`docs/decision-log.md` D-007's appended
 review note, D-029, D-030–D-033). `AI-03` must not start before this
 gate is complete.
 
-> Annotation (2026-09-16, `D-034`): the model family/exact model
-> (Qwen3.5-4B) and the baseline/CPU-oriented hardware-tier default are
-> now decided — see `docs/decision-log.md` D-034. Q4_K_M is recorded as
-> the selected quantization because it is what the selected model was
-> evaluated at; no comparative quantization study was performed. **Two
-> items named above remain genuinely open: the runtime
-> (`llama.cpp` vs. Ollama — every hands-on evaluation round used a
-> benchmark-only `llama.cpp` adapter exclusively, never Ollama) and the
-> accelerated/developer hardware-tier default (D-029's second profile
-> was never evaluated — every round ran CPU-only).** This gate is not
-> yet complete; `AI-03` must still not start.
->
-> **Annotation (2026-09-16, `D-035`): this gate is now COMPLETE for
-> v0.2 baseline scope.** The runtime is decided (`llama.cpp`); Ollama is
-> recorded as a future alternative, not disqualified. All four named
-> items are resolved for the baseline/CPU-oriented profile. **`AI-03`
-> is ready to start**, scoped to the baseline profile only. The
-> accelerated/developer hardware-tier default remains explicitly
-> deferred by deliberate human choice — a later, non-blocking
-> follow-on, not an unresolved gap in this gate's baseline-scope
-> completion.
+Status: **complete for the `v0.2` baseline scope** (`docs/decision-log.md` D-034, D-035).
+
+- Decided: the model family and exact model (Qwen3.5-4B), the baseline/CPU-oriented
+  hardware-tier default, and the runtime (`llama.cpp`; Ollama is recorded as a future
+  alternative, not disqualified). Q4_K_M is recorded as the selected quantization because it
+  is what the selected model was evaluated at; no comparative quantization study was
+  performed.
+- Evidence limits: every hands-on evaluation round used a benchmark-only `llama.cpp` adapter
+  and ran CPU-only, so Ollama and the accelerated/developer profile (D-029's second profile)
+  were never evaluated.
+- Deferred by deliberate owner choice, as a later non-blocking follow-on: the
+  accelerated/developer hardware-tier default.
+- Consequence: the gate no longer blocks `AI-03`, which is scoped to the baseline profile
+  only.
 
 ## AI-03 — Local inference provider (llama.cpp, baseline profile)
 
 Configurable local model, timeout, structured output, health and availability.
 
-> Annotation (2026-09-13, `CHG-002`; corrected 2026-09-13, `CHG-003`
-> sequencing): the specific runtime (`llama.cpp` vs. Ollama) is an open,
-> human-owned decision — see `docs/decision-log.md` D-007's appended
-> note and D-030–D-032. The heading above is left unedited pending that
-> decision, per this project's historical-truth convention (same
-> treatment `CHG-002` already applied). **This item must not be treated
-> as ready before `AI-06` (the benchmark harness) and the human decision
-> gate above are both complete — see D-033.** This item's exact scope
-> is pending the runtime decision.
->
-> Annotation (2026-09-16, `D-034`): the exact model (Qwen3.5-4B-Q4_K_M)
-> is now decided for the baseline hardware tier — see `docs/decision-
-> log.md` D-034. This does not change this item's status: the runtime
-> decision this heading itself names ("Ollama") is still unresolved and
-> is not confirmed by `D-034`, so this item remains not-ready to start.
->
-> **Correction and readiness (2026-09-16, `D-035`):** the runtime
-> decision is now made — `llama.cpp`, not Ollama. The heading above is
-> corrected accordingly (previously "AI-03 — Ollama provider"; prior
-> wording preserved in this repository's own git history, not silently
-> erased, per this project's historical-truth convention). **This item
-> is now READY to start**, scoped to: a real `llama.cpp` local-inference
-> provider for Qwen3.5-4B-Q4_K_M on the baseline/CPU-oriented hardware
-> profile only. The accelerated/GPU hardware-tier profile is explicitly
-> out of scope for this item's initial implementation — a later,
-> separate follow-on, per `D-035`.
+Scope as decided (`docs/decision-log.md` D-035): a real `llama.cpp` local-inference provider
+for Qwen3.5-4B-Q4_K_M on the baseline/CPU-oriented hardware profile only. The
+accelerated/GPU hardware-tier profile is explicitly out of scope for this item's initial
+implementation and is a later, separate follow-on.
+
+Provenance: the item must not start before `AI-06` and the human decision gate above
+(D-033). The model was decided in D-034 and the runtime in D-035. The heading was corrected
+from "AI-03 — Ollama provider" to match; the prior wording is preserved in this repository's
+Git history, not silently erased. The earlier open-runtime notes are D-007's appended
+review note and D-030–D-032.
 
 ## AI-04 — Local runtime documentation (llama.cpp, baseline profile)
 
 No paid account required.
 
-> **Annotation (2026-09-16, `D-035`):** heading corrected from "AI-04 —
-> Ollama documentation" to match the runtime decision (`llama.cpp`);
-> prior wording preserved in this repository's own git history, not
-> silently erased.
+Provenance: the heading was corrected from "AI-04 — Ollama documentation" to match the runtime
+decision (`llama.cpp`, `docs/decision-log.md` D-035); the prior wording is preserved in
+this repository's Git history, not silently erased.
 
 ## CTX-01 — Deterministic context hypotheses
 
@@ -438,20 +456,19 @@ Acceptance:
 - report records protection
 - safe fallback shown
 
-> **Annotation (2026-09-19, `D-039`):** implemented for `v0.2`. The
-> evaluation runs end to end against the real routes and provider factory
-> (`backend/tests/security/test_prompt_injection_adversarial_evaluation.py`)
-> and found that `SEC-02`'s validator was purely structural, so a
-> schema-valid narrative-only "this dataset is perfect" output would have
-> been accepted; a bounded, closed claim screen was added to the validator
-> (`docs/decision-log.md` D-039). "Report records protection" is satisfied
-> on the surface that exists in `v0.2` — the explanation response's
-> `ai_call_status`/`evidence_sent_to_model` and the Finding Detail
-> protections list. **Carried forward, not silently dropped:** asserting
-> the applied protections in the *exported* report cannot be done before
-> the report exists (Markdown/JSON/YAML export and a security section in
-> reports are `v0.3` deliverables, `docs/release-plan.md`), so that half of
-> this acceptance line is owed by the `v0.3` report package.
+Status: implemented for `v0.2` (`docs/decision-log.md` D-039). The evaluation runs end to
+end against the real routes and provider factory
+(`backend/tests/security/test_prompt_injection_adversarial_evaluation.py`). It found that
+`SEC-02`'s validator was purely structural, so a schema-valid narrative-only "this dataset
+is perfect" output would have been accepted; a bounded, closed claim screen was added to the
+validator. "Report records protection" is satisfied on the surface that exists in `v0.2`:
+the explanation response's `ai_call_status`/`evidence_sent_to_model` and the Finding Detail
+protections list.
+
+Carried forward, not dropped: asserting the applied protections in the *exported* report
+could not be done before the report existed (Markdown/JSON/YAML export and a security
+section in reports are `v0.3` deliverables, `docs/release-plan.md`), so that half of this
+acceptance line was owed by the `v0.3` report package (`EXP-01`).
 
 ## AI-08 — Grounded AI analysis, recommendations and deployable local-AI experience
 
@@ -516,51 +533,34 @@ rather than inventing the path, and must not close until:
   a finding falls back to built-in guidance) and the per-finding latency and
   suitable `LLM_TIMEOUT_SECONDS` on baseline hardware — measured, not asserted.
 
-> **Annotation (2026-09-20, `docs/decision-log.md` D-041):** `REL-02` is delivered
-> in three ordered steps, so this item stays **open** until all three are done.
-> (1) *Repository-side path — defined, not executed:* `docker-compose.release.yml`
-> (pull-only, requires `TRUSTTABLE_VERSION`) and a tag-gated publish workflow
-> (`docs/release-images.md`), tested structurally and against locally built
-> images; this satisfies none of the four bullets above by itself, because no
-> image is published and no fresh host has been used. (2) *Local-AI
-> qualification* (the fourth bullet). (3) *Protected publish and fresh-host
-> verification* (the first three bullets), after which the guide is updated to
-> what actually passed. Publishing, tagging and package visibility stay with the
-> repository owner.
->
-> **Annotation (2026-09-20, `docs/decision-log.md` D-042):** before the local-AI
-> qualification, the backend test suite was made hermetic against a developer's
-> local provider configuration and the trust-boundary meaning of the
-> `confirmed_context` envelope slot was recorded. Neither satisfies any of the
-> four bullets above; `REL-02` stays **open**.
->
-> **Annotation (2026-09-20, `docs/decision-log.md` D-043):** the instrument for
-> the local-AI qualification (the fourth bullet) now exists: a harness that runs
-> the product's own finding-analysis path over one finding per detector, with and
-> without finalized confirmed context, and records fill rate, fallback rate and
-> harness-measured latency (`docs/local-ai-qualification.md`). It has been proven
-> against the real explanation route with stubbed providers only; **no real model
-> has been measured**, so the fourth bullet is still unmet and `REL-02` stays
-> **open**.
->
-> **Annotation (2026-09-21, `docs/decision-log.md` D-044):** the **fourth bullet
-> is waived** by the human owner for `v0.2`. No real-model benchmark of this path
-> was completed and none is planned as a replacement; the waiver is **not a pass**
-> and no minimum, recommended, baseline-tier or general hardware claim may be
-> inferred from it. The bullet's "on baseline hardware" wording is preserved as
-> written and is unvalidated by this project's own evidence. `REL-02` still
-> requires the first three bullets — the published images, the clean-host
-> install check and the updated guide — so it stays **open**.
->
-> **Annotation (2026-09-21, `docs/decision-log.md` D-045):** **`REL-02` is
-> complete.** The `v0.2.0` images were published to GHCR (bullet 1), and the
-> pull-only path needs no build step and no PyPI, npm or base-image access. The
-> release was installed on a clean Linux host with only GitHub and GHCR access and
-> no GHCR credentials (bullet 2), **narrowed by the human owner to one AI-off
-> pull, start and health check**: the offline-provisioned model and the model
-> connectivity check were not exercised there. The guide states the verified
-> commands and marks what the run did not cover (bullet 3). Bullet 4 remains
-> waived (D-044); nothing was measured.
+Status: `REL-02` is complete (`docs/decision-log.md` D-041 to D-045). It was delivered in
+three ordered steps:
+
+1. *Repository-side path* (D-041): `docker-compose.release.yml` (pull-only, requires
+   `TRUSTTABLE_VERSION`) and a tag-gated publish workflow (`docs/release-images.md`), tested
+   structurally and against locally built images. Publishing, tagging and package
+   visibility stay with the repository owner.
+2. *Local-AI qualification* (the fourth bullet above). The instrument exists: a harness that
+   runs the product's own finding-analysis path over one finding per detector, with and
+   without finalized confirmed context, and records fill rate, fallback rate and
+   harness-measured latency (`docs/local-ai-qualification.md`, D-043); it was proven only
+   against the real explanation route with stubbed providers. The bullet is **waived** by
+   the human owner for `v0.2` (D-044): no real-model benchmark of this path was completed
+   and none is planned as a replacement. The waiver is **not a pass**, and no minimum,
+   recommended, baseline-tier or general hardware claim may be inferred from it. The
+   bullet's "on baseline hardware" wording is preserved as written and is unvalidated by
+   this project's own evidence.
+3. *Protected publish and clean-host verification* (the first three bullets; D-045): the
+   `v0.2.0` images were published to GHCR, and the pull-only path needs no build step and no
+   PyPI, npm or base-image access. The release was installed on a clean Linux host with only
+   GitHub and GHCR access and no GHCR credentials, **narrowed by the human owner to one
+   AI-off pull, start and health check**: the offline-provisioned model and the model
+   connectivity check were not exercised there. The guide states the verified commands and
+   marks what the run did not cover.
+
+Also recorded (D-042): before the qualification, the backend test suite was made hermetic
+against a developer's local provider configuration and the trust-boundary meaning of the
+`confirmed_context` envelope slot was recorded. Neither satisfies any of the four bullets.
 
 # Complete manager workflow
 
@@ -600,113 +600,68 @@ Report includes AI-processing security:
 - rejected-output status
 - model location
 
-> **Annotation (2026-09-28, slice 1 of `EXP-01`):** the JSON and YAML rules
-> exports are implemented (`GET /analyses/{id}/exports/rules.json` and
-> `rules.yaml`, `docs/api-specification.md` §12). Only validated rules are
-> exported. The Markdown report, its snapshot and routes, and the
-> AI-processing security section are **not yet implemented**; `EXP-01`
-> stays open.
->
-> **Annotation (2026-09-29, slice 2 of `EXP-01`):** the deterministic Markdown
-> report renderer and immutable report snapshot are implemented as a library
-> (`trusttable_backend.exports.report_markdown`), including the AI-processing security
-> section, which reports only recorded state (`D-046`). Still **not
-> implemented**: report snapshot persistence, the four report routes with
-> their API contract and generated client, a durable per-analysis record of
-> AI enrichment calls (needed for a complete "sent to a model" statement),
-> and the report screen (`UI-03`). `EXP-01` stays open.
->
-> **Annotation (2026-09-29, slice 3 of `EXP-01`):** report snapshot
-> persistence (a new additive `reports` table) and the four report routes
-> (`docs/api-specification.md` §12) are implemented, with the OpenAPI
-> contract and generated client regenerated. Reports are rendered once and
-> stored; downloads never re-render. Still **not implemented**: a durable
-> per-analysis record of AI enrichment calls, the report screen (`UI-03`),
-> and deletion of reports with their analysis (`DEL-01`). `EXP-01` stays
-> open.
->
-> **Annotation (2026-09-29, slice 4 of `EXP-01`):** the per-analysis record
-> of AI enrichment calls (`D-047`) is implemented and new reports state
-> counts, what may have been sent, the model location and the protections.
-> The `EXP-01` backend scope is complete: Markdown report, JSON/YAML rules
-> and the AI-processing section. The report screen (`UI-03`) and report
-> deletion with the analysis (`DEL-01`) remain separate items.
+Status: the backend scope is complete; the report screen (`UI-03`) and report deletion with
+the analysis (`DEL-01`) are separate items. Delivered in four slices:
+
+1. The JSON and YAML rules exports (`GET /analyses/{id}/exports/rules.json` and
+   `rules.yaml`, `docs/api-specification.md` §12). Only validated rules are exported.
+2. The deterministic Markdown report renderer and immutable report snapshot, as a library
+   (`trusttable_backend.exports.report_markdown`), including the AI-processing security
+   section, which reports only recorded state (`D-046`).
+3. Report snapshot persistence (a new additive `reports` table) and the four report routes
+   (`docs/api-specification.md` §12), with the OpenAPI contract and generated client
+   regenerated. Reports are rendered once and stored; downloads never re-render.
+4. The durable per-analysis record of AI enrichment calls (`D-047`), so new reports state
+   counts, what may have been sent, the model location and the protections.
 
 ## DEL-01 — Analysis deletion
 
 Delete file, derived artifacts, exports, and records.
 
-> **Annotation (2026-09-29):** `DELETE /analyses/{id}` is implemented
-> (`docs/api-specification.md` §6, `D-048`): the analysis and all of its
-> reports are removed in one transaction, a running analysis is cancelled
-> and cannot be brought back by its worker, and the stored bytes are
-> overwritten in the database file. The deletion control and its completion
-> message are part of `UI-03`; no `analysis_deleted` event is emitted
-> because no lifecycle event log exists yet.
+Status: `DELETE /analyses/{id}` is implemented (`docs/api-specification.md` §6, `D-048`): the
+analysis and all of its reports are removed in one transaction, a running analysis is
+cancelled and cannot be brought back by its worker, and the stored bytes are overwritten in
+the database file. The deletion control and its completion message are part of `UI-03`. No
+`analysis_deleted` event is emitted because no lifecycle event log exists yet.
 
 ## UI-03 — Complete manager UI
 
 Review, remediation, rules, report, deletion, retry.
 
-> **Annotation (2026-09-29, slice 1 of `UI-03`):** the analysis lifecycle
-> controls are implemented in the analysis layout: cancel, retry (opens the
-> new attempt) and delete with an accessible permanent-removal
-> confirmation (`docs/ui-specification.md` §3). Still **not implemented**:
-> the rules screen, the report screen, finding review controls and the
-> technical details screen. `UI-03` stays open.
->
-> **Annotation (2026-09-29, slice 2 of `UI-03`):** the report screen is
-> implemented (`docs/ui-specification.md` §4.10): choose the report
-> options, generate an immutable snapshot, list stored reports and download
-> a report's Markdown. Still **not implemented**: the rules screen (with
-> the rules export downloads), finding review controls and the technical
-> details screen. `UI-03` stays open.
->
-> **Annotation (2026-09-29, slice 3 of `UI-03`):** the rules screen is
-> implemented (`docs/ui-specification.md` §4.9): list rules with their
-> latest results, expand read-only details, re-run and delete a rule, and
-> download the validated rules as JSON or YAML. Still **not implemented**:
-> editing rule parameters and the enabled toggle (no update route exists),
-> finding review controls and the technical details screen. `UI-03` stays
-> open.
->
-> **Annotation (2026-09-29, slice 4 of `UI-03`):** the finding review
-> controls are implemented on the finding detail screen
-> (`docs/ui-specification.md` §4.7) over the existing review route, and the
-> findings list shows each review state. Still **not implemented**: the
-> technical details screen, and filtering findings by review state.
-> `UI-03` stays open.
->
-> **Annotation (2026-09-30, slice 5 of `UI-03`, item complete):** the
-> technical details screen is implemented (`docs/ui-specification.md`
-> §4.11) from existing routes only. `UI-03`'s named screens (lifecycle
-> controls, rules, report, finding review, technical details) are now all
-> delivered. Backend-dependent gaps remain outside this item: editing rule
-> parameters and the enabled toggle (no update route), filtering findings
-> by review state (no filter), and exposing detector thresholds and
-> analysis-level prompt/model metadata.
+Status: complete for its named screens, delivered in five slices; backend-dependent gaps
+remain outside this item.
+
+1. The analysis lifecycle controls in the analysis layout: cancel, retry (opens the new
+   attempt) and delete with an accessible permanent-removal confirmation
+   (`docs/ui-specification.md` §3).
+2. The report screen (`docs/ui-specification.md` §4.10): choose the report options, generate
+   an immutable snapshot, list stored reports and download a report's Markdown.
+3. The rules screen (§4.9): list rules with their latest results, expand read-only details,
+   re-run and delete a rule, and download the validated rules as JSON or YAML.
+4. The finding review controls on the finding detail screen (§4.7) over the existing review
+   route; the findings list shows each review state.
+5. The technical details screen (§4.11), from existing routes only.
+
+Gaps outside this item: editing rule parameters and the enabled toggle (no update route),
+filtering findings by review state (no filter), and exposing detector thresholds and
+analysis-level prompt/model metadata.
 
 ## REL-03 — v0.3 package
 
 Persistence and complete CSV workflow.
 
-> **Annotation (2026-09-30, slice 1 of `REL-03`):** the repository side is
-> prepared: the backend version is `0.3.0` and one acceptance test
-> (`backend/tests/api/test_v03_complete_workflow.py`) drives a CSV through the
-> whole persisted workflow — analysis, findings, a finding review, a rule
-> created and run, the rules export, a stored Markdown report, a restart and
-> permanent deletion. Still **not done** at that point: pushing the `v0.3.0`
-> tag, publishing the images and a clean-host install check (protected release
-> actions), so `REL-03` stayed open.
->
-> **Annotation (2026-09-30, slice 2 of `REL-03`, item complete):** the owner
-> pushed the tag `v0.3.0` (peels to `5053249adacca3c46276daa91f8ea1ff0ccc945d`),
-> the release workflow passed, and a clean Linux host with no GHCR credentials
-> pulled and started the release with AI off (`docs/decision-log.md` D-049).
-> As for `REL-02`, the clean-host check is one AI-off pull, start and health
-> check; the local-AI setup was not exercised. Images remain unsigned,
-> unattested and not container-scanned. `REL-03` is complete; the `v0.3`
-> milestone decision is the owner's.
+Status: `REL-03` is complete; the `v0.3` milestone decision is the owner's.
+
+- Repository side: the backend version is `0.3.0`, and one acceptance test
+  (`backend/tests/api/test_v03_complete_workflow.py`) drives a CSV through the whole
+  persisted workflow: analysis, findings, a finding review, a rule created and run, the
+  rules export, a stored Markdown report, a restart and permanent deletion.
+- Release: the owner pushed the tag `v0.3.0` (peels to
+  `5053249adacca3c46276daa91f8ea1ff0ccc945d`), the release workflow passed, and a clean
+  Linux host with no GHCR credentials pulled and started the release with AI off
+  (`docs/decision-log.md` D-049). As for `REL-02`, the clean-host check is one AI-off pull,
+  start and health check; the local-AI setup was not exercised. The images remain unsigned,
+  unattested and not container-scanned.
 
 # Production completion
 
@@ -714,424 +669,225 @@ Persistence and complete CSV workflow.
 
 Worksheet selection, stored values, macro rejection, expansion limits.
 
-> **Annotation (2026-10-01, slice 1 of `ING-03`):** the secure XLSX parser
-> (`parsers/xlsx_parser.py`, `parse_xlsx`) is implemented and tested in
-> isolation: worksheet selection by name or the first visible sheet, stored
-> values read as literal text with formulas never evaluated, rejection of
-> macro-enabled, encrypted, malformed and path-traversal workbooks, and
-> expansion, entity and resource limits (`docs/decision-log.md` D-050). Still
-> **not done**, so `ING-03` stays open: wiring XLSX into the upload route,
-> storage and analysis pipeline (the API still returns `415` for `.xlsx`), a
-> worksheet picker in the UI, and date-aware rendering of date cells.
->
-> **Annotation (2026-10-01, slice 2 of `ING-03`):** the API now accepts
-> `.xlsx` (`POST /analyses` with the optional `worksheet` field): worksheet
-> selection or `WORKSHEET_REQUIRED`, upload-time refusal of macro-enabled,
-> malformed and over-limit workbooks, a format-aware pipeline that reads the
-> chosen worksheet at every stage, `selected_worksheet` in the dataset
-> summary, and retry that keeps the format (`docs/decision-log.md` D-051).
-> Still **not done**, so `ING-03` stays open: the Start screen still offers
-> `.csv` only (no `.xlsx` in the file picker and no worksheet picker),
-> `POST /datasets/inspect` is not built, and date cells are shown as the
-> numbers stored in the file.
->
-> **Annotation (2026-10-01, slice 3 of `ING-03`, item still in progress):**
-> the Start screen accepts `.xlsx`, asks which worksheet to analyze when the
-> API answers `WORKSHEET_REQUIRED`, uploads the same file with the picked
-> worksheet, shows the API's refusal messages, and the Overview and Technical
-> details screens name the worksheet analyzed (`docs/decision-log.md`
-> D-052). Worksheet selection, stored values and macro rejection are done.
-> **Still open and part of the item:** the "expansion limits" are built in
-> but not configurable — `docs/configuration.md` ties `MAX_WORKSHEETS` and
-> `MAX_UNCOMPRESSED_WORKBOOK_MB` to Excel support, and no parser reads them
-> (nor `MAX_ROWS`, `MAX_COLUMNS` or `MAX_CELL_COUNT`); reading the settings
-> is the remaining slice. **Checked and outside the item:**
-> `POST /datasets/inspect` (marked optional in the API specification and
-> assigned to no backlog item), date interpretation (no authoritative
-> document asks for it; formatting is ignored by design, so a date stored as
-> a serial number is shown as that number), and the end-to-end scenario
-> "Excel worksheet selection" (a `REL-04` test-gate item under
-> `docs/testing-strategy.md` §2.4).
->
-> **Annotation (2026-10-02, slice 4 of `ING-03`): the item is complete.**
-> `MAX_FILE_SIZE_MB`, `MAX_ROWS`, `MAX_COLUMNS`, `MAX_WORKSHEETS`,
-> `MAX_UNCOMPRESSED_WORKBOOK_MB` and `MAX_CELL_COUNT` (with the column-name and
-> text-value length settings) are now read from the settings on every CSV and
-> Excel parse — the upload inspection and each pipeline stage — through one
-> factory (`analysis/parse_limits.py`); with no variables set behavior is
-> unchanged (`docs/decision-log.md` D-053). Unchanged and outside the item:
-> `POST /datasets/inspect`, date interpretation, and the Playwright worksheet
-> selection scenario (`REL-04`).
+Status: the item is complete (`ING-03`). It was delivered in four slices:
+
+1. The secure XLSX parser (`parsers/xlsx_parser.py`, `parse_xlsx`): worksheet selection by
+   name or the first visible sheet, stored values read as literal text with formulas never
+   evaluated, rejection of macro-enabled, encrypted, malformed and path-traversal
+   workbooks, and expansion, entity and resource limits (`docs/decision-log.md` D-050).
+2. The API accepts `.xlsx` (`POST /analyses` with the optional `worksheet` field):
+   worksheet selection or `WORKSHEET_REQUIRED`, upload-time refusal of macro-enabled,
+   malformed and over-limit workbooks, a format-aware pipeline that reads the chosen
+   worksheet at every stage, `selected_worksheet` in the dataset summary, and retry that
+   keeps the format (D-051).
+3. The Start screen accepts `.xlsx`, asks which worksheet to analyze when the API answers
+   `WORKSHEET_REQUIRED`, uploads the same file with the picked worksheet and shows the API's
+   refusal messages; the Overview and Technical details screens name the worksheet analyzed
+   (D-052).
+4. The configured limits (documented in `docs/configuration.md`): `MAX_FILE_SIZE_MB`, `MAX_ROWS`, `MAX_COLUMNS`, `MAX_WORKSHEETS`,
+   `MAX_UNCOMPRESSED_WORKBOOK_MB` and `MAX_CELL_COUNT` (with the column-name and text-value
+   length settings) are read from the settings on every CSV and Excel parse, in the upload
+   inspection and each pipeline stage, through one factory (`analysis/parse_limits.py`);
+   with no variables set behavior is unchanged (D-053).
+
+Checked and outside the item: `POST /datasets/inspect` (marked optional in the API
+specification and assigned to no backlog item), date interpretation (no authoritative
+document asks for it; formatting is ignored by design, so a date stored as a serial number
+is shown as that number), and the Playwright worksheet-selection scenario (a `REL-04`
+test-gate item under `docs/testing-strategy.md` §2.4).
 
 ## DET-03 — Core detector catalogue
 
 Add remaining structural, completeness, consistency, validity, statistical, and cross-field detectors.
 
-> **Retitled 2026-10-05 (`docs/decision-log.md` D-061):** this item was titled
-> "Complete detector catalogue" and is now the **Core detector catalogue**. The
-> annotations below were written under the earlier title and are kept as history;
-> where they place work in this item that D-061 moves out, the "Closure boundary"
-> annotation at the end of this section governs.
+Status: **closed as the Core detector catalogue** (`docs/decision-log.md` D-065): **26
+detectors covering 28 of 41 catalogue entries; 13 carried by named successors.** This is a
+closure of the Core detector catalogue, not a claim that every catalogue idea is
+implemented: the 13 moved entries are not built, and their successor items (`DET-04`,
+`CCX-01`, `CCX-02`, `DET-05`, `DET-06`, `STD-01`, `HARM-01`, `RULE-03`) remain planned with
+no milestone placement, which is an open owner decision. The 41-entry mapping is in
+`docs/detector-framework.md` §16 ("Closure boundary"): 28 entries are built (20 before
+closure, 8 by the closure packages) and 13 are moved (11 by D-061 and 2 previously by
+D-057).
 
-> **Annotation (2026-10-02, slice 1 of `DET-03`, item still in progress):**
-> `completeness.fully_empty_rows` and `consistency.inconsistent_booleans` are
-> built, registered and covered by built-in guidance (`docs/decision-log.md`
-> D-054); neither has a deterministic rule proposal, by design.
->
-> **Annotation (2026-10-02, slice 2 of `DET-03`, item still in progress):**
-> `validity.implausibly_old_dates` (proposes a date-range rule from its own
-> evidence) and `validity.invalid_email_shape` (no rule proposal; counts only,
-> never an email value) are built, registered and covered by built-in guidance
-> (`docs/decision-log.md` D-055).
->
-> **Annotation (2026-10-02, slice 3 of `DET-03`, item still in progress):**
-> `consistency.numeric_values_stored_as_text` and
-> `consistency.near_duplicate_categories` are built, registered and covered by
-> built-in guidance (`docs/decision-log.md` D-056); neither has a deterministic
-> rule proposal, by design. **Still open and part of the item:** the remaining
-> detectors listed in `docs/detector-framework.md` §16 — structural (empty
-> dataset, unnamed column, duplicate normalized column name, probable
-> duplicate identifier, mixed types, excessive parse failures), completeness
-> (concentrated missingness, completeness change over time), consistency
-> (inconsistent date formats, conflicting stable attributes), validity
-> (invalid country or region values), statistical (high-cardinality categories,
-> unexpected rarity,
-> distribution shift, identifier-like measure),
-> cross-field (discount, tax, start date after end date, status/date conflict,
-> missing currency) and the second and third AI-processing security checks.
+Provenance of the title: the item was titled "Complete detector catalogue" and was retitled
+the Core detector catalogue by D-061. Earlier planning wording is preserved in Git history.
 
-> **Annotation (2026-10-04, slice 4 of `DET-03`, item still in progress):**
-> `structural.duplicate_normalized_column_name` is built, registered and covered
-> by built-in guidance (`docs/decision-log.md` D-058); it proposes no rule, by
-> design. It is the entry the dependency graph below marks as needing no new
-> prerequisite. The catalogue has 20 detectors. In the list above, "duplicate
-> normalized column name" is no longer open; the other remaining entries are
-> unchanged and `DET-03` is not complete.
+### Detectors built before the closure plan
 
-> **Annotation (2026-10-02, design materialization; `docs/decision-log.md`
-> D-057; documentation only, `DET-03` still in progress):** the confirmed design
-> changes the shape of the remaining work. Nothing here is built.
->
-> - **Moved out of `DET-03`, not dropped and never counted as completed:**
->   "invalid country/region values" (carried by the proposed *standards policy*
->   and *semantic category harmonization* capabilities below) and "status/date
->   conflict" (carried by a named business-rule follow-up, tracked as a working
->   title only). `docs/detector-framework.md` §16 carries the per-entry status.
-> - **Closable context-free part:** the structural, ingest-fact and
->   value-evidence detectors that need no confirmed context can close
->   independently. The context-bound detectors (start date after end date,
->   discount, tax, missing currency, conflicting stable attributes, probable
->   duplicate identifier, identifier-like measure, completeness change over time,
->   distribution shift) depend on the confirmed-context foundation, so `DET-03`
->   stays open while they remain. Until a confirmation path ships they stay
->   inactive and their tests are contract-level, not end-to-end.
-> - **Name-based shipped detectors:** `cross_field.line_total_mismatch` and
->   `validity.invalid_percentages` must migrate to confirmed roles, and
->   `validity.invalid_email_shape` is a compatibility exception to review, with a
->   compatibility window and a measurable owner-visible exit condition (open).
->
-> **Working titles (identifiers and milestone placement are open and pending
-> owner approval; these are not committed backlog items):**
->
-> | Working title | Kind |
-> |---|---|
-> | Observation type | prerequisite item |
-> | Ingest-facts record | prerequisite item |
-> | Confirmed-context foundation (roles, expectation capture, shared applicability gate, context-version identity) | prerequisite item |
-> | Standards policy | proposed capability, no implementation commitment |
-> | Semantic category harmonization | proposed capability, no implementation commitment |
-> | Business-rule follow-up (status/date conflict) | named follow-up |
->
-> **Dependency graph.** An edge `A -> B` means `A` must exist before `B` starts.
-> **Amended on 2026-10-04 (D-059): see `dependency_graph_amendment` in the
-> annotation below this one; it refines E1 and E3, and the lists in this
-> annotation are history, not current open items.**
-> The block below is the machine-readable form; automation must not propose a
-> slice with an unmet edge. Names in `needs`/`blocks` that are working titles
-> carry `id: pending` and are matched by title until identifiers are assigned.
->
-> ```yaml
-> dependency_graph:
->   schema: 1
->   status: design-recorded-not-implemented
->   nodes:
->     observation_type:        {title: "Observation type", id: pending}
->     ingest_facts:            {title: "Ingest-facts record", id: pending}
->     confirmed_context:       {title: "Confirmed-context foundation", id: pending}
->     standards_policy:        {title: "Standards policy", id: pending}
->     category_harmonization:  {title: "Semantic category harmonization", id: pending}
->     ui_ux_design:            {title: "Upcoming UI/UX design", id: pending}
->     verify_zero_row:         {title: "Verify zero-row and header-only handling", id: pending}
->     verify_date_patterns:    {title: "Verify date-pattern vocabulary", id: pending}
->     security_review:         {title: "Security review and adversarial suite extension", id: pending}
->   edges:
->     - {id: E1, from: observation_type, to: "every observation-emitting detector (high-cardinality categories, unexpected rarity, concentrated missingness, mixed types, inconsistent date formats) and every NOT_CHECKED observation"}
->     - {id: E2, from: ingest_facts, to: "unnamed column detector and any parser-fact detector"}
->     - {id: E3, from: confirmed_context, to: "every context-bound DET-03 slice (four cross-field detectors, probable duplicate identifier, identifier-like measure, conflicting stable attributes, completeness change over time, distribution shift)"}
->     - {id: E4, from: confirmed_context, to: "migration of line_total_mismatch and invalid_percentages and review of invalid_email_shape"}
->     - {id: E5, from: [observation_type, confirmed_context, ui_ux_design], to: [standards_policy, category_harmonization]}
->     - {id: E6, from: verify_zero_row, to: "empty dataset detector"}
->     - {id: E7, from: verify_date_patterns, to: "inconsistent date formats"}
->     - {id: E8, from: security_review, to: "possible data-exfiltration instruction and suspicious secret-request text"}
->   no_edge:
->     - "duplicate normalized column name needs no new type and can deliver first"
->   notes:
->     - "E3 includes the expectation-capture mechanism, the shared applicability gate, and stale and conflicting fixtures and the context-version identity scheme defined first."
->     - "Harmonization's durable business context reuses the confirmed-context store."
->     - "DET-03 completion counts only implemented entries; moved entries are never counted as completed."
-> ```
->
-> **Conditions carried by the follow-on items** (specified here, built there):
-> an executable catalogue check that every entry is implemented or carries a
-> traceable moved or deferred note; a machine-readable dependency-edge validator
-> that tolerates pending identifiers; per-detector negative tests asserting zero
-> findings, unchanged score and a NOT EVALUATED record; a scoring-boundary
-> regression test over the observation-kind registry; reproducibility tests for
-> context versions with stale and conflicting fixtures first; and a migration
-> plan for demo and benchmark fixtures. The open items (identifiers and
-> milestone placement; role vocabulary, storage and versioning schema, stable
-> column identity and expectation capture; starter standards; local-AI scope; the
-> observation-kind vocabulary and its persistence and API; zero-row, date-pattern
-> and type-inference verifications; migration exit condition; relationship of
-> ingest facts to parsing-warning codes; durable dataset identity) are **open**
-> and are not decided here.
+Each is registered and covered by built-in guidance. The catalogue held 20 detectors after
+slice 4.
 
-> **Annotation (2026-10-04, confirmed-context foundation design; `docs/decision-log.md`
-> D-059; documentation only, `DET-03` still in progress): PLAN CHANGE.** The
-> confirmed design splits the "Confirmed-context foundation" working title into
-> two ordered, planned work packages and folds the "Observation type" working
-> title into the second. **Nothing here is built, and neither package is
-> authorized yet.** Both belong to `DET-03` and are implementation-planned, not
-> implemented. Identifiers are assigned when each package is defined.
->
-> | Order | Planned package | Delivers | Does not deliver |
-> |---|---|---|---|
-> | 1 (next) | Confirmed-relationship foundation | The persisted confirmed-relationship record (kind `start_end_date`), immutable versions with a stable relationship id, server-set provenance, confirm / replace / withdraw with version-aware writes, `POST` and `GET .../confirmed-relationships` (current projection plus history), the storage limits, the `delete_analysis` cascade; `POST` returns `check_status: "not_active"` | Any observation, any detector run, the gate, the summary; it does not claim context-bound detection is active |
-> | 2 | Context-bound execution | The minimal `NOT_CHECKED` observation and `GET .../observations`, the gate, the durable idempotent bounded second pass, the `start_end_date` detector, stale-result protection, the derived "awaiting confirmed context" summary, finding and run provenance bound to the confirmation version | The confirmation screen, observation dismissal and suppression, any other observation kind or relationship kind |
->
-> **Gate.** Package 2 must not be authorized until two open design decisions are
-> made: what counts as a *conflicting* confirmation, and how the gate and the
-> derived summary treat a *withdrawn* relationship. Package 1 ships the withdraw
-> transition before the second decision, so that decision must not require a
-> different stored shape. One further owner question is open and affects package
-> 1: whether a withdrawal is exempt from the 50-versions-per-relationship cap
-> (as decided, a relationship at 50 versions can no longer be replaced or
-> withdrawn, and only deleting the analysis recovers it). Package 2's own design also
-> specifies the detector's severity and evidence cap, how a finding records its
-> confirmation version, the justification for a new scheduler beside the existing
-> job pool, and the ordering rule between `delete_analysis` and a running context
-> run.
->
-> ```yaml
-> dependency_graph_amendment:
->   schema: 1
->   status: design-recorded-not-implemented
->   refines_edges: [E1, E3]      # E1 and E3 are NOT dropped: E1 still holds for every observation producer other than NOT_CHECKED, and E3 holds per relationship kind; the original block above is history
->   nodes:
->     cc_package_1: {title: "Confirmed-relationship foundation", id: pending}
->     cc_package_2: {title: "Context-bound execution", id: pending}
->     conflicting_confirmation_decision: {title: "Define a conflicting confirmation", id: pending, kind: design-decision}
->     withdrawn_relationship_decision: {title: "Gate and summary treatment of a withdrawn relationship", id: pending, kind: design-decision}
->   edges:
->     - {id: E9,  from: cc_package_1, to: cc_package_2}
->     - {id: E10, from: conflicting_confirmation_decision, to: cc_package_2}
->     - {id: E10b, from: withdrawn_relationship_decision, to: cc_package_2}
->     - {id: E11, from: cc_package_2, to: "start date after end date detector"}
->     - {id: E12, from: cc_package_2, to: "every other context-bound DET-03 slice, each adding its own relationship kind"}
->     - {id: E1r, from: cc_package_2, to: "the first NOT_CHECKED observation (the observation type ships here with its first producer)"}
->     - {id: E13, from: "a later observation-kind design", to: "any observation kind other than NOT_CHECKED, and observation dismissal and suppression"}
->   notes:
->     - "E1 still holds for every observation-emitting detector other than the NOT_CHECKED producer; only the NOT_CHECKED kind ships with package 2."
->     - "E3 is satisfied per relationship kind, not once: each context-bound detector adds its own kind to the confirmed-relationship record."
->     - "Name-based shipped detectors are not gated by confirmations; E4 (migration) still depends on confirmed roles and is unchanged."
-> ```
->
-> The remaining open items stay open and are not decided here: what a conflicting
-> confirmation is, observation dismissal and suppression, the confirmation screen,
-> a durable cross-parse column identity, relationship kinds beyond `start_end_date`,
-> how the gate and the derived summary treat a *withdrawn* relationship (stale,
-> with a mandatory `NOT_CHECKED` observation, or the same as never confirmed),
-> and the migration of the name-based shipped detectors.
+| Slice | Decision | Detectors | Rule proposal |
+|---|---|---|---|
+| 1 | D-054 | `completeness.fully_empty_rows`, `consistency.inconsistent_booleans` | none, by design |
+| 2 | D-055 | `validity.implausibly_old_dates`, `validity.invalid_email_shape` | the date detector proposes a date-range rule from its own evidence; the email detector proposes none (counts only, never an email value) |
+| 3 | D-056 | `consistency.numeric_values_stored_as_text`, `consistency.near_duplicate_categories` | none, by design |
+| 4 | D-058 | `structural.duplicate_normalized_column_name` | none, by design |
 
-> **Annotation (2026-10-05, closure boundary; `docs/decision-log.md` D-061;
-> documentation only, `DET-03` still in progress): PLAN CHANGE.** The owner
-> approved an explicit closure boundary. **Nothing here is built except what the
-> earlier annotations already record, and only the documentation record of this
-> change is authorized.** This annotation supersedes the working-title table, the
-> `dependency_graph` and the `dependency_graph_amendment` blocks above as the
-> *current* plan; those blocks stay as history.
->
-> **Retitle.** `DET-03` is the **Core detector catalogue**. It closes at **27
-> registered detectors covering 28 of the 41 catalogue entries** (one security
-> detector covers two entries), or **26 registered detectors** only if empty
-> dataset is conclusively parser-owned and terminal before detector execution;
-> that is decided by package 1 and this text stays conditional until then. 13
-> entries are carried by named successors. The 41-entry mapping table is in
-> `docs/detector-framework.md` §16 ("Closure boundary"); 20 are built, 8 are
-> planned to be built by closure, 11 are moved to named successors and 2 were
-> moved by D-057.
->
-> **What changed.** The confirmed-context execution engine (the former "package
-> 2": gate, durable second pass, scheduler, stale-run recovery, the
-> awaiting-confirmation summary and `NOT_CHECKED`) leaves `DET-03` and becomes
-> CCX-01. The Observation foundation and the ingest-warning support stay in
-> `DET-03` only in the minimal, bounded form below. **`WP-106` is preserved**: it
-> is delivered history under `DET-03` and is recorded as CCX-01 package 1. **D-059
-> ordering amendment:** the minimal Observation foundation ships first, with a
-> value-evidence producer, and CCX-01 later adds `NOT_CHECKED` as a new kind;
-> D-059 items 11 and 15 are superseded on ordering only.
->
-> **Closure packages (finite; none beyond the documentation record authorized):**
->
-> | # | Package | Delivers | Count after |
-> |---|---|---|---|
-> | 0 | Re-scope materialization (documentation only) | This record | 20 |
-> | 1 | Structural and ingest closure | Zero-row and header-only investigation, then `structural.empty_dataset` or a regression proof that it is parser-owned; an immutable in-memory parser-warning projection limited to four warning codes; `structural.unnamed_column`; `structural.excessive_parse_failures`. No persisted ingest-facts record | 23 (22 if parser-owned) — **built; the empty case is detector-owned, so 23 (D-062)** |
-> | 2 | Observation and value-evidence slice | The minimal Observation foundation, a read-only API and a read-only results-UI list; `structural.mixed_types`, `consistency.inconsistent_date_formats`, `completeness.concentrated_missingness` | 26 (25) — **built; 26 registered (D-063)** |
-> | 3 | Security detector slice | The adversarial suite extended first; one detector for possible data-exfiltration instruction and suspicious secret-request text as two evidence subtypes; bounded, redacted evidence; "possible risk" wording; the Security Reviewer review | 27 (26) — **built as subtypes of the existing detector; no detector added, 26 registered (D-064)** |
-> | 4 | `DET-03` closure | An executable catalogue-status check against the 41-entry table; document and count reconciliation; the closure report | 27 (26) |
->
-> Packages 1, 2 and 3 are technically independent of each other and may run in
-> any order after package 0; package 4 follows all three. Each package has its own
-> acceptance criteria, reviews and evidence.
->
-> **Boundaries that hold for packages 1 to 3.** The parser-warning projection is
-> in memory, limited to `parsing.empty_column_name`, `parsing.ragged_row`,
-> `parsing.xlsx_formula_without_cached_value` and `parsing.xlsx_error_value`,
-> carries counts and bounded references and never a message or a cell value, and
-> reaches detectors through an additive optional input behind a flag that defaults
-> to off. Observations are neutral, have no severity, confidence or priority, have
-> one closed kind (`value_evidence`), are never counted by trust scoring or
-> priority, never enter an AI payload, and are excluded from exports and reports
-> for now. A negative allowlist test fails if an Observation field reaches score,
-> priority, an AI payload, an export or a report. The extension seam is that a
-> later kind is a new kind, never a change to `value_evidence`. Package 2 records
-> the provisional Observation API in the API specification and the domain model.
-> There is no dismissal, suppression, history, scheduling, `NOT_CHECKED`, scheduler,
-> second-pass machinery or stale-run recovery in `DET-03`, and **no `DET-03`
-> detector reads confirmed relationships**. The two unresolved CCX decisions
-> (what counts as a *conflicting* confirmation; how a *withdrawn* relationship is
-> gated) stay open and belong to CCX-01.
->
-> **`DET-03` is COMPLETE when** (finite definition): (1) the title and scope are
-> reconciled and no document assigns confirmed context, a scheduler,
-> `NOT_CHECKED`, persisted ingest facts or Observation workflow to it; (2) the
-> registry holds exactly 27 detectors (26 only under the parser-owned empty-dataset
-> condition) and the original 20 remain registered and green; (3) empty dataset is
-> terminal, as a registered detector or as an evidenced, regression-tested outcome
-> before detection; (4) unnamed column and excessive parse failures read only the
-> four-code projection, with nothing persisted or exposed; (5) the three
-> observation detectors are readable through the API and visible in the results
-> UI, never change score or priority, and never enter an AI payload; (6) the
-> security detector exists with an extended adversarial suite, bounded and redacted
-> evidence and a recorded Security Reviewer approval; (7) the executable
-> catalogue-status check passes: every one of the 41 entries is built, built by
-> closure, moved to a named existing successor, or moved previously, and moved
-> entries are never counted as built; (8) documents are reconciled with the wording
-> "27 detectors covering 28 of 41 catalogue entries; 13 carried by named
-> successors", never "complete catalogue built"; (9) CI is green on the final
-> fingerprint with no stale verification and no unresolved blocking finding; (10)
-> the owner records the item complete.
->
-> **Successor items** are listed in the group "Successor items carried out of
-> `DET-03`" at the end of this file. Their milestone placement is open.
->
-> **Annotation (2026-10-05, closure package 1 built; `docs/decision-log.md`
-> D-062; `DET-03` still in progress):** closure package 1 is built. The zero-row
-> investigation found that parsers accept a header-only CSV or worksheet, so the
-> empty case is detector-owned and the "26 registered detectors" alternative above no
-> longer applies; the target stays **27 registered detectors covering 28 of 41
-> entries**. Registered today: **23**. Built: `structural.empty_dataset`,
-> `structural.unnamed_column` and `structural.excessive_parse_failures`, with the
-> in-memory four-code ingest-facts projection behind a default-off metadata flag. No
-> persisted ingest-facts record, Observation, confirmed-context execution, scheduler
-> or `NOT_CHECKED` work was built, and no detector reads confirmed relationships.
-> Packages 2 to 4 remain planned and are not authorized by this package. The
-> catalogue is not complete. Open for the owner at closure: whether
-> `structural.empty_column` should skip a zero-row dataset so that the empty case is
-> reported once (D-062 item 9).
->
-> **Annotation (2026-10-05, closure package 2 built; `docs/decision-log.md`
-> D-063; `DET-03` still in progress):** closure package 2 is built. The minimal
-> Observation foundation is in place: a neutral record with no severity, confidence
-> or priority and one closed kind (`value_evidence`), stored in a new nullable
-> `observations_json` column (migration `0008`), read through the read-only
-> `GET /api/v1/analyses/{analysis_id}/observations` route and listed read-only on the
-> Overview screen. Three observation-only producers are registered:
-> `structural.mixed_types`, `consistency.inconsistent_date_formats` and
-> `completeness.concentrated_missingness`. Registered today: **26**. Observations
-> never change trust score or priority, never enter an AI payload and are excluded
-> from exports and reports, enforced by a negative allowlist test. No dismissal,
-> suppression, history, `NOT_CHECKED`, scheduler, persisted ingest-facts record or
-> confirmed-relationship read was built. Packages 3 and 4 remain planned and are not
-> authorized by this package. The catalogue is not complete.
->
-> **Annotation (2026-10-06, closure package 3 built; `docs/decision-log.md`
-> D-064; `DET-03` still in progress): PLAN CHANGE within the closure plan, by owner
-> decision (SD-989e7edf3d5a, option R).** Catalogue entries 40 (possible
-> data-exfiltration instruction) and 41 (suspicious secret-request text) are covered
-> as **evidence subtypes of the existing `security.possible_llm_prompt_injection`**
-> (version 2), not by a second detector. The closure target is amended from 27 to
-> **26 registered detectors covering the same 28 of 41 entries**, and the finite
-> `DET-03` COMPLETE definition above changes its detector count from 27 to 26;
-> package 3 adds no detector, so **registered today: 26**. Built: closed subtype
-> vocabulary and per-subtype row counts in the evidence, extended phrasings for the
-> two heightened families, invisible-character and compatibility normalization,
-> bounded redacted evidence (never text after a secret or exfiltration request) and an
-> extended adversarial suite, with a recorded Security Reviewer approval. Still one
-> finding per column; identity, severity and trust-score effect are unchanged for
-> every column in which nothing newly recognised appears, and newly recognised
-> phrasings count wherever they appear, so a column version 1 already flagged can
-> rise in severity and priority (owner decision SD-0cc2de8a9889, option A). Only
-> package 4 (executable catalogue-status check,
-> document and count reconciliation, closure report) remains and is not authorized by
-> this package. The catalogue is not complete.
->
-> ```yaml
-> dependency_graph_closure:
->   schema: 1
->   status: design-recorded-not-implemented
->   supersedes: [dependency_graph, dependency_graph_amendment]   # history is not edited; this is the current plan
->   nodes:
->     det03_p0: {title: "DET-03 re-scope materialization", kind: documentation}
->     det03_p1: {title: "Structural and ingest closure"}
->     det03_p2: {title: "Observation and value-evidence slice"}
->     det03_p3: {title: "Security detector slice"}
->     det03_p4: {title: "DET-03 closure"}
->     wp106:    {title: "Confirmed-relationship foundation (delivered; CCX-01 package 1)", id: WP-106, state: delivered}
->   edges:
->     - {id: C1, from: det03_p0, to: [det03_p1, det03_p2, det03_p3]}
->     - {id: C2, from: [det03_p1, det03_p2, det03_p3], to: det03_p4}
->     - {id: C3, from: det03_p2, to: [DET-04, OBS-02, CCX-01]}   # CCX-01 adds NOT_CHECKED to the existing observation record
->     - {id: C4, from: det03_p1, to: ING-04}
->     - {id: C5, from: [wp106, det03_p2], to: CCX-01}
->     - {id: C6, from: CCX-01, to: [CCX-02, DET-05, DET-06]}
->     - {id: C7, from: CCX-02, to: DET-05}
->   no_edge:
->     - "no DET-03 package depends on CCX-01, CCX-02, DET-05 or DET-06"
->     - "no DET-03 detector reads confirmed relationships"
->   notes:
->     - "E4 (migration of line_total_mismatch and invalid_percentages, review of invalid_email_shape) moves to DET-05."
->     - "E5 (standards policy and category harmonization) is unchanged and remains outside DET-03; STD-01, HARM-01 and RULE-03 are working titles."
->     - "E6 (zero-row verification) and E7 (date-pattern vocabulary) become investigation steps inside packages 1 and 2; E8 (security review) is inside package 3."
->     - "The two open CCX decisions gate CCX-01 only."
-> ```
->
-> **Annotation (2026-10-06, closure package 4 built; `docs/decision-log.md` D-065;
-> `DET-03` closed as the Core detector catalogue):** the closure definition above is met
-> as **26 detectors covering 28 of 41 catalogue entries; 13 carried by named
-> successors.** (Item 2 reads 26 rather than 27 by D-064.) An executable
-> catalogue-status check (`backend/tests/detectors/test_catalogue_status.py`) compares the
-> 41-entry table in `docs/detector-framework.md` section 16 with the real registry and
-> with the successor items in this file, so a dropped row, an unknown detector, an
-> unknown successor or a moved entry counted as built fails the test run. This is a
-> closure of the Core detector catalogue, not a claim that every catalogue idea is
-> implemented: the 13 moved entries are not built, and their successor items (DET-04,
-> CCX-01, CCX-02, DET-05, DET-06, STD-01, HARM-01, RULE-03) remain planned with no
-> milestone placement, which is still an open owner decision. Still open and not
-> decided here: the two CCX-01 decisions and whether `structural.empty_column` should
-> skip a zero-row dataset (D-062 item 9). No detector, finding, score, API or UI
-> behavior changed in this package.
+### Design record that shaped the closure
+
+- **D-057 (design materialization, documentation only).** Two catalogue entries were moved
+  out of `DET-03`, not dropped and never counted as completed: "invalid country/region
+  values" (carried by the proposed *standards policy* and *semantic category harmonization*
+  capabilities) and "status/date conflict" (carried by a named business-rule follow-up).
+  Context-free detectors can close independently; context-bound detectors depend on a
+  confirmed-context foundation and stay inactive, with contract-level tests, until a
+  confirmation path ships. The name-based shipped detectors `cross_field.line_total_mismatch`
+  and `validity.invalid_percentages` must migrate to confirmed roles, and
+  `validity.invalid_email_shape` is a compatibility exception to review, with a compatibility
+  window and a measurable owner-visible exit condition (open; carried by `DET-05`).
+- **D-059 (confirmed-context foundation design, documentation only).** The foundation was
+  split into two ordered packages and the observation type folded into the second. Package 1,
+  the confirmed-relationship foundation, delivers the persisted record (kind
+  `start_end_date`) with immutable versions and a stable relationship id, server-set
+  provenance, confirm / replace / withdraw with version-aware writes, `POST` and `GET
+  .../confirmed-relationships` (current projection plus history), the storage limits and the
+  `delete_analysis` cascade; `POST` returns `check_status: "not_active"`, and it does not
+  claim context-bound detection is active. It was delivered as `WP-106` (D-060). The second
+  package, context-bound execution, was gated on two open decisions (what counts as a
+  *conflicting* confirmation; how the gate and summary treat a *withdrawn* relationship) and
+  on an open owner question: whether a withdrawal is exempt from the 50-versions-per-relationship
+  cap (as decided, a relationship at 50 versions can no longer be replaced or withdrawn, and
+  only deleting the analysis recovers it).
+- **D-061 (closure boundary, PLAN CHANGE, documentation only).** The owner approved a finite
+  closure boundary. The confirmed-context execution engine (the former "package 2": the gate,
+  the durable second pass, the scheduler, stale-run recovery, the awaiting-confirmation
+  summary and `NOT_CHECKED`) left `DET-03` and became `CCX-01`. **`WP-106` is preserved**: it
+  is delivered history under `DET-03` and is recorded as `CCX-01` package 1. The minimal
+  Observation foundation ships first, with a value-evidence producer, and `CCX-01` later adds
+  `NOT_CHECKED` as a new kind; D-059 items 11 and 15 are superseded on ordering only.
+
+### Closure packages (all built)
+
+| # | Package | Delivered | Registered after |
+|---|---|---|---|
+| 0 | Re-scope materialization (documentation only) | The D-061 record | 20 |
+| 1 | Structural and ingest closure (D-062) | Zero-row and header-only investigation; `structural.empty_dataset`; an immutable in-memory parser-warning projection limited to four warning codes; `structural.unnamed_column`; `structural.excessive_parse_failures`. No persisted ingest-facts record | 23 |
+| 2 | Observation and value-evidence slice (D-063) | The minimal Observation foundation, a read-only API and a read-only results-UI list; `structural.mixed_types`, `consistency.inconsistent_date_formats`, `completeness.concentrated_missingness` | 26 |
+| 3 | Security detector slice (D-064) | The adversarial suite extended first; subtypes of the existing detector; bounded, redacted evidence; "possible risk" wording; the Security Reviewer review. Built as subtypes of the existing detector; no detector added, 26 registered (D-064) | 26 |
+| 4 | `DET-03` closure (D-065) | An executable catalogue-status check against the 41-entry table; document and count reconciliation; the closure report | 26 |
+
+Packages 1, 2 and 3 were technically independent of each other; package 4 followed all
+three. Each had its own acceptance criteria, reviews and evidence.
+
+- **Package 1 (D-062).** The zero-row investigation found that the parsers accept a
+  header-only CSV or worksheet, so the empty case is detector-owned and the
+  parser-owned alternative no longer applies. The four-code ingest-facts projection is in
+  memory, behind a default-off metadata flag. No persisted ingest-facts record,
+  Observation, confirmed-context execution, scheduler or `NOT_CHECKED` work was built, and
+  no detector reads confirmed relationships.
+- **Package 2 (D-063).** The Observation is a neutral record with no severity, confidence or
+  priority and one closed kind (`value_evidence`), stored in a new nullable
+  `observations_json` column (migration `0008`), read through the read-only
+  `GET /api/v1/analyses/{analysis_id}/observations` route and listed read-only on the
+  Overview screen. A negative allowlist test fails if an Observation field reaches score,
+  priority, an AI payload, an export or a report.
+- **Package 3 (D-064).** By owner decision SD-989e7edf3d5a (option R), catalogue entries 40
+  (possible data-exfiltration instruction) and 41 (suspicious secret-request text) are
+  covered as **evidence subtypes of the existing
+  `security.possible_llm_prompt_injection`** (version 2) instead of a second detector, which
+  amended the closure target from 27 to 26 registered detectors covering the same 28 of 41
+  entries. Built: a closed subtype vocabulary and per-subtype row counts in the evidence,
+  extended phrasings for the two heightened families, invisible-character and compatibility
+  normalization, bounded redacted evidence (never text after a secret or exfiltration
+  request), an extended adversarial suite and a recorded Security Reviewer approval. It is
+  still one finding per column; identity, severity and trust-score effect are unchanged for
+  every column in which nothing newly recognised appears, and newly recognised phrasings
+  count wherever they appear, so a column version 1 already flagged can rise in severity and
+  priority (owner decision SD-0cc2de8a9889, option A).
+- **Package 4 (D-065).** The check (`backend/tests/detectors/test_catalogue_status.py`)
+  compares the 41-entry table in `docs/detector-framework.md` section 16 with the real
+  registry and with the successor items in this file, so a dropped row, an unknown
+  detector, an unknown successor or a moved entry counted as built fails the test run. No
+  detector, finding, score, API or UI behavior changed in this package.
+
+### Boundaries that held for packages 1 to 3
+
+The parser-warning projection is in memory, limited to `parsing.empty_column_name`,
+`parsing.ragged_row`, `parsing.xlsx_formula_without_cached_value` and
+`parsing.xlsx_error_value`, carries counts and bounded references and never a message or a
+cell value, and reaches detectors through an additive optional input behind a flag that
+defaults to off. Observations are neutral, have no severity, confidence or priority, have
+one closed kind (`value_evidence`), are never counted by trust scoring or priority, never
+enter an AI payload, and are excluded from exports and reports for now. The extension seam
+is that a later kind is a new kind, never a change to `value_evidence`. The provisional
+Observation API is recorded in the API specification and the domain model. There is no
+dismissal, suppression, history, scheduling, `NOT_CHECKED`, scheduler, second-pass
+machinery or stale-run recovery in `DET-03`, and **no `DET-03` detector reads confirmed
+relationships**.
+
+### Finite COMPLETE definition (met by D-065)
+
+`DET-03` is complete when: (1) the title and scope are reconciled and no document assigns
+confirmed context, a scheduler, `NOT_CHECKED`, persisted ingest facts or Observation
+workflow to it; (2) the registry holds exactly 26 detectors (27 before D-064) and the
+original 20 remain registered and green; (3) empty dataset is terminal, as a registered
+detector; (4) unnamed column and excessive parse failures read only the four-code
+projection, with nothing persisted or exposed; (5) the three observation detectors are
+readable through the API and visible in the results UI, never change score or priority, and
+never enter an AI payload; (6) the security coverage exists with an extended adversarial
+suite, bounded and redacted evidence and a recorded Security Reviewer approval; (7) the
+executable catalogue-status check passes: every one of the 41 entries is built, built by
+closure, moved to a named existing successor, or moved previously, and moved entries are
+never counted as built; (8) documents are reconciled with the wording "26 detectors
+covering 28 of 41 catalogue entries; 13 carried by named successors", never "complete
+catalogue built"; (9) CI is green on the final fingerprint with no stale verification and no
+unresolved blocking finding; (10) the owner records the item complete.
+
+### Current dependency graph
+
+```yaml
+dependency_graph_closure:
+  schema: 1
+  status: design-recorded-not-implemented
+  supersedes: [dependency_graph, dependency_graph_amendment]   # earlier graphs are in Git history; this is the current plan
+  nodes:
+    det03_p0: {title: "DET-03 re-scope materialization", kind: documentation}
+    det03_p1: {title: "Structural and ingest closure"}
+    det03_p2: {title: "Observation and value-evidence slice"}
+    det03_p3: {title: "Security detector slice"}
+    det03_p4: {title: "DET-03 closure"}
+    wp106:    {title: "Confirmed-relationship foundation (delivered; CCX-01 package 1)", id: WP-106, state: delivered}
+  edges:
+    - {id: C1, from: det03_p0, to: [det03_p1, det03_p2, det03_p3]}
+    - {id: C2, from: [det03_p1, det03_p2, det03_p3], to: det03_p4}
+    - {id: C3, from: det03_p2, to: [DET-04, OBS-02, CCX-01]}   # CCX-01 adds NOT_CHECKED to the existing observation record
+    - {id: C4, from: det03_p1, to: ING-04}
+    - {id: C5, from: [wp106, det03_p2], to: CCX-01}
+    - {id: C6, from: CCX-01, to: [CCX-02, DET-05, DET-06]}
+    - {id: C7, from: CCX-02, to: DET-05}
+  no_edge:
+    - "no DET-03 package depends on CCX-01, CCX-02, DET-05 or DET-06"
+    - "no DET-03 detector reads confirmed relationships"
+  notes:
+    - "E4 (migration of line_total_mismatch and invalid_percentages, review of invalid_email_shape) moves to DET-05."
+    - "E5 (standards policy and category harmonization) is unchanged and remains outside DET-03; STD-01, HARM-01 and RULE-03 are working titles."
+    - "E6 (zero-row verification) and E7 (date-pattern vocabulary) become investigation steps inside packages 1 and 2; E8 (security review) is inside package 3."
+    - "The two open CCX decisions gate CCX-01 only."
+```
+
+### Carried forward and not decided here
+
+- The two `CCX-01` decisions: what counts as a *conflicting* confirmation, and how the gate
+  and the derived summary treat a *withdrawn* relationship (stale, with a mandatory
+  `NOT_CHECKED` observation, or the same as never confirmed).
+- Whether `structural.empty_column` should skip a zero-row dataset so that the empty case is
+  reported once (D-062 item 9).
+- Observation dismissal and suppression; the confirmation screen; a durable cross-parse
+  column identity; relationship kinds beyond `start_end_date`; the migration of the
+  name-based shipped detectors.
+- Conditions specified by the closure plan and built by the follow-on items: a
+  machine-readable dependency-edge validator that tolerates pending identifiers; per-detector
+  negative tests asserting zero findings, unchanged score and a NOT EVALUATED record; a
+  scoring-boundary regression test over the observation-kind registry; reproducibility tests
+  for context versions with stale and conflicting fixtures first; and a migration plan for
+  demo and benchmark fixtures. (The executable catalogue check was built by package 4.)
+- Open design items: identifiers and milestone placement; role vocabulary, storage and
+  versioning schema, stable column identity and expectation capture; starter standards;
+  local-AI scope; the observation-kind vocabulary and its persistence and API; zero-row,
+  date-pattern and type-inference verifications; the migration exit condition; the
+  relationship of ingest facts to parsing-warning codes; and durable dataset identity.
 
 ## PRIV-01 — Sensitive sample redaction
 
