@@ -39,6 +39,44 @@ export type AiProvenanceResponse = {
 };
 
 /**
+ * AiStatusResponse
+ */
+export type AiStatusResponse = {
+    /**
+     * Assistance
+     */
+    assistance: 'off' | 'on';
+    /**
+     * Location
+     */
+    location: 'none' | 'local' | 'unknown';
+    /**
+     * Model Label
+     */
+    model_label: string | null;
+    /**
+     * Provider Label
+     */
+    provider_label: string;
+    /**
+     * Runtime Label
+     */
+    runtime_label: string | null;
+    /**
+     * Sample Values Sent
+     */
+    sample_values_sent: boolean;
+    /**
+     * State
+     */
+    state: 'disabled' | 'ready' | 'unavailable';
+    /**
+     * Summary
+     */
+    summary: string;
+};
+
+/**
  * AnalysisFailureResponse
  *
  * Mirrors `analysis.service.AnalysisFailure` — a fixed, safe,
@@ -235,6 +273,16 @@ export type BodyPostAnalysisUploadApiV1AnalysesPost = {
      * Worksheet
      */
     worksheet?: string | null;
+};
+
+/**
+ * Body_post_staged_upload_api_v1_staged_uploads_post
+ */
+export type BodyPostStagedUploadApiV1StagedUploadsPost = {
+    /**
+     * File
+     */
+    file: Blob | File;
 };
 
 /**
@@ -1851,6 +1899,171 @@ export type SecurityExposureResponse = {
 };
 
 /**
+ * StagedCheckGroup
+ */
+export type StagedCheckGroup = {
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * StagedNotice
+ */
+export type StagedNotice = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Message
+     */
+    message: string;
+};
+
+/**
+ * StagedProblem
+ */
+export type StagedProblem = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Message
+     */
+    message: string;
+};
+
+/**
+ * StagedShape
+ */
+export type StagedShape = {
+    /**
+     * Column Count
+     */
+    column_count: number;
+    /**
+     * Row Count
+     */
+    row_count: number;
+};
+
+/**
+ * StagedUploadInspectRequest
+ */
+export type StagedUploadInspectRequest = {
+    /**
+     * Staging Ref
+     */
+    staging_ref: string;
+    /**
+     * Worksheet
+     */
+    worksheet?: string | null;
+};
+
+/**
+ * StagedUploadReference
+ *
+ * A request body naming one staged upload.
+ */
+export type StagedUploadReference = {
+    /**
+     * Staging Ref
+     */
+    staging_ref: string;
+};
+
+/**
+ * StagedUploadResponse
+ */
+export type StagedUploadResponse = {
+    /**
+     * Byte Size
+     */
+    byte_size: number;
+    /**
+     * Can Run
+     */
+    can_run: boolean;
+    /**
+     * Checks
+     */
+    checks: Array<StagedCheckGroup>;
+    /**
+     * Expires At
+     */
+    expires_at: string | null;
+    /**
+     * Filename
+     */
+    filename: string;
+    /**
+     * Format
+     */
+    format: 'csv' | 'xlsx';
+    /**
+     * Notices
+     */
+    notices: Array<StagedNotice>;
+    /**
+     * Problems
+     */
+    problems: Array<StagedProblem>;
+    /**
+     * Selected Worksheet
+     */
+    selected_worksheet: string | null;
+    shape: StagedShape | null;
+    /**
+     * Staging Ref
+     */
+    staging_ref: string | null;
+    /**
+     * Worksheets
+     */
+    worksheets: Array<StagedWorksheet> | null;
+};
+
+/**
+ * StagedUploadRunRequest
+ */
+export type StagedUploadRunRequest = {
+    /**
+     * Staging Ref
+     */
+    staging_ref: string;
+    /**
+     * Worksheet
+     */
+    worksheet?: string | null;
+};
+
+/**
+ * StagedWorksheet
+ */
+export type StagedWorksheet = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Visible
+     */
+    visible: boolean;
+};
+
+/**
  * TrustAssessmentResponse
  *
  * Mirrors `risk.scoring.TrustAssessment`.
@@ -2092,6 +2305,22 @@ export type WarningResponse = {
      */
     message: string;
 };
+
+export type GetAiStatusApiV1AiStatusGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/ai/status';
+};
+
+export type GetAiStatusApiV1AiStatusGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: AiStatusResponse;
+};
+
+export type GetAiStatusApiV1AiStatusGetResponse = GetAiStatusApiV1AiStatusGetResponses[keyof GetAiStatusApiV1AiStatusGetResponses];
 
 export type PostAnalysisUploadApiV1AnalysesPostData = {
     body: BodyPostAnalysisUploadApiV1AnalysesPost;
@@ -3187,6 +3416,106 @@ export type GetReadinessApiV1HealthReadyGetResponses = {
 };
 
 export type GetReadinessApiV1HealthReadyGetResponse = GetReadinessApiV1HealthReadyGetResponses[keyof GetReadinessApiV1HealthReadyGetResponses];
+
+export type PostStagedUploadApiV1StagedUploadsPostData = {
+    body: BodyPostStagedUploadApiV1StagedUploadsPost;
+    path?: never;
+    query?: never;
+    url: '/api/v1/staged-uploads';
+};
+
+export type PostStagedUploadApiV1StagedUploadsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostStagedUploadApiV1StagedUploadsPostError = PostStagedUploadApiV1StagedUploadsPostErrors[keyof PostStagedUploadApiV1StagedUploadsPostErrors];
+
+export type PostStagedUploadApiV1StagedUploadsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: StagedUploadResponse;
+};
+
+export type PostStagedUploadApiV1StagedUploadsPostResponse = PostStagedUploadApiV1StagedUploadsPostResponses[keyof PostStagedUploadApiV1StagedUploadsPostResponses];
+
+export type PostStagedUploadDiscardApiV1StagedUploadsDiscardPostData = {
+    body: StagedUploadReference;
+    path?: never;
+    query?: never;
+    url: '/api/v1/staged-uploads/discard';
+};
+
+export type PostStagedUploadDiscardApiV1StagedUploadsDiscardPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostStagedUploadDiscardApiV1StagedUploadsDiscardPostError = PostStagedUploadDiscardApiV1StagedUploadsDiscardPostErrors[keyof PostStagedUploadDiscardApiV1StagedUploadsDiscardPostErrors];
+
+export type PostStagedUploadDiscardApiV1StagedUploadsDiscardPostResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type PostStagedUploadDiscardApiV1StagedUploadsDiscardPostResponse = PostStagedUploadDiscardApiV1StagedUploadsDiscardPostResponses[keyof PostStagedUploadDiscardApiV1StagedUploadsDiscardPostResponses];
+
+export type PostStagedUploadInspectApiV1StagedUploadsInspectPostData = {
+    body: StagedUploadInspectRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/staged-uploads/inspect';
+};
+
+export type PostStagedUploadInspectApiV1StagedUploadsInspectPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostStagedUploadInspectApiV1StagedUploadsInspectPostError = PostStagedUploadInspectApiV1StagedUploadsInspectPostErrors[keyof PostStagedUploadInspectApiV1StagedUploadsInspectPostErrors];
+
+export type PostStagedUploadInspectApiV1StagedUploadsInspectPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: StagedUploadResponse;
+};
+
+export type PostStagedUploadInspectApiV1StagedUploadsInspectPostResponse = PostStagedUploadInspectApiV1StagedUploadsInspectPostResponses[keyof PostStagedUploadInspectApiV1StagedUploadsInspectPostResponses];
+
+export type PostStagedUploadRunApiV1StagedUploadsRunPostData = {
+    body: StagedUploadRunRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/staged-uploads/run';
+};
+
+export type PostStagedUploadRunApiV1StagedUploadsRunPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostStagedUploadRunApiV1StagedUploadsRunPostError = PostStagedUploadRunApiV1StagedUploadsRunPostErrors[keyof PostStagedUploadRunApiV1StagedUploadsRunPostErrors];
+
+export type PostStagedUploadRunApiV1StagedUploadsRunPostResponses = {
+    /**
+     * Successful Response
+     */
+    202: UploadAnalysisResponse;
+};
+
+export type PostStagedUploadRunApiV1StagedUploadsRunPostResponse = PostStagedUploadRunApiV1StagedUploadsRunPostResponses[keyof PostStagedUploadRunApiV1StagedUploadsRunPostResponses];
 
 export type GetVersionApiV1VersionGetData = {
     body?: never;

@@ -162,6 +162,35 @@ def test_proxy_forwards_version_to_backend(compose_stack: ComposeStack) -> None:
     assert proxied.json() == direct.json()
 
 
+def test_proxy_passes_an_upload_larger_than_nginx_default_body_limit(
+    compose_stack: ComposeStack,
+) -> None:
+    """UX-02 (D-068): nginx's default `client_max_body_size` of 1 MB refused
+    larger uploads before the backend saw them. The proxy now applies no size
+    limit (the backend is the single authority), so a ~2 MB CSV staged through
+    the frontend origin must reach the backend and be accepted."""
+    content = b"a,b\n" + b"1234567,abcdefg\n" * 140_000
+    assert len(content) > 2 * 1024 * 1024
+
+    response = httpx.post(
+        f"{FRONTEND_URL}/api/v1/staged-uploads",
+        files={"file": ("large.csv", content, "text/csv")},
+        timeout=60,
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["can_run"] is True
+    assert body["byte_size"] == len(content)
+    # Leave nothing staged behind.
+    discard = httpx.post(
+        f"{FRONTEND_URL}/api/v1/staged-uploads/discard",
+        json={"staging_ref": body["staging_ref"]},
+        timeout=10,
+    )
+    assert discard.status_code == 204
+
+
 def test_spa_fallback_serves_index_html_for_unknown_route(
     compose_stack: ComposeStack,
 ) -> None:

@@ -24,8 +24,8 @@ from trusttable_backend.config import Settings, get_settings
 from trusttable_backend.main import create_app
 
 # Every `.env.example` variable, verified 2026-08-07 against the file
-# directly (23 total: 4 Application + 8 Local limits + 8 LLM provider +
-# 3 Security).
+# directly (26 total: 4 Application + 11 Local limits + 8 LLM provider +
+# 3 Security; the 3 `STAGING_*` limits were added by `UX-02`, D-068).
 ALL_ENV_VAR_NAMES = [
     "APP_ENV",
     "LOG_LEVEL",
@@ -39,6 +39,9 @@ ALL_ENV_VAR_NAMES = [
     "MAX_CELL_COUNT",
     "ANALYSIS_RETENTION_HOURS",
     "BACKGROUND_WORKER_COUNT",
+    "STAGING_MAX_COUNT",
+    "STAGING_MAX_TOTAL_MB",
+    "STAGING_TTL_MINUTES",
     "LLM_PROVIDER",
     "LLM_BASE_URL",
     "LLM_MODEL",
@@ -51,7 +54,7 @@ ALL_ENV_VAR_NAMES = [
     "MAX_TEXT_VALUE_LENGTH_FOR_ANALYSIS",
     "MAX_COLUMN_NAME_LENGTH",
 ]
-assert len(ALL_ENV_VAR_NAMES) == 23
+assert len(ALL_ENV_VAR_NAMES) == 26
 
 EXPECTED_DEFAULTS = {
     "app_env": "development",
@@ -66,6 +69,9 @@ EXPECTED_DEFAULTS = {
     "max_cell_count": 50_000_000,
     "analysis_retention_hours": 0,
     "background_worker_count": 2,
+    "staging_max_count": 5,
+    "staging_max_total_mb": 250,
+    "staging_ttl_minutes": 60,
     "llm_provider": "disabled",
     "llm_base_url": "http://host.docker.internal:8081",
     "llm_model": "",
@@ -88,12 +94,15 @@ POSITIVE_INT_FIELDS = [
     "max_uncompressed_workbook_mb",
     "max_cell_count",
     "background_worker_count",
+    "staging_max_count",
+    "staging_max_total_mb",
+    "staging_ttl_minutes",
     "llm_context_window",
     "llm_timeout_seconds",
     "max_text_value_length_for_analysis",
     "max_column_name_length",
 ]
-assert len(POSITIVE_INT_FIELDS) == 11
+assert len(POSITIVE_INT_FIELDS) == 14
 
 NON_NEGATIVE_INT_FIELDS = ["analysis_retention_hours", "llm_max_sample_values"]
 BOOLEAN_FIELDS = ["llm_send_sample_values", "prompt_injection_detection_enabled"]

@@ -109,6 +109,26 @@ Returns:
 - privacy summary
 - safe error when unavailable
 
+**Implemented (`UX-02`, `docs/decision-log.md` D-068).** `GET /ai/status` returns an
+honest, bounded and address-free status derived from the deployment configuration and,
+when a runtime is configured, one short liveness probe:
+
+| Field | Meaning |
+|---|---|
+| `assistance` | `off` when `LLM_PROVIDER=disabled`, otherwise `on` |
+| `state` | `disabled` (assistance off), `ready` (probe succeeded) or `unavailable` (probe failed or timed out) |
+| `location` | `none` (disabled), `local` (the `mock` provider, or `llama_cpp` whose configured host is this machine) or `unknown` (anything else) |
+| `provider_label` | A closed display label such as `Local AI`, `Test AI` or `AI`; never operator free text |
+| `runtime_label` | A closed or sanitized runtime label such as `llama.cpp`; `null` when disabled |
+| `model_label` | The readable model label from the sanitized identifier (for example `Qwen3.5 4B`); `null` when disabled or unavailable to derive |
+| `sample_values_sent` | Whether sample values may be sent to a model (`LLM_SEND_SAMPLE_VALUES`); always `false` when assistance is off |
+| `summary` | Fixed, plain-language privacy and capability text chosen by `assistance`, `state` and `location` |
+
+The probe is made with `min(LLM_TIMEOUT_SECONDS, 3)` seconds and never raises. No base
+URL, host, port, path, exception text or provider `detail` is returned. The route makes
+no model completion call and sends no dataset content. It does not start, install or
+manage a runtime (`UX-09` and `LAI-01` are separate).
+
 ## 5. Demo dataset
 
 ### POST `/demo/sales`
@@ -279,10 +299,110 @@ Returns:
 
 It must not execute formulas or macros.
 
-> **Planned, not built.** The redesign replaces this stateless description with a
-> staging capability that inspects a file once and lets Run analyse the exact staged
-> bytes (section 16, `docs/decision-log.md` D-066). Until a slice specification edits
-> this section, read it as superseded in intent.
+> **Superseded; `POST /datasets/inspect` will not be built.** `UX-02` replaces this
+> stateless description with the staged-upload routes below, which inspect a file once
+> and let Run analyse the exact staged bytes (`docs/decision-log.md` D-066, D-068).
+
+### Staged uploads (`UX-02`, `docs/decision-log.md` D-068)
+
+Choosing a file never starts an analysis. The Configure step is served by temporary
+staging in the existing SQLite store: the bytes are stored under an opaque, single-use
+reference, inspected, and either discarded, expired or consumed by Run. Staging creates
+no analysis, no dataset record and no durable identity, and the direct-upload route
+(`POST /analyses`) keeps its contract. Both use one shared ingestion path (the same
+extension rules, size limit, workbook inspection, worksheet rules and parser limits).
+
+**Reference.** A 256-bit random URL-safe token. Only its SHA-256 digest is stored; the
+token is shown once, in the staging response. It is a capability: anyone holding it, on
+this single-user local instance, can read the staged file's facts, run it or discard it.
+It is unguessable, short-lived, spent by Run and never logged by the application. It
+travels only in the JSON body of the routes below, never in a URL path or query, so it
+cannot reach access logs, proxy logs or browser history. A malformed token is treated
+exactly like an unknown one.
+
+**Bounds** (installation settings, `docs/configuration.md`): `STAGING_MAX_COUNT` (default
+`5`), `STAGING_MAX_TOTAL_MB` (default `250`) and `STAGING_TTL_MINUTES` (default `60`),
+plus the existing `MAX_FILE_SIZE_MB` per file. Expired rows are deleted at application
+startup and lazily before each staging write, read and Run. SQLite `secure_delete`
+zeroes freed content in the database file; it does not reach journal files, backups or
+the operating system's caches, so a deleted copy is not guaranteed to be gone from disk
+at the moment it expires. The expiry is fixed at staging time and never extended.
+
+#### POST `/staged-uploads`
+
+Multipart field `file` (no `worksheet` field). Request-level refusals use the direct-upload
+codes: `400 INVALID_REQUEST` (missing filename, empty file), `415 UNSUPPORTED_FILE_TYPE`,
+`413 FILE_TOO_LARGE`. If the count or total-bytes bound would be exceeded the answer is
+`409 STAGING_FULL` (with `details.ttl_minutes`, so the client can say how long waiting files
+are kept) and nothing is stored.
+
+Otherwise the file is inspected (a bounded parse with the same limits as the pipeline;
+values are never retained or returned) and the response is a staged-upload resource:
+
+| Field | Meaning |
+|---|---|
+| `staging_ref` | The reference; `null` when the file was not stored |
+| `expires_at` | When the staged copy is deleted; `null` when not stored |
+| `filename` | The sanitized filename |
+| `format` | `csv` or `xlsx` |
+| `byte_size` | Size in bytes |
+| `worksheets` | For `xlsx`: `[{name, visible}]` in workbook order; `null` for CSV |
+| `selected_worksheet` | The worksheet the inspection describes: the only visible one, or the requested one; `null` for CSV or while a choice is needed |
+| `shape` | `{row_count, column_count}` for the inspected CSV or worksheet; `null` while a worksheet choice is needed or when it cannot be read |
+| `problems` | Blocking readability problems `[{code, message}]` |
+| `notices` | Non-blocking `[{code, message, count}]`, counts only |
+| `checks` | `[{title, description}]`: one business-language group per registered detector category, never a detector name; the standard analysis always runs all of them |
+| `can_run` | `true` only when stored, no problem remains and (for `xlsx`) a worksheet is selected |
+
+Status `201` when stored, `200` when the file was **not** stored because the file itself
+cannot be read (then `staging_ref` is `null`, `can_run` is `false` and `problems` says
+why). Worksheet-level problems keep the file stored so another worksheet can be chosen.
+
+Problem codes (fixed text; nothing from the file is echoed except worksheet names and
+configured limit numbers): `FILE_NOT_UTF8` (the bytes are not valid UTF-8 text),
+`NO_HEADER_ROW`, `ROW_LIMIT_EXCEEDED`, `COLUMN_LIMIT_EXCEEDED`, `CSV_UNREADABLE`,
+`MACRO_ENABLED_FILE`, `MALFORMED_FILE`, `WORKBOOK_EXPANSION_LIMIT`, `CELL_LIMIT_EXCEEDED`,
+`WORKSHEET_UNREADABLE`. Notice codes are the parser's warning codes with counts only
+(for example rows whose number of values differs from the header).
+
+#### POST `/staged-uploads/inspect`
+
+JSON body `{"staging_ref": string, "worksheet": string | null}`. Returns the same
+resource (status `200`). A non-null `worksheet` inspects that worksheet of a stored
+workbook (a name not in the workbook is `400 INVALID_REQUEST` with `details.worksheets`).
+It changes nothing and does not extend the expiry; `POST` is used only so the reference
+stays out of the URL. An unknown, malformed, expired or already consumed reference is
+`410 STAGED_UPLOAD_UNAVAILABLE`.
+
+#### POST `/staged-uploads/run`
+
+JSON body `{"staging_ref": string, "worksheet": string | null}`. Response `202` with the same body as
+`POST /analyses` (analysis resource and status URL). In order: load the staged row
+(`410` if unavailable); recompute the SHA-256 of the stored bytes and compare it with
+the digest computed at staging (a mismatch deletes the row and answers
+`410 STAGED_UPLOAD_UNAVAILABLE`); validate through the shared ingestion path exactly
+as direct upload does (the worksheet rules and codes of `POST /analyses`: `400
+WORKSHEET_REQUIRED`, `400 INVALID_REQUEST`), and refuse with `400
+STAGED_UPLOAD_NOT_RUNNABLE` (`details.problems` as above) when the chosen worksheet
+still has a blocking problem; **the reference is not spent by a refused Run**); then
+consume the row with one atomic `DELETE ... RETURNING` conditioned on the reference
+digest, the unchanged content digest and an unexpired row. Exactly one of any number of
+concurrent Runs obtains the row; the others receive `410`. The analysis is created from
+the consumed bytes, so the analysed bytes equal the inspected bytes and the dataset's
+`content_hash` equals the staged digest. If creating the analysis fails after the row
+was consumed, the reference is spent and the user chooses the file again; it is never
+run twice.
+
+#### POST `/staged-uploads/discard`
+
+JSON body `{"staging_ref": string}`. Discards a staged file. Always `204`, whether or not
+the reference existed.
+
+All staged-upload responses carry `Cache-Control: no-store`.
+
+> **Not built here (`UX-03`):** listing analyses, rerun, and a notice that this exact
+> file was analysed before. The staged digest is internal, is not returned and is never
+> used as a dataset identity.
 
 ## 8. Profile
 
@@ -898,6 +1018,10 @@ call's own status via its own `ai_call_status` field.
 - MALFORMED_FILE
 - MACRO_ENABLED_FILE
 - WORKSHEET_REQUIRED
+- STAGED_UPLOAD_UNAVAILABLE
+- STAGED_UPLOAD_NOT_RUNNABLE
+- STAGING_FULL
+- REQUEST_TOO_LARGE
 - ANALYSIS_NOT_FOUND
 - INVALID_ANALYSIS_STATE
 - ANALYSIS_FAILED
@@ -932,7 +1056,11 @@ call's own status via its own `ai_call_status` field.
 - no raw stack traces
 - no user-controlled filesystem paths
 - unguessable IDs
-- strict request limits
+- strict request limits (`UX-02`: the bodies of `POST /analyses` and `POST /staged-uploads` are
+  counted as they stream and refused with `413 FILE_TOO_LARGE` once they exceed
+  `MAX_FILE_SIZE_MB` plus 1 MiB of multipart overhead, before the body is buffered in full;
+  the body of every other request is refused with `413 REQUEST_TOO_LARGE` beyond 1 MiB;
+  the frontend proxy applies no separate size limit, so the backend is the single authority)
 - safe content disposition filenames
 - escaped display fields
 - OpenAPI drift checked in CI
@@ -951,8 +1079,8 @@ Existing routes, including direct upload `POST /analyses`, keep their contracts.
 
 | Need | Planned capability | Notes (requirements, not mechanisms) |
 |---|---|---|
-| Configure step (`UX-02`) | Stage a file once, inspect it, then Run the analysis over the exact staged bytes | Single-use opaque reference; server-computed integrity hash verified at consume; bounded count, bytes and expiry; startup and lazy cleanup; atomic consume; no durable Dataset; the same validation and parser limits as direct upload through one shared ingestion path; inspection returns worksheets, shape, readability problems and warnings, never cell values; this supersedes the unbuilt `POST /datasets/inspect` description in section 7 |
-| AI status (`UX-02`, `UX-09`) | `GET /ai/status` (section 4 describes it and it is not built) | Honest enabled, ready and model-identity state; path-free and address-free labels; an abstract status that does not assume where a runtime runs |
+| Configure step (`UX-02`) — **built by `UX-02`, section 7 (D-068)** | Stage a file once, inspect it, then Run the analysis over the exact staged bytes | Single-use opaque reference; server-computed integrity hash verified at consume; bounded count, bytes and expiry; startup and lazy cleanup; atomic consume; no durable Dataset; the same validation and parser limits as direct upload through one shared ingestion path; inspection returns worksheets, shape, readability problems and warnings, never cell values; this supersedes the unbuilt `POST /datasets/inspect` description in section 7 |
+| AI status (`UX-02`, `UX-09`) — **status route built by `UX-02`, section 4 (D-068)**; guided setup and connection testing remain `UX-09` | `GET /ai/status` | Honest enabled, ready and model-identity state; path-free and address-free labels; an abstract status that does not assume where a runtime runs |
 | History (`UX-03`) | List analyses; rerun as a new analysis from stored content; look up whether the exact same file was analysed before | The lookup is not a dataset identity; it reflects only analyses that still exist; no integrity hash in normal-user responses |
 | Dashboard (`UX-04`) | Aggregates where client derivation from existing data is insufficient | Proposal-level |
 | Persisted AI enrichment (`UX-05`) | Start or resume, read status and read a saved result per finding, split from the deterministic explanation | Deterministic content never waits for a model call; the result is bound to the finding, confirmed-context version, model identity and prompt or contract version and is reported stale when the binding changes; start and status must not depend on one long request; bounded concurrency; saved output is deleted with its analysis |

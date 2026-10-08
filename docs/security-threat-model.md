@@ -249,6 +249,30 @@ Logs may contain:
   use; hard caps on count and bytes and bounded inspection time and memory; the same
   type, size and parser limits as direct upload; the hash recomputed at consume; the
   reference never in logs, URLs or shareable responses; cleanup that survives a crash.
+  **Addressed by `UX-02` (`docs/api-specification.md` §7, D-068), to be verified by its
+  review and tests:** a 256-bit random reference stored only as its SHA-256 digest, used
+  only in JSON bodies; the capability model for a single-user local instance stated in
+  D-068; one atomic `DELETE ... RETURNING` consume with a fail-closed `410` for expiry,
+  second use and concurrent Run; hard count, total-bytes, per-file and time bounds enforced
+  in single statements; the shared ingestion path and parser limits; the content digest
+  recomputed at consume; expired rows removed at startup and before each staging write,
+  read and Run; upload bodies counted as they stream. Residual risk: staged bytes sit
+  unencrypted in the local database until consumed or expired (the same exposure as a
+  stored analysis), a crash between consume and analysis creation spends the
+  reference without an analysis, and any local client can fill the staging pool and
+  block staging until the files expire (acceptable under the single-user local trust
+  model; the bounds and `STAGING_FULL` keep it from growing without limit). The API has
+  no per-client throttling by design: a client that can reach it can also repeat
+  `GET /ai/status`, each call costing at most the 3-second probe, and the unthrottled
+  local API is an assumption that must be revisited if the service is ever exposed beyond
+  the machine it runs on. SQLite `secure_delete` zeroes freed content in the database
+  file but not journal files, backups or operating-system caches, so expiry does not
+  guarantee the bytes are gone from disk at that instant. Inspection
+  runs on the request path with the pipeline's parser limits and is covered by tests for
+  time-bounded, memory-bounded refusal of oversize, malformed and expansion inputs;
+  untrusted worksheet names and filenames are returned as data and rendered as inert
+  text, with tests for markup in both; request bodies on every route are bounded by the
+  backend (`docs/api-specification.md` §15) because the proxy applies no size limit.
 - **"This exact file was analysed before."** This is a content-hash oracle. State the
   single-user and local trust assumption, or scope the lookup; never show the hash to a
   normal user; keep it a lookup, not an identity.

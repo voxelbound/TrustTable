@@ -20,6 +20,7 @@ from .database import (
 from .reconciliation import INTERRUPTED_BY_RESTART_CODE, reconcile_interrupted_analyses
 from .relationship_store import SqlRelationshipStore
 from .report_store import SqlReportStore
+from .staging_store import SqlStagingStore, StagedUpload, StagingFullError, reference_digest
 from .store import SqlAnalysisStore
 
 __all__ = [
@@ -27,6 +28,10 @@ __all__ = [
     "SqlAnalysisStore",
     "SqlRelationshipStore",
     "SqlReportStore",
+    "SqlStagingStore",
+    "StagedUpload",
+    "StagingFullError",
+    "reference_digest",
     "build_engine",
     "build_session_factory",
     "ensure_data_directory",

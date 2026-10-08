@@ -166,3 +166,27 @@ class ReportRecord(Base):
     schema_version: Mapped[str] = mapped_column(String, nullable=False)
     markdown: Mapped[str] = mapped_column(Text, nullable=False)
     content_sha256: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class StagedUploadRecord(Base):
+    """One temporarily staged upload (`UX-02`, `docs/decision-log.md` D-068).
+
+    Stores data only. The primary key is the SHA-256 digest of the opaque
+    reference handed to the client, never the reference itself, so a copy of
+    the database does not yield a usable reference. Rows are short-lived: they
+    are consumed by Run (one atomic `DELETE ... RETURNING`), discarded, or
+    deleted once `expires_at` has passed. `expires_at` and `created_at` are
+    fixed-format UTC ISO-8601 strings, so string comparison orders them.
+    """
+
+    __tablename__ = "staged_uploads"
+    __table_args__ = (Index("ix_staged_uploads_expires_at", "expires_at"),)
+
+    ref_digest: Mapped[str] = mapped_column(String, primary_key=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    expires_at: Mapped[str] = mapped_column(String, nullable=False)
+    filename: Mapped[str] = mapped_column(String, nullable=False)
+    format: Mapped[str] = mapped_column(String, nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String, nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)

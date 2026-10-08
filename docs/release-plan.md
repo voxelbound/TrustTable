@@ -162,9 +162,11 @@ Current status: **in progress.** `v1.0` is the current milestone.
     name-based detectors (`line_total_mismatch`, `invalid_percentages`, and the review of
     `invalid_email_shape`) until they migrate; their exit condition is open and is carried by
     `DET-05`.
-- **UI/UX redesign — planned, none of it built.** An owner-confirmed PLAN CHANGE makes the
-  UI/UX redesign (`UX-01`, planned slices S1 to S8a) the next `v1.0` work, ahead of `DET-04`
-  (D-066). That record authorizes none of the slices. It does not place `DET-04`, `CCX-01`,
+- **UI/UX redesign — slice S1 built; every other slice planned and not built.** An
+  owner-confirmed PLAN CHANGE makes the UI/UX redesign (`UX-01`, slices S1 to S8a) the next
+  `v1.0` work, ahead of `DET-04` (D-066). Slice S1, the workspace and a deliberate start
+  (`UX-02`, D-068), is built: choosing a file stages it for review and nothing is analyzed
+  until Run. Slices S2 to S8a (`UX-03` to `UX-09`) are not built and not authorized. It does not place `DET-04`, `CCX-01`,
   `CCX-02`, `DET-05`, `DET-06`, `OBS-02`, `ING-04`, `STD-01`, `HARM-01` or `RULE-03` in any
   milestone, and nothing is removed from `v1.0`. The sequencing of accessibility,
   browser-matrix and performance work relative to the redesign is not decided. The Local AI
