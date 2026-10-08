@@ -53,7 +53,16 @@ class CsvParseError(ValueError):
     rows, duplicate/empty column names, over-long column names/field
     values) is instead recorded as a `ParsingWarning` on the returned
     `ParsedDataset`.
+
+    `code` is a stable, machine-readable class of failure (`UX-02`, D-068)
+    used by the pre-run inspection to report a fixed, business-language
+    problem; the message itself is never shown to a user. Callers that only
+    catch `CsvParseError` are unaffected.
     """
+
+    def __init__(self, message: str, *, code: str = "CSV_UNREADABLE") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +134,7 @@ def parse_csv(content: bytes, *, limits: CsvParseLimits | None = None) -> CsvPar
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
-        raise CsvParseError("CSV content is not valid UTF-8") from exc
+        raise CsvParseError("CSV content is not valid UTF-8", code="FILE_NOT_UTF8") from exc
 
     delimiter = _detect_delimiter(text)
 
@@ -143,11 +152,14 @@ def parse_csv(content: bytes, *, limits: CsvParseLimits | None = None) -> CsvPar
         raise CsvParseError(f"CSV header row could not be read: {exc}") from exc
 
     if header_row is None or len(header_row) == 0:
-        raise CsvParseError("CSV content has no header row with at least one column")
+        raise CsvParseError(
+            "CSV content has no header row with at least one column", code="NO_HEADER_ROW"
+        )
     if len(header_row) > limits.max_columns:
         raise CsvParseError(
             f"CSV header has {len(header_row)} columns, exceeding the "
-            f"{limits.max_columns}-column limit"
+            f"{limits.max_columns}-column limit",
+            code="COLUMN_LIMIT_EXCEEDED",
         )
 
     columns, warnings = _build_columns(header_row, limits)
@@ -159,7 +171,10 @@ def parse_csv(content: bytes, *, limits: CsvParseLimits | None = None) -> CsvPar
     try:
         for row_number, raw_row in enumerate(reader):
             if row_number >= limits.max_rows:
-                raise CsvParseError(f"CSV content has more than {limits.max_rows} data rows")
+                raise CsvParseError(
+                    f"CSV content has more than {limits.max_rows} data rows",
+                    code="ROW_LIMIT_EXCEEDED",
+                )
             row, row_warnings = _normalize_row(raw_row, expected_field_count, row_number, limits)
             data_rows.append(row)
             row_references.append(RowReference(row_number=row_number))

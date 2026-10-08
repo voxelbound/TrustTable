@@ -1062,8 +1062,12 @@ inside the relevant slice and not to be presented as decisions:
 - The frontend proxy sets no read timeout or request-body size, so upload limits and
   long AI requests may be inconsistent with the backend limits and with
   `LLM_TIMEOUT_SECONDS`; to be verified, with server-side enforcement as the authority.
+  **Resolved for uploads by `UX-02` (D-068):** the proxy now applies no size limit and
+  streams bodies with 300-second read and send timeouts, and the backend is the size
+  authority. Whether a long AI request fits the proxy timeouts is not re-verified here.
 - The Start screen states that AI is disabled regardless of configuration, and a
-  documented `GET /ai/status` route does not exist.
+  documented `GET /ai/status` route does not exist. **Resolved by `UX-02` (D-068):**
+  `GET /ai/status` exists and the Workspace and Configure step show its status.
 - Raw internal values (categories, severities) appear in the interface.
 - Placeholder text on the Overview ("coming soon") describes capabilities that exist.
 - `ANALYSIS_RETENTION_HOURS` is declared and consumed by nothing.
@@ -1073,6 +1077,12 @@ inside the relevant slice and not to be presented as decisions:
   finding screen waits for it.
 
 ## UX-02 — S1: workspace and a deliberate start
+
+Status: built (`docs/decision-log.md` D-068; migration `0009`; settings
+`STAGING_MAX_COUNT`, `STAGING_MAX_TOTAL_MB` and `STAGING_TTL_MINUTES`). Delivered as
+specified below with the engineering choices recorded in D-068; no durable Dataset, no
+history, hash lookup or "analysed before" notice (`UX-03`), and no Analyses, Settings or
+Help navigation until those slices ship. `UX-03` onward remain planned and unauthorized.
 
 Workspace landing page; file choice that never starts an analysis; a Configure step
 with file facts, worksheet choice, known readability problems reported before Run

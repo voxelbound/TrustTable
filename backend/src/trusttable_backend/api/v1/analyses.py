@@ -84,7 +84,6 @@ from trusttable_backend.analysis import (
     retry_analysis,
     set_finding_review,
 )
-from trusttable_backend.analysis.parse_limits import xlsx_parse_limits
 from trusttable_backend.config import get_settings
 from trusttable_backend.context_inference.ai_context import (
     ContextInferenceResult,
@@ -120,12 +119,13 @@ from trusttable_backend.explanation.ai_explanation import (
     run_finding_explanation,
 )
 from trusttable_backend.explanation.deterministic import build_deterministic_explanation
-from trusttable_backend.jobs import JobPool
-from trusttable_backend.parsers import (
-    XlsxParseError,
-    XlsxWorksheetInfo,
-    inspect_xlsx_worksheets,
+from trusttable_backend.ingestion import (
+    plan_ingestion,
+    read_upload_content,
+    require_worksheet_applies,
+    validate_upload_name,
 )
+from trusttable_backend.jobs import JobPool
 from trusttable_backend.profiling.schemas import ColumnProfile, DatasetProfile, ProfilingWarning
 from trusttable_backend.risk.scoring import TrustAssessment
 from trusttable_backend.rules.ai_generation import (
@@ -180,26 +180,8 @@ from trusttable_backend.schemas.analysis import (
     ValidationRulesListResponse,
     WarningResponse,
 )
-from trusttable_backend.uploads import sanitize_filename
 
 router = APIRouter(tags=["analyses"])
-
-#: The formats `POST /analyses` accepts (`ING-02` CSV, `ING-03` XLSX).
-#: `.xlsm` and every other extension is `415 UNSUPPORTED_FILE_TYPE`.
-_CSV_EXTENSION = ".csv"
-_XLSX_EXTENSION = ".xlsx"
-_SUPPORTED_UPLOAD_EXTENSIONS = [_CSV_EXTENSION, _XLSX_EXTENSION]
-
-#: Fixed upload-time response for each workbook rejection class
-#: (`docs/api-specification.md` §14). The message is fixed text: nothing
-#: from the workbook is echoed back except, for worksheet selection, the
-#: worksheet names the caller must choose between.
-_WORKBOOK_REJECTIONS: dict[str, tuple[int, str]] = {
-    "MACRO_ENABLED_FILE": (415, "The workbook contains macros and is not supported."),
-    "WORKBOOK_EXPANSION_LIMIT": (413, "The workbook exceeds the size limits once unpacked."),
-    "CELL_LIMIT_EXCEEDED": (413, "The workbook exceeds the row, column or cell limits."),
-    "MALFORMED_FILE": (400, "The file could not be read as a valid .xlsx workbook."),
-}
 
 #: Fixed, safe per-state polling message (`docs/api-specification.md` §6's
 #: "current message"). Never derived from dataset content.
@@ -1172,58 +1154,30 @@ def post_analysis_finalize(
     return _analysis_resource(finalized)
 
 
-def _upload_extension(filename: str) -> str | None:
-    lowered = filename.lower()
-    for extension in _SUPPORTED_UPLOAD_EXTENSIONS:
-        if lowered.endswith(extension):
-            return extension
-    return None
-
-
-def _inspect_workbook(content: bytes) -> tuple[XlsxWorksheetInfo, ...]:
-    """List a workbook's worksheets, refusing unsafe or unreadable ones.
-
-    Runs the parser's package validation (macros, encryption, traversal,
-    DOCTYPE, decompression budget) without reading any worksheet's cells,
-    so the cost is bounded by the package structure. A rejection becomes
-    the documented fixed-text error for its class.
+def start_analysis_from_content(
+    request: Request,
+    *,
+    content: bytes,
+    original_filename: str,
+    dataset_format: DatasetFormat,
+    selected_worksheet: str | None,
+) -> UploadAnalysisResponse:
+    """Create a queued analysis over already-validated upload bytes and submit
+    it to the worker pool. The one place both direct upload and Run of a staged
+    upload (`UX-02`) turn validated bytes into an analysis, so the analysed
+    bytes are exactly the bytes that were validated.
     """
-    try:
-        return inspect_xlsx_worksheets(content, limits=xlsx_parse_limits())
-    except XlsxParseError as exc:
-        status_code, message = _WORKBOOK_REJECTIONS.get(
-            exc.code, _WORKBOOK_REJECTIONS["MALFORMED_FILE"]
-        )
-        code = exc.code if exc.code in _WORKBOOK_REJECTIONS else "MALFORMED_FILE"
-        raise AppError(code, message, status_code=status_code, details={}) from exc
-
-
-def _choose_worksheet(worksheets: tuple[XlsxWorksheetInfo, ...], requested: str | None) -> str:
-    """Pick the worksheet to analyze, per `docs/api-specification.md` §6/§14.
-
-    An explicit choice must name an existing worksheet. Without one, a
-    workbook with exactly one visible worksheet uses it; anything else is
-    `WORKSHEET_REQUIRED` — the service never guesses between worksheets.
-    """
-    names = [worksheet.name for worksheet in worksheets]
-    if requested is not None:
-        if requested not in names:
-            raise AppError(
-                "INVALID_REQUEST",
-                "The requested worksheet does not exist in the workbook.",
-                status_code=400,
-                details={"worksheets": names},
-            )
-        return requested
-    visible = [worksheet.name for worksheet in worksheets if worksheet.visible]
-    if len(visible) == 1:
-        return visible[0]
-    raise AppError(
-        "WORKSHEET_REQUIRED",
-        "The workbook has several worksheets; choose one with the worksheet field.",
-        status_code=400,
-        details={"worksheets": names},
+    store = get_analysis_store(request)
+    analysis = create_analysis_from_upload(
+        store,
+        content=content,
+        original_filename=original_filename,
+        dataset_format=dataset_format,
+        selected_worksheet=selected_worksheet,
     )
+    get_job_pool(request).submit(analysis.analysis_id)
+    status_url = f"/api/v1/analyses/{analysis.analysis_id}/status"
+    return UploadAnalysisResponse(analysis=_analysis_resource(analysis), status_url=status_url)
 
 
 @router.post("/analyses", response_model=UploadAnalysisResponse, status_code=202)
@@ -1243,86 +1197,26 @@ async def post_analysis_upload(
     field selects the worksheet; a workbook is also inspected here, before
     any analysis exists, so a macro-enabled, malformed or over-limit
     workbook, or an ambiguous worksheet choice, is refused with a
-    documented error rather than becoming a failed analysis.
-    `file: UploadFile` takes no `= File(...)`
-    default — FastAPI already treats a required `UploadFile` annotation
-    as a file-upload parameter, avoiding the `ruff` `B008`
+    documented error rather than becoming a failed analysis. Every rule
+    lives in `trusttable_backend.ingestion`, shared with staged uploads
+    (`UX-02`, D-068). `file: UploadFile` takes no `= File(...)` default —
+    FastAPI already treats a required `UploadFile` annotation as a
+    file-upload parameter, avoiding the `ruff` `B008`
     function-call-in-default-argument pattern `WP-024` already found and
     avoided for `Depends`.
     """
-    original_name = file.filename
-    if not original_name:
-        # Defense in depth: `UploadFile.filename` is typed `str | None` and
-        # can in principle be an empty string or `None` even when a `file`
-        # part is present (a `Content-Disposition` with no/blank `filename`
-        # parameter). A request with no `file` part at all never reaches
-        # here — FastAPI's own required-parameter validation rejects it
-        # first, via the app's existing `RequestValidationError` -> `422
-        # INVALID_REQUEST` global handler (`FND-04`).
-        raise AppError(
-            "INVALID_REQUEST",
-            "A filename is required.",
-            status_code=400,
-            details={},
-        )
-    extension = _upload_extension(original_name)
-    if extension is None:
-        raise AppError(
-            "UNSUPPORTED_FILE_TYPE",
-            "Only .csv and .xlsx files are currently supported.",
-            status_code=415,
-            details={
-                "filename": sanitize_filename(original_name),
-                "supported_extensions": _SUPPORTED_UPLOAD_EXTENSIONS,
-            },
-        )
+    original_name, extension = validate_upload_name(file.filename)
     requested_worksheet = worksheet if worksheet else None
-    if extension == _CSV_EXTENSION and requested_worksheet is not None:
-        raise AppError(
-            "INVALID_REQUEST",
-            "A worksheet can only be chosen for .xlsx files.",
-            status_code=400,
-            details={},
-        )
-
-    max_bytes = get_settings().max_file_size_mb * 1024 * 1024
-    # Bound the read itself so an oversized upload never fully enters
-    # memory before being rejected (`docs/security-threat-model.md`
-    # §3.1 "resource exhaustion").
-    content = await file.read(max_bytes + 1)
-    if len(content) > max_bytes:
-        raise AppError(
-            "FILE_TOO_LARGE",
-            "The uploaded file exceeds the maximum allowed size.",
-            status_code=413,
-            details={"max_bytes": max_bytes},
-        )
-    if not content:
-        raise AppError(
-            "INVALID_REQUEST",
-            "The uploaded file is empty.",
-            status_code=400,
-            details={},
-        )
-
-    dataset_format = DatasetFormat.CSV
-    selected_worksheet: str | None = None
-    if extension == _XLSX_EXTENSION:
-        dataset_format = DatasetFormat.XLSX
-        worksheets = await run_in_threadpool(_inspect_workbook, content)
-        selected_worksheet = _choose_worksheet(worksheets, requested_worksheet)
-
-    store = get_analysis_store(request)
-    analysis = create_analysis_from_upload(
-        store,
+    require_worksheet_applies(extension, requested_worksheet)
+    content = await read_upload_content(file)
+    plan = await run_in_threadpool(plan_ingestion, content, extension, requested_worksheet)
+    return start_analysis_from_content(
+        request,
         content=content,
-        original_filename=sanitize_filename(original_name),
-        dataset_format=dataset_format,
-        selected_worksheet=selected_worksheet,
+        original_filename=original_name,
+        dataset_format=plan.dataset_format,
+        selected_worksheet=plan.selected_worksheet,
     )
-    get_job_pool(request).submit(analysis.analysis_id)
-    status_url = f"/api/v1/analyses/{analysis.analysis_id}/status"
-    return UploadAnalysisResponse(analysis=_analysis_resource(analysis), status_url=status_url)
 
 
 @router.post("/demo/sales", response_model=DemoAnalysisResponse, status_code=202)

@@ -777,8 +777,9 @@ No global state library is planned for v1.
 ### Investigation shell (UI-01)
 
 The real route tree (`frontend/src/router.tsx`, replacing `FND-01`'s
-placeholder route): `/` redirects to `/analyses/new` (the Start screen,
-no analysis list/dashboard exists yet); `/analyses/:analysisId` is the
+placeholder route): originally `/` redirected to `/analyses/new` (the Start
+screen; `UX-02` replaced this, see "Updated (`UX-02`, D-068)" below; no analysis
+list/dashboard exists yet); `/analyses/:analysisId` is the
 layout route (`AnalysisLayoutRoute`) that polls status and renders
 `AnalysisStageProgress` while in progress, a terminal-state view when
 `failed`/`cancelled`, or its children once `completed`:
@@ -805,11 +806,22 @@ guidance otherwise, with a human-readable provenance line and never a
 filesystem path. Only persistent review controls remain an honestly
 disclosed not-yet-available placeholder (`REV-01`, not yet built); the
 rule engine, rule execution and remediation workflow (`RULE-01`/`REM-01`)
-remain later items. The Start screen's upload control is
-now enabled (`WP-029`; it accepts `.csv` and, with `ING-03`, `.xlsx`,
-asking which worksheet to analyze when a workbook has several, and the
+remain later items. The Start screen's upload control was
+enabled by `WP-029` (it accepts `.csv` and, with `ING-03`, `.xlsx`, and the
 Overview and Technical details screens name the worksheet analyzed) — see "Analysis API routes" above for
 `POST /analyses`.
+
+**Updated (`UX-02`, D-068):** the route tree now has `/` as the Workspace
+(`features/workspace/WorkspaceRoute`) and `/configure` as the Configure step
+(`ConfigureRoute`); `/analyses/new` redirects to `/`. Choosing a file calls
+`POST /staged-uploads` and opens `/configure`; the opaque staged reference is
+held in tab-scoped `sessionStorage` (`stagedReference.ts`) and sent only in
+request bodies, never in the address. Run calls `POST /staged-uploads/run`.
+`AppShell` carries the workspace navigation (Home and a disabled, labelled
+Compare entry). `AiStatusPanel` renders `GET /ai/status`, replacing the former
+unconditional "AI is disabled" sentence. The queries and mutations live in
+`features/workspace/api.ts`, composing the generated SDK like
+`features/analysis/api.ts`.
 
 ## 5. API contracts
 
@@ -1140,6 +1152,21 @@ Persist:
 - version metadata
 
 Large validated profile structures may be stored as JSON where normalization adds no practical value.
+
+**Temporary staging (`UX-02`, D-068, migration `0009`).** A chosen file is held
+in a `staged_uploads` table (`persistence/staging_store.py`, `SqlStagingStore`)
+until Run consumes it, it is discarded, or it expires. It is not a dataset and
+has no durable identity. The primary key is the SHA-256 digest of the opaque
+reference given to the client, so the database never holds a usable reference.
+The count and total-bytes bounds are enforced by the same `INSERT ... SELECT`
+that stores a row, and consumption is one `DELETE ... RETURNING` conditioned on
+the reference digest, the content digest recorded at staging and an unexpired
+row, so concurrent callers cannot race past a bound or both obtain a file. All
+validation (extension, size, workbook inspection, worksheet choice, parser
+limits) lives in `trusttable_backend/ingestion.py`, shared by direct upload and
+staging, and the pre-run inspection (`staging_inspection.py`) reuses the
+pipeline's parsers and limits. `request_limits.py` counts request bodies as they
+stream, because the frontend proxy applies no size limit.
 
 **Implemented (`DB-01`):** analysis metadata, file metadata, stage and
 failure state, profile, context, questions and answers, findings, and

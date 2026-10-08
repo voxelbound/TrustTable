@@ -6,8 +6,9 @@ import { FindingsRoute } from './features/analysis/FindingsRoute'
 import { OverviewRoute } from './features/analysis/OverviewRoute'
 import { ReportRoute } from './features/analysis/ReportRoute'
 import { RulesRoute } from './features/analysis/RulesRoute'
-import { StartRoute } from './features/analysis/StartRoute'
 import { TechnicalRoute } from './features/analysis/TechnicalRoute'
+import { ConfigureRoute } from './features/workspace/ConfigureRoute'
+import { WorkspaceRoute } from './features/workspace/WorkspaceRoute'
 
 /**
  * React Router Data Mode router (`UI-01`, `WP-025`; `findings/:findingId`
@@ -17,19 +18,24 @@ import { TechnicalRoute } from './features/analysis/TechnicalRoute'
  * replaces `FND-01`'s placeholder route with the real investigation
  * shell.
  *
- * `/` redirects to `/analyses/new`: no analysis list/dashboard exists
- * yet (no persistence, `DB-01` not built) — `WP-025`'s Recorded
- * assumption 2. `docs/ui-specification.md` §3's route tree is now fully
- * implemented.
+ * `UX-02` (`docs/decision-log.md` D-068): `/` is the Workspace, where choosing
+ * a file stages it and opens `/configure` (the staged reference is kept in
+ * tab-scoped storage, never in the address). `/analyses/new`, the former Start
+ * screen, stays reachable and redirects to `/`. No analysis list exists yet
+ * (`UX-03`).
  */
 export const router = createBrowserRouter([
   {
     path: '/',
-    loader: () => redirect('/analyses/new'),
+    element: <WorkspaceRoute />,
+  },
+  {
+    path: '/configure',
+    element: <ConfigureRoute />,
   },
   {
     path: '/analyses/new',
-    element: <StartRoute />,
+    loader: () => redirect('/'),
   },
   {
     path: '/analyses/:analysisId',

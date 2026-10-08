@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     max_cell_count: PositiveInt = 50_000_000
     analysis_retention_hours: NonNegativeInt = 0
     background_worker_count: PositiveInt = 2
+    staging_max_count: PositiveInt = 5
+    staging_max_total_mb: PositiveInt = 250
+    staging_ttl_minutes: PositiveInt = 60
 
     # LLM provider
     llm_provider: LlmProvider = "disabled"

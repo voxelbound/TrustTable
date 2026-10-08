@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import type {
+  AiStatusResponse,
   AnalysisResource,
   AnalysisStatusResponse,
   AnswerGuidedQuestionResponse,
@@ -12,6 +13,7 @@ import type {
   FindingsListResponse,
   ObservationsListResponse,
   RowContextResponse,
+  StagedUploadResponse,
   UploadAnalysisResponse,
 } from '../../api'
 
@@ -407,12 +409,81 @@ export function apiErrorBody(
   }
 }
 
+/** A well-formed staged-file reference (43 URL-safe characters). Tests use it
+ * only as an opaque value; it is never a real capability. */
+export const STAGED_REF = 'TestReference0123456789_abcdefghijklmnopqrs'
+
+/** The checks groups the server derives from the detector registry. The
+ * wording is fixed server text; tests use a small stable subset. */
+export const STAGED_CHECKS = [
+  {
+    title: 'Missing and empty data',
+    description: 'Empty rows and values that are missing.',
+  },
+  {
+    title: 'Inconsistent formatting',
+    description: 'The same thing written in different ways.',
+  },
+]
+
+export function makeStagedUploadResponse(
+  overrides: Partial<StagedUploadResponse> = {},
+): StagedUploadResponse {
+  return {
+    staging_ref: STAGED_REF,
+    expires_at: '2026-10-08T15:30:00Z',
+    filename: 'my-data.csv',
+    format: 'csv',
+    byte_size: 2048,
+    worksheets: null,
+    selected_worksheet: null,
+    shape: { row_count: 120, column_count: 5 },
+    problems: [],
+    notices: [],
+    checks: STAGED_CHECKS,
+    can_run: true,
+    ...overrides,
+  }
+}
+
+export function makeAiStatusResponse(
+  overrides: Partial<AiStatusResponse> = {},
+): AiStatusResponse {
+  return {
+    assistance: 'off',
+    state: 'disabled',
+    location: 'none',
+    provider_label: 'AI assistance',
+    runtime_label: null,
+    model_label: null,
+    sample_values_sent: false,
+    summary:
+      'AI assistance is off. TrustTable finds and scores issues with its built-in checks only, and no dataset content is sent to any model.',
+    ...overrides,
+  }
+}
+
 /** Default handlers: a demo run that is already `completed` by the time
  * every endpoint is queried — matching `API-01`'s real synchronous-
  * completion behavior (`WP-023`/`WP-024`). Individual tests override
  * specific endpoints via `server.use(...)` to exercise in-progress/
  * failed/error scenarios. */
 export const handlers = [
+  http.get(`${BASE}/ai/status`, () => {
+    return HttpResponse.json(makeAiStatusResponse())
+  }),
+  http.post(`${BASE}/staged-uploads`, () => {
+    return HttpResponse.json(makeStagedUploadResponse(), { status: 201 })
+  }),
+  http.post(`${BASE}/staged-uploads/inspect`, () => {
+    return HttpResponse.json(makeStagedUploadResponse())
+  }),
+  http.post(`${BASE}/staged-uploads/run`, () => {
+    return HttpResponse.json(makeUploadAnalysisResponse(), { status: 202 })
+  }),
+  http.post(`${BASE}/staged-uploads/discard`, () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
   http.post(`${BASE}/demo/sales`, () => {
     return HttpResponse.json(makeDemoAnalysisResponse(), { status: 202 })
   }),

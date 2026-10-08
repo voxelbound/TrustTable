@@ -82,6 +82,35 @@ export function getWorksheetChoices(body: unknown): string[] | null {
   return worksheets
 }
 
+/** The problem messages a `STAGED_UPLOAD_NOT_RUNNABLE` refusal carries
+ * (`UX-02`; `docs/api-specification.md` §7), or `null` for any other body.
+ * Validated as a non-empty list of objects with a string `message`; the text
+ * is server-fixed but is still only ever shown as plain text. */
+export function getNotRunnableProblems(body: unknown): string[] | null {
+  if (
+    !isApiErrorEnvelope(body) ||
+    body.error.code !== 'STAGED_UPLOAD_NOT_RUNNABLE'
+  ) {
+    return null
+  }
+  const problems: unknown = body.error.details?.problems
+  if (!Array.isArray(problems) || problems.length === 0) {
+    return null
+  }
+  const messages: string[] = []
+  for (const problem of problems) {
+    if (
+      typeof problem !== 'object' ||
+      problem === null ||
+      typeof (problem as Record<string, unknown>).message !== 'string'
+    ) {
+      return null
+    }
+    messages.push((problem as { message: string }).message)
+  }
+  return messages
+}
+
 /** The structured error code (e.g. `ANALYSIS_NOT_FOUND`) when the body
  * conforms to the envelope, otherwise `null`. */
 export function getApiErrorCode(body: unknown): string | null {

@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import timedelta
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -42,6 +43,7 @@ from trusttable_backend.persistence import (
     SqlAnalysisStore,
     SqlRelationshipStore,
     SqlReportStore,
+    SqlStagingStore,
     build_engine,
     reconcile_interrupted_analyses,
     run_migrations,
@@ -51,6 +53,7 @@ from trusttable_backend.request_context import (
     RequestIdMiddleware,
     get_request_id,
 )
+from trusttable_backend.request_limits import RequestBodyLimitMiddleware
 from trusttable_backend.schemas.errors import ErrorDetail, ErrorResponse
 from trusttable_backend.version_info import get_application_version
 
@@ -188,6 +191,15 @@ def create_app() -> FastAPI:
     run_migrations(settings)
     store = SqlAnalysisStore(engine)
     reconcile_interrupted_analyses(store)
+    staging_store = SqlStagingStore(
+        engine,
+        max_count=settings.staging_max_count,
+        max_total_bytes=settings.staging_max_total_mb * 1024 * 1024,
+        ttl=timedelta(minutes=settings.staging_ttl_minutes),
+    )
+    # A file staged before a restart that has since expired is removed now,
+    # not only the next time staging is used (`UX-02`, D-068).
+    staging_store.purge_expired()
     job_pool = JobPool(store, settings.background_worker_count)
 
     @asynccontextmanager
@@ -201,11 +213,18 @@ def create_app() -> FastAPI:
         version=get_application_version(),
         lifespan=_lifespan,
     )
+    # Added before `RequestIdMiddleware` so it sits inside it: a refusal it
+    # raises is formatted by the shared error handlers with the request id.
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_file_bytes=lambda: get_settings().max_file_size_mb * 1024 * 1024,
+    )
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
     app.include_router(api_v1_router)
     app.state.analysis_engine = engine
     app.state.analysis_store = store
+    app.state.staging_store = staging_store
     app.state.report_store = SqlReportStore(engine)
     app.state.relationship_store = SqlRelationshipStore(engine)
     app.state.job_pool = job_pool
