@@ -81,9 +81,9 @@ Current status: **complete.** This is the first promoted portfolio release.
   (D-045); `REL-02`, the last `v0.2` item, is complete. Live local-AI evaluation is optional in
   `docs/testing-strategy.md` §8, so the release gates are unaffected.
 
-Provenance of the list wording: the prior "Ollama provider" entry was corrected, and the
-benchmark-harness and decision-gate entries added, by `CHG-002` and the `CHG-003` planning
-alignment.
+Provenance of the list wording: it reads "real local-inference provider" rather than the
+earlier "Ollama provider" wording, and includes the benchmark-harness and decision-gate
+entries sequenced ahead of it (D-032, D-033). The earlier wording is preserved in Git history.
 
 ## v0.3 — Complete manager workflow
 

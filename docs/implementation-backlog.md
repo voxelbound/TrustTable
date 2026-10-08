@@ -305,7 +305,7 @@ Physical-neighborhood inspection around a row a finding already
 references: whole row, all columns, file-order adjacency, bounded
 default window with explicit expand. Not an Evidence type, not
 included in Report/export output, never automatic AI-prompt input.
-See `docs/decision-log.md` D-025 and `CHG-001`.
+See `docs/decision-log.md` D-025.
 
 # Local AI beta
 
@@ -339,8 +339,7 @@ harness's results (D-032), not from generic public benchmarks.
 
 Sequencing: `AI-06` depends only on `AI-01`/`AI-02` (the merged provider seam and the
 mock and disabled providers) and the committed demo fixture, not on `AI-03`'s real-runtime
-implementation, so it is sequenced ahead of `AI-03` (`docs/decision-log.md` D-032, D-033;
-`CHG-003`).
+implementation, so it is sequenced ahead of `AI-03` (`docs/decision-log.md` D-032, D-033).
 
 ## Human decision gate — runtime, model, and quantization
 
@@ -378,8 +377,8 @@ implementation and is a later, separate follow-on.
 Provenance: the item must not start before `AI-06` and the human decision gate above
 (D-033). The model was decided in D-034 and the runtime in D-035. The heading was corrected
 from "AI-03 — Ollama provider" to match; the prior wording is preserved in this repository's
-Git history, not silently erased. The earlier open-runtime notes are `CHG-002` and
-`CHG-003`, D-007's appended review note and D-030–D-032.
+Git history, not silently erased. The earlier open-runtime notes are D-007's appended
+review note and D-030–D-032.
 
 ## AI-04 — Local runtime documentation (llama.cpp, baseline profile)
 
