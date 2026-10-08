@@ -331,7 +331,8 @@ zeroes freed content. The expiry is fixed at staging time and never extended.
 Multipart field `file` (no `worksheet` field). Request-level refusals use the direct-upload
 codes: `400 INVALID_REQUEST` (missing filename, empty file), `415 UNSUPPORTED_FILE_TYPE`,
 `413 FILE_TOO_LARGE`. If the count or total-bytes bound would be exceeded the answer is
-`409 STAGING_FULL` and nothing is stored.
+`409 STAGING_FULL` (with `details.ttl_minutes`, so the client can say how long waiting files
+are kept) and nothing is stored.
 
 Otherwise the file is inspected (a bounded parse with the same limits as the pipeline;
 values are never retained or returned) and the response is a staged-upload resource:
@@ -1018,6 +1019,7 @@ call's own status via its own `ai_call_status` field.
 - STAGED_UPLOAD_UNAVAILABLE
 - STAGED_UPLOAD_NOT_RUNNABLE
 - STAGING_FULL
+- REQUEST_TOO_LARGE
 - ANALYSIS_NOT_FOUND
 - INVALID_ANALYSIS_STATE
 - ANALYSIS_FAILED
@@ -1055,6 +1057,7 @@ call's own status via its own `ai_call_status` field.
 - strict request limits (`UX-02`: the bodies of `POST /analyses` and `POST /staged-uploads` are
   counted as they stream and refused with `413 FILE_TOO_LARGE` once they exceed
   `MAX_FILE_SIZE_MB` plus 1 MiB of multipart overhead, before the body is buffered in full;
+  the body of every other request is refused with `413 REQUEST_TOO_LARGE` beyond 1 MiB;
   the frontend proxy applies no separate size limit, so the backend is the single authority)
 - safe content disposition filenames
 - escaped display fields

@@ -258,8 +258,15 @@ Logs may contain:
   recomputed at consume; expired rows removed at startup and before each staging write,
   read and Run; upload bodies counted as they stream. Residual risk: staged bytes sit
   unencrypted in the local database until consumed or expired (the same exposure as a
-  stored analysis), and a crash between consume and analysis creation spends the
-  reference without an analysis.
+  stored analysis), a crash between consume and analysis creation spends the
+  reference without an analysis, and any local client can fill the staging pool and
+  block staging until the files expire (acceptable under the single-user local trust
+  model; the bounds and `STAGING_FULL` keep it from growing without limit). Inspection
+  runs on the request path with the pipeline's parser limits and is covered by tests for
+  time-bounded, memory-bounded refusal of oversize, malformed and expansion inputs;
+  untrusted worksheet names and filenames are returned as data and rendered as inert
+  text, with tests for markup in both; request bodies on every route are bounded by the
+  backend (`docs/api-specification.md` §15) because the proxy applies no size limit.
 - **"This exact file was analysed before."** This is a content-hash oracle. State the
   single-user and local trust assumption, or scope the lookup; never show the hash to a
   normal user; keep it a lookup, not an identity.

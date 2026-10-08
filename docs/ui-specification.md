@@ -120,8 +120,16 @@ reference, `/configure` returns to the Workspace. It shows, from `POST
   controls: the standard analysis always runs;
 - Local AI status (assistance is optional and separate from the deterministic checks) and
   a privacy statement, both from `GET /ai/status`;
+- the time until which the staged copy is kept (from `expires_at`), stated in plain
+  words;
 - one *Run analysis* action, which analyses exactly the staged bytes, and *Choose a
   different file*, which discards the staged copy.
+
+If staging is refused because too many files are already waiting (`409 STAGING_FULL`),
+the Workspace says so in plain words, that waiting files are kept for up to the stated
+minutes, and that the user can finish or discard a file waiting in another tab, or wait. A Run that is refused
+because the chosen worksheet still has a blocking problem shows the same problem text
+that the inspection showed and does not spend the staged file.
 
 If the staged copy has expired or was already used, the screen says the file is no longer
 available, that staged files are kept only briefly, and offers to choose it again. No
