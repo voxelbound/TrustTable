@@ -122,6 +122,7 @@ class RequestBodyLimitMiddleware:
                 "headers": [
                     (b"content-type", b"application/json"),
                     (b"content-length", str(len(body)).encode("ascii")),
+                    (b"cache-control", b"no-store"),
                     (b"connection", b"close"),
                 ],
             }

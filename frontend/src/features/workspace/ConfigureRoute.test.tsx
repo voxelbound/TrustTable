@@ -171,7 +171,9 @@ describe('ConfigureRoute', () => {
     ).toBeInTheDocument()
     expect(await screen.findByText('AI assistance: off')).toBeInTheDocument()
     const privacy = screen.getByRole('region', { name: 'Privacy' })
-    expect(privacy).toHaveTextContent('Your file stays on this computer.')
+    expect(privacy).toHaveTextContent(
+      'Your file stays on the machine that runs TrustTable.',
+    )
     expect(privacy).toHaveTextContent('deleted when you run the analysis')
   })
 

@@ -323,8 +323,10 @@ exactly like an unknown one.
 **Bounds** (installation settings, `docs/configuration.md`): `STAGING_MAX_COUNT` (default
 `5`), `STAGING_MAX_TOTAL_MB` (default `250`) and `STAGING_TTL_MINUTES` (default `60`),
 plus the existing `MAX_FILE_SIZE_MB` per file. Expired rows are deleted at application
-startup and lazily before each staging write, read and Run; SQLite `secure_delete`
-zeroes freed content. The expiry is fixed at staging time and never extended.
+startup and lazily before each staging write, read and Run. SQLite `secure_delete`
+zeroes freed content in the database file; it does not reach journal files, backups or
+the operating system's caches, so a deleted copy is not guaranteed to be gone from disk
+at the moment it expires. The expiry is fixed at staging time and never extended.
 
 #### POST `/staged-uploads`
 

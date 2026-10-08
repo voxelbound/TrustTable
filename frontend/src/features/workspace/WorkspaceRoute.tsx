@@ -49,6 +49,10 @@ export function WorkspaceRoute() {
   const [waitingReference, setWaitingReference] = useState<string | null>(() =>
     readStagedReference(),
   )
+  const [discardedWaiting, setDiscardedWaiting] = useState(false)
+  const [ignoredExtraFiles, setIgnoredExtraFiles] = useState<string | null>(
+    null,
+  )
 
   const chooseFile = (file: File) => {
     setUnreadable(null)
@@ -78,14 +82,19 @@ export function WorkspaceRoute() {
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
+      setIgnoredExtraFiles(null)
       chooseFile(file)
     }
   }
 
   const handleDrop = (event: DragEvent<HTMLElement>) => {
     event.preventDefault()
-    const file = event.dataTransfer.files?.[0]
+    const files = event.dataTransfer.files
+    const file = files?.[0]
     if (file && !stage.isPending) {
+      // Only one file is ever staged at a time: say so rather than silently
+      // dropping the others.
+      setIgnoredExtraFiles(files.length > 1 ? file.name : null)
       chooseFile(file)
     }
   }
@@ -96,6 +105,7 @@ export function WorkspaceRoute() {
     }
     forgetStagedReference()
     setWaitingReference(null)
+    setDiscardedWaiting(true)
   }
 
   const handleRunDemo = () => {
@@ -124,6 +134,12 @@ export function WorkspaceRoute() {
             you rely on it.
           </p>
         </div>
+
+        {discardedWaiting && (
+          <Alert variant="success" title="File discarded">
+            The file that was waiting has been discarded.
+          </Alert>
+        )}
 
         {waitingReference !== null && (
           <Alert variant="info" title="You have a file waiting">
@@ -180,6 +196,19 @@ export function WorkspaceRoute() {
                 : 'CSV and Excel (.xlsx) files. Macro-enabled workbooks (.xlsm) are not supported.'}
             </p>
           </div>
+
+          {ignoredExtraFiles !== null && (
+            <div className="mt-4 text-left">
+              <Alert
+                variant="info"
+                title="Only one file can be chosen at a time"
+              >
+                You dropped more than one file. Only the first,{' '}
+                <span className="font-medium">{ignoredExtraFiles}</span>, was
+                used. Choose the others separately.
+              </Alert>
+            </div>
+          )}
 
           {unreadable !== null && (
             <div className="mt-4 text-left">

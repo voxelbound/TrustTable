@@ -47,6 +47,7 @@ def test_an_oversize_json_body_is_413_with_the_shared_error_envelope(
     assert error["details"] == {"max_bytes": DEFAULT_BODY_LIMIT_BYTES}
     assert error["request_id"]
     assert response.headers["x-request-id"] == error["request_id"]
+    assert response.headers["cache-control"] == "no-store"
 
 
 def test_a_streamed_body_with_no_declared_length_is_still_counted(client: TestClient) -> None:

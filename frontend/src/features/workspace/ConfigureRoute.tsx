@@ -333,10 +333,11 @@ export function ConfigureRoute() {
             Privacy
           </h2>
           <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
-            Your file stays on this computer. The temporary copy you chose is
-            deleted when you run the analysis, when you discard it, or when it
-            expires. Running the analysis keeps the file with that analysis,
-            also on this computer, until you delete the analysis.
+            Your file stays on the machine that runs TrustTable. The temporary
+            copy you chose is deleted when you run the analysis, when you
+            discard it, or when it expires. Running the analysis keeps the file
+            with that analysis, on the same machine, until you delete the
+            analysis.
           </p>
         </section>
 

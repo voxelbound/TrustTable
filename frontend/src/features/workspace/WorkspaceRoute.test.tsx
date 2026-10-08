@@ -163,6 +163,72 @@ describe('WorkspaceRoute', () => {
     expect(calls.analyses + calls.demo + calls.run).toBe(0)
   })
 
+  it('stages only the first of several dropped files', async () => {
+    const calls = watchAnalysisStarts()
+    const router = renderWorkspace()
+    await screen.findByRole('heading', { name: 'TrustTable' })
+
+    fireEvent.drop(screen.getByRole('region', { name: 'Choose data' }), {
+      dataTransfer: { files: [csvFile('first.csv'), csvFile('second.csv')] },
+    })
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/configure')
+    })
+    expect(calls.staged).toBe(1)
+  })
+
+  it('tells the user, in words, that extra dropped files were ignored', async () => {
+    server.use(
+      http.post(`${BASE}/staged-uploads`, () =>
+        HttpResponse.json(
+          makeStagedUploadResponse({
+            staging_ref: null,
+            expires_at: null,
+            shape: null,
+            can_run: false,
+            problems: [
+              {
+                code: 'NO_HEADER_ROW',
+                message: 'The file has no header row with column names.',
+              },
+            ],
+          }),
+        ),
+      ),
+    )
+    renderWorkspace()
+    await screen.findByRole('heading', { name: 'TrustTable' })
+
+    fireEvent.drop(screen.getByRole('region', { name: 'Choose data' }), {
+      dataTransfer: { files: [csvFile('first.csv'), csvFile('second.csv')] },
+    })
+
+    const notice = await screen.findByText(
+      'Only one file can be chosen at a time',
+    )
+    expect(notice.closest('[role="status"]')).toHaveTextContent('first.csv')
+    expect(notice.closest('[role="status"]')).toHaveTextContent(
+      'Choose the others separately.',
+    )
+  })
+
+  it('does not show the ignored-files notice for a single dropped file', async () => {
+    watchAnalysisStarts()
+    renderWorkspace()
+    await screen.findByRole('heading', { name: 'TrustTable' })
+
+    fireEvent.drop(screen.getByRole('region', { name: 'Choose data' }), {
+      dataTransfer: { files: [csvFile('only.csv')] },
+    })
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Only one file can be chosen at a time'),
+      ).not.toBeInTheDocument()
+    })
+  })
+
   it('shows reading progress while a file is being staged and blocks a second choice', async () => {
     let release: () => void = () => {}
     const gate = new Promise<void>((resolve) => {
@@ -391,6 +457,11 @@ describe('WorkspaceRoute', () => {
         screen.queryByText('You have a file waiting'),
       ).not.toBeInTheDocument()
       expect(readStagedReference()).toBeNull()
+      // Keyboard and screen-reader users are told it happened.
+      const confirmation = screen.getByText('File discarded')
+      expect(confirmation.closest('[role="status"]')).toHaveTextContent(
+        'The file that was waiting has been discarded.',
+      )
     })
 
     it('shows nothing about a waiting file when there is none', async () => {
