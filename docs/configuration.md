@@ -53,6 +53,12 @@ are present, correctly typed, and bounded from day one.
 | `MAX_CELL_COUNT` | positive integer | `50000000` | Maximum cells in the chosen worksheet. A worksheet over the limit ends as a `failed` analysis (`CELL_LIMIT_EXCEEDED`); the CSV parser has no cell-count limit beyond its row and column limits. |
 | `ANALYSIS_RETENTION_HOURS` | non-negative integer (`0` = unlimited) | `0` | Will control automatic analysis retention once persistence exists (`DB-01`). |
 | `BACKGROUND_WORKER_COUNT` | positive integer | `2` | Will size the bounded in-process worker pool once background jobs exist (`JOB-01`). |
+| `STAGING_MAX_COUNT` | positive integer | `5` | Maximum files held in temporary staging at once (`UX-02`, `docs/api-specification.md` §7). A further file is refused with `409 STAGING_FULL`. |
+| `STAGING_MAX_TOTAL_MB` | positive integer | `250` | Maximum total size of all staged files. A file that would exceed it is refused with `409 STAGING_FULL`. A single file is still bounded by `MAX_FILE_SIZE_MB`. |
+| `STAGING_TTL_MINUTES` | positive integer | `60` | How long a staged file is kept before it is deleted. The expiry is fixed when the file is staged. |
+
+The three `STAGING_*` limits are installation-controlled resource limits. They are not
+product-managed settings and the product never edits them.
 
 These limits are read from the settings on every parse of a stored file, not
 only at upload: the analysis run, a retry, and every later step that reads

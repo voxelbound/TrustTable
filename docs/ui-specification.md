@@ -42,8 +42,10 @@ Testing:
 ## 3. Routes
 
 ```text
-/
-├── /analyses/new
+/                          (Workspace; UX-02)
+├── /analyses/new          (redirects to /; UX-02)
+├── /configure             (Configure; UX-02; the staged reference is kept in
+│                           tab-scoped session storage, never in the address)
 └── /analyses/:analysisId
     ├── /overview
     ├── /context
@@ -74,9 +76,21 @@ inline and the page stays put.
 
 ## 4. Screen definitions
 
-### 4.1 Start
+### 4.1 Start (the Workspace, `UX-02`, `docs/decision-log.md` D-068)
 
-Contents:
+**Implemented (`UX-02`).** `/` is the Workspace. Choosing a file (picker or drop) never
+starts an analysis: it stages the file and opens the Configure step (section 4.2). A file
+that cannot be read at all is not stored; the Workspace then lists the plain-language
+problems and offers to choose another file. The Workspace also offers the sales demo as a
+separate, explicitly labelled action that starts the demo analysis when pressed, shows
+Local AI and privacy status from `GET /ai/status`, and shows a visible but disabled
+*Compare datasets* area stating that comparison is planned and not implemented. The
+page header carries Home and a disabled Compare entry; Analyses, Settings and Help are not
+shown until their slices ship, because nothing unbuilt is presented as available
+(section 12.1). Recent analyses, reopen, rerun and the exact-file notice belong to
+`UX-03`.
+
+Contents of the original Start screen (kept where still true):
 
 - drag-and-drop upload
 - file picker
@@ -87,7 +101,37 @@ Contents:
 - model location
 - sample-value setting
 
-### 4.2 File review
+### 4.2 File review (the Configure step, `UX-02`, `docs/decision-log.md` D-068)
+
+**Implemented (`UX-02`).** `/configure` replaces the former inline worksheet chooser. The
+staged reference lives in `sessionStorage` (tab-scoped, cleared when the staged file is
+run or discarded), so a reload keeps the step and the address never carries it. With no
+reference, `/configure` returns to the Workspace. It shows, from `POST
+/staged-uploads/inspect`:
+
+- the sanitized filename, size, format and (when known) rows and columns;
+- for a workbook, a worksheet chooser; a worksheet is preselected only when the workbook
+  has exactly one visible sheet, otherwise nothing is preselected and Run stays
+  unavailable until the user chooses; worksheet names are plain text;
+- readability problems (for example a file that is not UTF-8 text) as a blocking error
+  announced to assistive technology, with Run unavailable, and non-blocking notices;
+- a short, grouped, business-language summary of what TrustTable checks (no detector
+  names; a disclosure for more detail). There are no category or detector on/off
+  controls: the standard analysis always runs;
+- Local AI status (assistance is optional and separate from the deterministic checks) and
+  a privacy statement, both from `GET /ai/status`;
+- one *Run analysis* action, which analyses exactly the staged bytes, and *Choose a
+  different file*, which discards the staged copy.
+
+If the staged copy has expired or was already used, the screen says the file is no longer
+available, that staged files are kept only briefly, and offers to choose it again. No
+content hash is shown. The summary of what is checked comes from the `checks` field of
+the staged-upload resource, which the server derives from the categories of the
+registered detectors (one group per category, in business wording, never detector
+names), so it cannot name a check that does not exist; a test fails when a category has
+no group.
+
+Original File review contract (superseded in part by the above):
 
 Show:
 
@@ -493,8 +537,11 @@ frontend/
 
 > **Status.** Sections 1 to 11 describe the interface as it is built. This section
 > records the owner-confirmed target of the UI/UX redesign (`UX-01`,
-> `docs/decision-log.md` D-066, D-067). **Nothing in this section is built, and
-> nothing here may be presented in the interface as available until its slice ships.**
+> `docs/decision-log.md` D-066, D-067). **Slice S1 (`UX-02`, D-068) is built: the
+> Workspace, the Configure step, the Run of the staged bytes, the Local AI and privacy
+> status and the disabled Compare area (sections 4.1 and 4.2). Nothing else in this
+> section is built, and nothing here may be presented in the interface as available
+> until its slice ships.**
 > Proposal-level designs are marked as such and are to be confirmed in each slice's
 > specification, which needs a fresh, substantive independent review before
 > implementation.
