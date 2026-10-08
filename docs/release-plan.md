@@ -1,5 +1,22 @@
 # TrustTable Release Plan
 
+This document states what each milestone delivers and its current status. It is the
+planning view, not a progress log: per-item status is in
+`docs/implementation-backlog.md`, and the reasoning and history behind every change are in
+`docs/decision-log.md`. Earlier wording that has since been superseded is preserved in this
+repository's Git history, not repeated here.
+
+## Milestone status
+
+| Milestone | Status |
+|---|---|
+| v0.1 — Deterministic vertical slice | Complete |
+| v0.1.1 — Investigation UX | Complete |
+| v0.2 — Local AI beta | Complete; `v0.2.0` published and verified |
+| v0.3 — Complete manager workflow | Complete; `v0.3.0` published and verified |
+| v1.0 — Production-quality local release | Current milestone, in progress |
+| Post-v1 deployment track | Not decided |
+
 ## v0.1 — Deterministic vertical slice
 
 Deliver:
@@ -40,83 +57,33 @@ Deliver, in dependency order:
 - grounded explanations
 - prompt-injection trust boundary
 
-> **Annotation (2026-09-13, `CHG-002`; corrected 2026-09-13, `CHG-003`
-> planning alignment):** the specific local runtime (`llama.cpp` vs.
-> Ollama) remains an open, human-owned decision — see
-> `docs/decision-log.md` D-007's appended review note, D-030–D-032, and
-> the sequencing decision D-033. The list above now reads "real
-> local-inference provider" rather than "Ollama provider" and includes
-> the previously-missing benchmark-harness and human-decision-gate
-> entries, sequenced ahead of the real provider per D-032/D-033
-> ("runtime and model selection follow from the benchmark harness's
-> results"). The prior "Ollama provider" wording is preserved in this
-> repository's own git history, not silently erased.
+Current status: **complete.** This is the first promoted portfolio release.
 
-> **Annotation (2026-09-16, `docs/decision-log.md` D-034):** the human
-> decision gate above is now partially resolved — model family/exact
-> model (Qwen3.5-4B) and the baseline hardware-tier default are
-> decided (Q4_K_M is recorded as the selected quantization because it
-> is what the selected model was evaluated at; no comparative
-> quantization study was performed). Runtime (`llama.cpp` vs. Ollama)
-> and the accelerated hardware-tier default remain open; the real
-> local-inference provider still must not start until both are
-> resolved.
+- **Decision gate.** Complete for the baseline scope. `llama.cpp` is the selected runtime
+  (Ollama is a future alternative, not disqualified) and Qwen3.5-4B at Q4_K_M is the selected
+  baseline model; Q4_K_M is recorded because it is what the model was evaluated at, and no
+  comparative quantization study was performed. The accelerated hardware-tier default was
+  deliberately deferred as a later, non-blocking follow-on (D-034, D-035; see also D-007's
+  appended review note and D-030–D-032).
+- **Runtime hardening.** `llama-server` is inference infrastructure only: its built-in Web UI
+  is disabled in the supported profile and the local baseline uses host port `8081`, distinct
+  from the frontend port `8080` (`AI-07`, D-036), sequenced after `API-02` and before `AI-05`.
+- **Grounded AI analysis.** `AI-08` (grounded, advisory per-finding analysis, deployable
+  local-AI experience and first-class Linux documentation) was inserted before `REL-02` by
+  explicit product direction (D-040). It adds no `v0.3` scope: no rule engine, rule execution,
+  persistent review or export.
+- **Release.** `REL-02` was delivered in three ordered steps (D-041): the repository-side
+  pull-only Compose file and tag-gated publish workflow, the local-AI qualification, and the
+  protected publish with a clean-host check. The local-AI qualification was **waived** by the
+  owner (D-044): it is not a pass, no real-model benchmark of that path was completed, and
+  nothing about minimum, recommended or baseline-tier hardware may be inferred. `v0.2.0` is
+  published to GHCR and was started on a clean Linux host with no GHCR credentials and AI off
+  (D-045); `REL-02`, the last `v0.2` item, is complete. Live local-AI evaluation is optional in
+  `docs/testing-strategy.md` §8, so the release gates are unaffected.
 
-> **Annotation (2026-09-16, `docs/decision-log.md` D-035):** the human
-> decision gate above is now **complete for v0.2 baseline scope**.
-> `llama.cpp` is selected as the runtime (Ollama recorded as a future
-> alternative, not disqualified). The real local-inference provider is
-> now ready to start, scoped to the baseline/CPU-oriented profile
-> (Qwen3.5-4B-Q4_K_M on `llama.cpp`). The accelerated hardware-tier
-> default remains explicitly deferred, by deliberate choice, as a
-> later, non-blocking follow-on.
-
-> **Annotation (2026-09-17, `docs/decision-log.md` D-036):** `llama.cpp`'s
-> `llama-server` is hardened as inference infrastructure only — its
-> built-in Web UI is disabled in the documented/supported runtime
-> profile, and the documented local baseline moves to host port `8081`,
-> distinct from TrustTable's own frontend port `8080`. Tracked as
-> `AI-07` in `docs/implementation-backlog.md`, sequenced immediately
-> after `API-02` and before `AI-05` (`D-033`'s sequencing amendment).
-> Does not reopen `D-034`/`D-035`.
-
-> **Annotation (2026-09-19, `docs/decision-log.md` D-040):** `AI-08`
-> (grounded AI analysis, recommendations and deployable local-AI
-> experience) is inserted immediately before `REL-02`, by explicit
-> product direction: before `v0.2` is release-qualified, each finding's
-> AI-assisted analysis — explanation, possible business impact,
-> remediation and a proposed validation rule — must be complete,
-> structurally constrained and advisory, its provenance must not expose
-> host paths, and Linux/local-AI installation must be discoverable from
-> the README. It adds no `v0.3` scope: there is still no rule engine,
-> rule execution, persistent review or export. `REL-02` gains explicit
-> Linux-deployment acceptance requirements, including verifying the
-> Linux guide on a fresh host and publishing images, rather than that
-> path being claimed earlier.
-
-> **Annotation (2026-09-20, `docs/decision-log.md` D-041):** `REL-02` is
-> delivered in three ordered steps — the repository-side pull-only Compose file
-> and tag-gated publish workflow (defined and tested, nothing published), then
-> the local-AI qualification, then the protected publish with a fresh-Linux-host
-> verification. `v0.2` is not release-qualified until all three are done.
-
-> **Annotation (2026-09-21, `docs/decision-log.md` D-044):** the second of those
-> three steps, the local-AI qualification, is **waived** by the human owner for
-> `v0.2`: no real-model benchmark was completed, it is not a pass, and nothing
-> about minimum, recommended or baseline-tier hardware may be inferred. What
-> remains is the protected publish of the versioned images and a clean-host
-> pull/install/start check against them, then the updated install guide. Live
-> local-AI evaluation is optional in `docs/testing-strategy.md` §8, so the
-> release gates are unaffected.
-
-> **Annotation (2026-09-21, `docs/decision-log.md` D-045):** `v0.2.0` is
-> **published and verified**: both images are on GHCR, the release workflow's
-> credential-free pull-and-start check passed, and a clean Linux host pulled and
-> started the release with no GHCR credentials and AI off. `REL-02`, the last
-> `v0.2` item, is complete. The milestone decision is the project owner's and is
-> recorded separately.
-
-This is the first promoted portfolio release.
+Provenance of the list wording: the prior "Ollama provider" entry was corrected, and the
+benchmark-harness and decision-gate entries added, by `CHG-002` and the `CHG-003` planning
+alignment.
 
 ## v0.3 — Complete manager workflow
 
@@ -133,21 +100,12 @@ Deliver:
 - analysis deletion
 - security section in reports
 
-> **Annotation (2026-09-30, `REL-03` slice 1):** every `v0.3` feature above is
-> implemented, and the repository is prepared for the release: version `0.3.0`
-> and an end-to-end acceptance test of the persisted CSV workflow.
->
-> **Annotation (2026-09-30, `docs/decision-log.md` D-049):** `v0.3.0` is
-> published and was verified on a clean host with AI off (one pull, start and
-> health check), and `REL-03` is complete. The images are unsigned,
-> unattested and not container-scanned, and the local-AI setup was not
-> exercised there. Whether the `v0.3` milestone is complete is the owner's
-> decision and is not made here.
->
-> **Annotation (2026-10-01):** the project owner has since recorded the `v0.2`
-> and `v0.3` milestones complete, each at the agreed scoped qualification
-> level, and `v0.2.0` and `v0.3.0` are the published releases. `v1.0` below is
-> the current active milestone.
+Current status: **complete.** Every feature above is implemented. `v0.3.0` is published and
+was verified on a clean host with AI off (one pull, start and health check), and `REL-03` is
+complete (D-049). The images are unsigned, unattested and not container-scanned, and the
+local-AI setup was not exercised there. The project owner has recorded the `v0.2` and `v0.3`
+milestones complete, each at the agreed scoped qualification level; `v0.2.0` and `v0.3.0` are
+the published releases.
 
 ## v1.0 — Production-quality local release
 
@@ -165,114 +123,56 @@ Deliver:
 - production documentation
 - release artifacts
 
-> **Annotation (2026-10-01, `docs/decision-log.md` D-052):** `v1.0` is the
-> current milestone and has begun with XLSX support (`ING-03`). **Update
-> (2026-10-02, `docs/decision-log.md` D-053):** `ING-03` is complete — Excel
-> upload works from the API and the Start screen, and the documented limit
-> settings are read on every parse. The rest of the list above is planned or
-> has a `v0.1`-scoped baseline only. **Update (2026-10-02,
-> `docs/decision-log.md` D-054, D-055, D-056):** the detector catalogue
-> (`DET-03`) is in progress — 19 detectors are built (six added over three
-> slices) and the rest of `docs/detector-framework.md` §16 is planned.
->
-> **Annotation (2026-10-02, `docs/decision-log.md` D-057, documentation only):**
-> the confirmed `DET-03` design outcome is recorded; no scope is added to this
-> milestone. Two catalogue entries are **moved out of `DET-03`, not dropped and
-> not counted as completed**: geographic validation (to two separately named,
-> proposed capabilities, standards policy and semantic category harmonization,
-> which are *not* committed release scope and have no milestone placement) and
-> the status/date conflict check (to a named business-rule follow-up). The
-> context-free part of `DET-03` can close independently; the context-bound
-> detectors depend on a confirmed-context foundation that is a named prerequisite
-> item, so `DET-03` stays open while they remain. **Most context-bound detectors
-> stay inactive until a confirmation path ships, and their tests until then are
-> contract-level, not end-to-end.** The exit condition for the shipped
-> name-based detectors (`line_total_mismatch`, `invalid_percentages`; review of
-> `invalid_email_shape`) is open; until they migrate, the standing principle that
-> column names never define business meaning is partly unmet by shipped code.
->
-> **Update (2026-10-04, `docs/decision-log.md` D-058):** `DET-03` slice 4 adds
-> `structural.duplicate_normalized_column_name`, bringing the built catalogue to
-> 20 detectors. `DET-03` is still in progress and the rest of
-> `docs/detector-framework.md` §16 is planned; no scope is added to this
-> milestone.
->
-> **Annotation (2026-10-04, `docs/decision-log.md` D-059, documentation only):
-> PLAN CHANGE within `DET-03`; no scope is added to or removed from this
-> milestone.** The confirmed design for the confirmed-context foundation is
-> recorded. `DET-03` gains two ordered, planned work packages, neither built nor
-> yet authorized: first the *confirmed-relationship foundation* (a stored,
-> versioned, per-analysis record of user-confirmed start/end date relationships
-> with read and write routes; it does not make any check run), then
-> *context-bound execution* (the first context-bound detector, start date after
-> end date, with its `NOT_CHECKED` observation and a durable, bounded, idempotent
-> second pass). The second package is not authorized until two open decisions are
-> made: what counts as a conflicting confirmation, and how a withdrawn
-> relationship is treated. The confirmation screen and
-> any further relationship kinds are later work with no milestone placement.
-> `DET-03` is still in progress and is not claimed complete.
->
-> **Annotation (2026-10-05, `docs/decision-log.md` D-061, documentation only):
-> PLAN CHANGE; an owner-approved narrowing of what one `v1.0` bullet means.** The
-> `v1.0` bullet "complete detector catalogue" is **reinterpreted as the Core
-> detector catalogue closure**. `DET-03` is retitled the Core detector catalogue and
-> closes at 27 registered detectors covering 28 of the 41 catalogue entries (26
-> registered detectors only if empty dataset is conclusively parser-owned and
-> terminal before detector execution). The other 13 entries are carried by named
-> successor items listed in the "Successor items carried out of `DET-03`" group of
-> `docs/implementation-backlog.md`, **none of which is placed in this milestone or
-> in any other: their milestone placement is an open owner decision**, and until it
-> is made they are not `v1.0` scope and not claimed delivered. The confirmed-context
-> execution work formerly called package 2 leaves `DET-03`; the confirmed-relationship
-> record already built stays built. `DET-03` closes through four more packages
-> after this documentation record, in the order the backlog records, and is not
-> claimed complete here. The unresolved decisions about a conflicting confirmation
-> and a withdrawn relationship stay open and are not decided by this change.
->
-> **Update (2026-10-05, `docs/decision-log.md` D-062):** closure package 1 adds
-> `structural.empty_dataset`, `structural.unnamed_column` and
-> `structural.excessive_parse_failures`, bringing the built catalogue to 23
-> detectors. The investigation found the empty case is detector-owned, so the
-> closure target is 27 detectors covering 28 of 41 entries and the 26-detector
-> alternative no longer applies. `DET-03` is still in progress; the catalogue is not
-> complete; no scope is added to this milestone.
->
-> **Update (2026-10-05, `docs/decision-log.md` D-063):** closure package 2 adds the
-> minimal Observation foundation (a neutral, non-scoring record, one kind, stored with
-> the analysis, read through a read-only route and listed read-only on the Overview
-> screen) and three observation-only producers, `structural.mixed_types`,
-> `consistency.inconsistent_date_formats` and `completeness.concentrated_missingness`,
-> bringing the built catalogue to 26 detectors. `DET-03` is still in progress; the
-> security detector slice and the closure package remain; no scope is added to this
-> milestone.
->
-> **Update (2026-10-06, `docs/decision-log.md` D-064):** closure package 3 covers
-> catalogue entries 40 and 41 as evidence subtypes of the existing
-> `security.possible_llm_prompt_injection` (version 2) instead of a second detector,
-> by owner decision. The closure target is therefore **26 registered detectors
-> covering 28 of 41 entries** (amended from 27), the registry stays at 26, and only
-> the closure package remains. `DET-03` is still in progress; no scope is added to
-> this milestone.
->
-> **Update (2026-10-06, `docs/decision-log.md` D-065):** closure package 4 adds an
-> executable catalogue-status check and closes `DET-03` as the Core detector catalogue:
-> 26 detectors covering 28 of 41 catalogue entries; 13 carried by named successors.
-> The `v1.0` bullet "complete detector catalogue" is therefore met only in the narrowed
-> sense D-061 recorded. The 13 carried entries are not built, and their successor
-> items (DET-04, CCX-01, CCX-02, DET-05, DET-06, STD-01, HARM-01, RULE-03) are planned
-> with no milestone placement, which remains an open owner decision. No scope is added
-> to or removed from this milestone.
->
-> **Annotation (2026-10-06, `docs/decision-log.md` D-066, documentation only):
-> PLAN CHANGE, owner-confirmed.** A UI/UX redesign (`UX-01`, planned slices S1 to
-> S8a, **none built or authorized by this entry**) becomes the next `v1.0` work,
-> ahead of `DET-04`. This does not place `DET-04`, `CCX-01`, `CCX-02`, `DET-05`,
-> `DET-06`, `OBS-02`, `ING-04`, `STD-01`, `HARM-01` or `RULE-03` in any milestone;
-> their placement remains an open owner decision. Nothing is removed from `v1.0`.
-> The sequencing of accessibility, browser-matrix and performance work relative to
-> the redesign is not decided. The Local AI managed-provisioning architecture
-> (`S8b`), a Rules and Expectations design track and file-reading options are
-> recorded as open, unapproved design tracks with no milestone placement.
+Current status: **in progress.** `v1.0` is the current milestone.
+
+- **XLSX support — complete.** `ING-03` is complete: Excel upload works from the API and the
+  Start screen, and the documented limit settings are read on every parse (D-052, D-053).
+- **"Complete detector catalogue" — met only in a narrowed sense.** By owner decision (D-061)
+  this bullet is the **Core detector catalogue closure**, and `DET-03` is the Core detector
+  catalogue. `DET-03` is closed as **26 detectors covering 28 of 41 catalogue entries; 13
+  carried by named successors** (D-065); the 41-entry mapping is in
+  `docs/detector-framework.md` §16. The 13 carried entries are not built, not claimed delivered and not `v1.0` scope; their successor items (`DET-04`,
+  `CCX-01`, `CCX-02`, `DET-05`, `DET-06`, `STD-01`, `HARM-01`, `RULE-03`, with `OBS-02` and
+  `ING-04` also carried out of `DET-03`) are planned with **no milestone placement**, which
+  remains an open owner decision. Still open and undecided: the two `CCX-01` decisions (what
+  counts as a conflicting confirmation, and how a withdrawn relationship is gated) and whether
+  `structural.empty_column` should skip a zero-row dataset (D-062 item 9).
+- **How `DET-03` was built** (details in the decision log and the backlog):
+  - The detector slices added `completeness.fully_empty_rows`,
+    `consistency.inconsistent_booleans`, `validity.implausibly_old_dates`,
+    `validity.invalid_email_shape`, `consistency.numeric_values_stored_as_text`,
+    `consistency.near_duplicate_categories` and
+    `structural.duplicate_normalized_column_name` (D-054, D-055, D-056, D-058).
+  - The confirmed design outcome moved two entries out of `DET-03` without dropping or counting
+    them as completed: geographic validation (to the proposed standards policy and semantic
+    category harmonization capabilities) and the status/date conflict check (to a named
+    business-rule follow-up) (D-057).
+  - The confirmed-relationship foundation (D-059, D-060) is delivered history under `DET-03`
+    and is recorded as package 1 of `CCX-01`; the confirmed-context execution work left
+    `DET-03` (D-061).
+  - The four closure packages added `structural.empty_dataset`, `structural.unnamed_column` and
+    `structural.excessive_parse_failures` (D-062), the minimal Observation foundation with
+    `structural.mixed_types`, `consistency.inconsistent_date_formats` and
+    `completeness.concentrated_missingness` (D-063), the exfiltration-instruction and
+    secret-request evidence subtypes of the existing
+    `security.possible_llm_prompt_injection` detector, which added no detector (D-064), and the
+    executable catalogue-status check with the closure report (D-065).
+  - Most context-bound detectors stay inactive until a confirmation path ships. The standing
+    principle that column names never define business meaning is partly unmet by the shipped
+    name-based detectors (`line_total_mismatch`, `invalid_percentages`, and the review of
+    `invalid_email_shape`) until they migrate; their exit condition is open and is carried by
+    `DET-05`.
+- **UI/UX redesign — planned, none of it built.** An owner-confirmed PLAN CHANGE makes the
+  UI/UX redesign (`UX-01`, planned slices S1 to S8a) the next `v1.0` work, ahead of `DET-04`
+  (D-066). That record authorizes none of the slices. It does not place `DET-04`, `CCX-01`,
+  `CCX-02`, `DET-05`, `DET-06`, `OBS-02`, `ING-04`, `STD-01`, `HARM-01` or `RULE-03` in any
+  milestone, and nothing is removed from `v1.0`. The sequencing of accessibility,
+  browser-matrix and performance work relative to the redesign is not decided. The Local AI
+  managed-provisioning architecture (S8b, `LAI-01`), a Rules and Expectations design track
+  (`RULE-04`) and file-reading options (`ING-05`) are open, unapproved design tracks with no
+  milestone placement. D-067 records the visible supersession of the machine-specific hardware
+  wording in D-029 and the `AI-06` screening record.
+- **Not yet done.** The rest of the list above is planned or has a `v0.1`-scoped baseline only.
 
 Production definition:
 
