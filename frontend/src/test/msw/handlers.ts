@@ -5,6 +5,7 @@ import type {
   AnalysisHistoryResponse,
   AnalysisResource,
   AnalysisStatusResponse,
+  AnalysisSummaryResponse,
   AnswerGuidedQuestionResponse,
   ClarificationQuestionListResponse,
   ContextResponse,
@@ -490,6 +491,30 @@ export function makeAiStatusResponse(
   }
 }
 
+/** The dashboard summary (`UX-04`, D-070). Defaults describe a full-scope
+ * analysis of 300 rows and 6 columns where 40 distinct rows are affected. */
+export function makeSummaryResponse(
+  overrides: Partial<AnalysisSummaryResponse> = {},
+): AnalysisSummaryResponse {
+  return {
+    analysis_id: DEMO_ANALYSIS_ID,
+    row_count: 300,
+    column_count: 6,
+    rows_affected: 40,
+    findings_total: 2,
+    findings_without_row_detail: 0,
+    completeness: {
+      scope: 'full',
+      population_size: 300,
+      sample_size: 300,
+      cells_total: 1800,
+      cells_missing: 18,
+      missing_share: 0.01,
+    },
+    ...overrides,
+  }
+}
+
 /** Default handlers: a demo run that is already `completed` by the time
  * every endpoint is queried — matching `API-01`'s real synchronous-
  * completion behavior (`WP-023`/`WP-024`). Individual tests override
@@ -525,6 +550,9 @@ export const handlers = [
   }),
   http.get(`${BASE}/analyses/:analysisId/status`, () => {
     return HttpResponse.json(makeStatusResponse())
+  }),
+  http.get(`${BASE}/analyses/:analysisId/summary`, () => {
+    return HttpResponse.json(makeSummaryResponse())
   }),
   http.get(`${BASE}/analyses/:analysisId/findings`, () => {
     return HttpResponse.json(makeFindingsListResponse())

@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   makeAnalysisResource,
   makeFindingsListResponse,
+  makeSummaryResponse,
 } from '../../test/msw/handlers'
 import { server } from '../../test/msw/server'
 import { OverviewRoute } from './OverviewRoute'
@@ -98,16 +99,18 @@ describe('OverviewRoute', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('AC-05: renders sections in the documented order', async () => {
+  it('UX-04: renders the dashboard sections in order', async () => {
     renderOverview()
 
-    const headings = await screen.findAllByRole('heading', { level: 2 })
+    await screen.findByText('Dataset summary')
+    const headings = screen.getAllByRole('heading', { level: 2 })
     expect(headings.map((heading) => heading.textContent)).toEqual([
       'Trust assessment',
+      'At a glance',
+      'What was found',
+      'Columns with the most findings',
       'Top findings',
-      'Immediate actions',
-      'All findings',
-      'Data observations',
+      'Worth knowing',
       'Dataset summary',
       'Technical details',
     ])
@@ -184,15 +187,182 @@ describe('OverviewRoute', () => {
     )
   })
 
-  it('renders honest "coming soon" placeholders for immediate actions and technical details', async () => {
+  it('UX-04: no longer shows "coming soon" for capabilities that exist', async () => {
+    renderOverview()
+
+    await screen.findByText('Dataset summary')
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument()
+    expect(screen.getByText('Open technical details')).toHaveAttribute(
+      'href',
+      `/analyses/${ANALYSIS_ID}/technical`,
+    )
+  })
+
+  it('UX-04: shows rows affected as distinct rows with the unlocated-findings caveat', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/summary', () =>
+        HttpResponse.json(
+          makeSummaryResponse({
+            row_count: 300,
+            rows_affected: 40,
+            findings_without_row_detail: 2,
+          }),
+        ),
+      ),
+    )
+    renderOverview()
+
+    const glance = (await screen.findByText('At a glance')).closest(
+      'section',
+    ) as HTMLElement
+    const rows = (await within(glance).findByText('Rows affected')).closest(
+      'div',
+    ) as HTMLElement
+    expect(rows.textContent).toContain('40')
+    expect(rows.textContent).toContain('of 300')
+    expect(rows.textContent).toContain('each counted once')
+    expect(rows.textContent).toContain(
+      '2 findings concern a whole column or the whole file and name no row',
+    )
+    expect(rows.textContent).toContain('not necessarily clean')
+  })
+
+  it('UX-04: states a sampled completeness figure as a sample, not the whole file', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/summary', () =>
+        HttpResponse.json(
+          makeSummaryResponse({
+            completeness: {
+              scope: 'sampled',
+              population_size: 1000000,
+              sample_size: 50000,
+              cells_total: 300000,
+              cells_missing: 0,
+              missing_share: 0,
+            },
+          }),
+        ),
+      ),
+    )
+    renderOverview()
+
+    const figure = (await screen.findByText('Cells filled in')).closest(
+      'div',
+    ) as HTMLElement
+    expect(figure.textContent).toContain(
+      'Measured on a sample of 50,000 of 1,000,000 rows, not the whole file.',
+    )
+    expect(figure.textContent).not.toContain('Measured on all')
+  })
+
+  it('UX-04: a full-scope completeness figure says it covers every row', async () => {
+    renderOverview()
+
+    const figure = (await screen.findByText('Cells filled in')).closest(
+      'div',
+    ) as HTMLElement
+    expect(figure.textContent).toContain('99%')
+    expect(figure.textContent).toContain('18 of 1,800 cells are empty')
+    expect(figure.textContent).toContain('Measured on all 300 rows.')
+  })
+
+  it('UX-04: shows severity and category distributions in business wording', async () => {
+    renderOverview()
+
+    const section = (await screen.findByText('What was found')).closest(
+      'section',
+    ) as HTMLElement
+    const severity = within(section).getByRole('list', { name: 'By severity' })
+    expect(within(severity).getByText('High')).toBeVisible()
+    expect(within(severity).getByText('Low')).toBeVisible()
+    const kind = within(section).getByRole('list', {
+      name: 'By kind of problem',
+    })
+    expect(within(kind).getByText('Valid values')).toBeVisible()
+    expect(within(kind).getByText('Consistency')).toBeVisible()
+    // Raw internal category values never appear.
+    expect(section.textContent).not.toContain('cross_field')
+    expect(section.textContent).not.toContain('validity')
+  })
+
+  it('UX-04: lists the columns with the most findings', async () => {
+    renderOverview()
+
+    const section = (
+      await screen.findByText('Columns with the most findings')
+    ).closest('section') as HTMLElement
+    expect(within(section).getByText('order_date')).toBeVisible()
+    expect(within(section).getByText('category')).toBeVisible()
+  })
+
+  it('UX-04: shows review progress from the findings', async () => {
+    const reviewed = {
+      ...findingFixture('a', 10),
+      review_state: 'confirmed',
+    }
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/findings', () =>
+        HttpResponse.json(
+          makeFindingsListResponse({
+            items: [reviewed, findingFixture('b', 20), findingFixture('c', 30)],
+          }),
+        ),
+      ),
+    )
+    renderOverview()
+
+    const figure = (await screen.findByText('Review progress')).closest(
+      'div',
+    ) as HTMLElement
+    expect(figure.textContent).toContain('1')
+    expect(figure.textContent).toContain('of 3 findings reviewed')
+    expect(figure.textContent).toContain('Unreviewed: 2')
+    expect(figure.textContent).toContain('Confirmed: 1')
+  })
+
+  it('UX-04: shows the empty states when nothing was found', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/findings', () =>
+        HttpResponse.json(makeFindingsListResponse({ items: [] })),
+      ),
+    )
     renderOverview()
 
     expect(
-      await screen.findByText('Recommended actions are coming soon.'),
-    ).toBeInTheDocument()
+      await screen.findByText('No finding points at a specific column.'),
+    ).toBeVisible()
+    expect(screen.getAllByText('No findings were identified.')).toHaveLength(2)
+    expect(screen.getByText('There is nothing to review.')).toBeVisible()
+  })
+
+  it('UX-04: a failed summary request does not block the rest of the page', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/summary', () =>
+        HttpResponse.json(
+          { error: { code: 'X', message: 'x' } },
+          { status: 500 },
+        ),
+      ),
+    )
+    renderOverview()
+
     expect(
-      screen.getByText('Technical details are coming soon.'),
-    ).toBeInTheDocument()
+      await screen.findByText(
+        'Row and completeness figures could not be loaded.',
+      ),
+    ).toBeVisible()
+    expect(screen.getByText('Top findings')).toBeVisible()
+    expect(screen.getByText('Review progress')).toBeVisible()
+  })
+
+  it('UX-04: says AI explanations are separate and optional, and never claims AI ran', async () => {
+    renderOverview()
+
+    const glance = (await screen.findByText('At a glance')).closest(
+      'section',
+    ) as HTMLElement
+    expect(glance.textContent).toContain('AI explanations are optional')
+    expect(glance.textContent).toContain('built-in checks')
   })
 
   it('UI-02 slice 2 (WP-064): renders a link to the Context screen', async () => {

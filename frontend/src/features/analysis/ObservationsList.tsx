@@ -21,7 +21,7 @@ export function ObservationsList({
         id="observations-heading"
         className="text-xl font-semibold text-slate-900 dark:text-slate-100"
       >
-        Data observations
+        Worth knowing
       </h2>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
         Patterns seen in the data. They do not affect the trust assessment and

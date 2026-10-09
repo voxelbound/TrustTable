@@ -232,14 +232,24 @@ Every field shows provenance:
 
 ### 4.5 Overview
 
-Order:
+**Implemented by `UX-04` (`docs/decision-log.md` D-070).** The Overview is a
+business-oriented dashboard. Order:
 
-1. trust assessment
-2. top three findings
-3. immediate actions
-4. remaining finding summary
-5. dataset summary
-6. technical links
+1. trust assessment (unchanged)
+2. *At a glance*: rows affected (distinct rows that at least one finding points at, with
+   the number of findings that name no row), cells filled in (with whether it was measured
+   on every row or on a sample), and review progress
+3. *What was found*: findings by severity and by kind of problem, with a link to all
+   findings
+4. columns with the most findings
+5. top three findings
+6. *Worth knowing*: observations, which never affect the trust assessment
+7. dataset summary (file facts, rows and columns)
+8. technical details (links to the Technical and Context screens)
+
+Every count is printed as text; a bar is a visual aid only. Detector categories appear as
+business names. Nothing on this screen waits for, or implies, an AI result. If the
+summary request fails, only the two figures it supplies are replaced by a message.
 
 ### 4.6 Findings
 
@@ -631,6 +641,12 @@ deterministic result is ready. Optional AI work is shown separately, per finding
 never blocks or delays the deterministic result. No time estimate is shown unless
 measured.
 
+**Implemented by `UX-04` (D-070).** The stages are *Waiting to start*, *Checking the
+file*, *Reading the rows*, *Measuring each column* and *Looking for data-quality
+problems*, with no detector or pipeline names. The view says that results are ready when
+the steps finish and that AI explanations are optional, prepared separately for each
+finding asked about, and never delay the results. No time estimate or percentage is shown.
+
 ### 12.4 Findings review and the data inspector (confirmed boundaries)
 
 The inspector is **finding-scoped**: it is reached from a finding, or from an
@@ -690,6 +706,7 @@ explicit consent.
 
 ### 12.9 Proposal-level designs (not yet confirmed)
 
-Dashboard metrics and visualizations, progress stage wording, the provenance and help
-model, the empty, loading and error pattern, the contents of Normal and Advanced,
-and curated profile names are proposals, to be confirmed in the slice specifications.
+The provenance and help model, the empty, loading and error pattern, the contents of
+Normal and Advanced, and curated profile names are proposals, to be confirmed in the
+slice specifications. The dashboard metrics and visualizations and the progress stage
+wording were confirmed by `UX-04` (D-070) and are specified in section 4.5 and 12.3.

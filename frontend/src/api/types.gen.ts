@@ -296,6 +296,45 @@ export type AnalysisStatusResponse = {
 };
 
 /**
+ * AnalysisSummaryResponse
+ *
+ * Body for `GET /analyses/{analysis_id}/summary` (`UX-04`, D-070).
+ *
+ * Counts only: no cell value, no row-number list and no content hash.
+ * `rows_affected` is the number of *distinct* rows that at least one finding
+ * points at; `findings_without_row_detail` is how many findings name no row
+ * (for example a whole-column finding), so rows affected is never read as
+ * "every other row is clean".
+ */
+export type AnalysisSummaryResponse = {
+    /**
+     * Analysis Id
+     */
+    analysis_id: string;
+    /**
+     * Column Count
+     */
+    column_count: number;
+    completeness: CompletenessResponse;
+    /**
+     * Findings Total
+     */
+    findings_total: number;
+    /**
+     * Findings Without Row Detail
+     */
+    findings_without_row_detail: number;
+    /**
+     * Row Count
+     */
+    row_count: number;
+    /**
+     * Rows Affected
+     */
+    rows_affected: number;
+};
+
+/**
  * AnswerGuidedQuestionRequest
  *
  * Request body for `POST .../questions/{question_id}/answer`
@@ -531,6 +570,42 @@ export type ColumnReferenceResponse = {
      * Original Name
      */
     original_name: string;
+};
+
+/**
+ * CompletenessResponse
+ *
+ * Missing values across the profiled cells (`UX-04`, D-070).
+ *
+ * `scope` is `"full"` or `"sampled"` as the profile recorded it, so the
+ * interface never states a sampled figure as if it covered every row.
+ * `missing_share` is `null` when there are no cells to measure.
+ */
+export type CompletenessResponse = {
+    /**
+     * Cells Missing
+     */
+    cells_missing: number;
+    /**
+     * Cells Total
+     */
+    cells_total: number;
+    /**
+     * Missing Share
+     */
+    missing_share: number | null;
+    /**
+     * Population Size
+     */
+    population_size: number;
+    /**
+     * Sample Size
+     */
+    sample_size: number;
+    /**
+     * Scope
+     */
+    scope: string;
 };
 
 /**
@@ -3522,6 +3597,36 @@ export type GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses = {
 };
 
 export type GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponse = GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses[keyof GetAnalysisStatusApiV1AnalysesAnalysisIdStatusGetResponses];
+
+export type GetAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/summary';
+};
+
+export type GetAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGetError = GetAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGetErrors[keyof GetAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGetErrors];
+
+export type GetAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: AnalysisSummaryResponse;
+};
+
+export type GetAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGetResponse = GetAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGetResponses[keyof GetAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGetResponses];
 
 export type PostDemoSalesApiV1DemoSalesPostData = {
     body?: never;

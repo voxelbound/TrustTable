@@ -53,7 +53,7 @@ describe('ObservationsList', () => {
 
     const section = (
       await screen.findByRole('heading', {
-        name: 'Data observations',
+        name: 'Worth knowing',
       })
     ).closest('section') as HTMLElement
     const items = await within(section).findAllByRole('listitem')
@@ -76,7 +76,7 @@ describe('ObservationsList', () => {
 
     const section = (
       await screen.findByRole('heading', {
-        name: 'Data observations',
+        name: 'Worth knowing',
       })
     ).closest('section') as HTMLElement
     await within(section).findAllByRole('listitem')

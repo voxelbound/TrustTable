@@ -681,6 +681,16 @@ upload extension, not the larger context/rules/reports surface those
 later, separate backlog items own. Persistence (`DB-01`) and true
 background execution (`JOB-01`) remain later, separate packages.
 
+`GET /analyses/{id}/summary` (`UX-04`, D-070) returns the dashboard figures a
+browser cannot derive from the list responses: distinct affected rows, row and
+column counts, and completeness with its sampled-or-full scope. The computation
+is the framework-independent `analysis/summary.py` (no FastAPI or SQLAlchemy
+import) over the stored profile and findings; the route reads them, starts no
+work and calls no model, and answers `409 INVALID_ANALYSIS_STATE` until the
+analysis completes. The frontend derives severity and category distribution,
+columns with the most findings and review progress from the findings list in
+`frontend/src/domain/dashboard.ts` (pure, no React or API-client import).
+
 `POST /analyses` (`WP-029`, `API-01`/`UI-01` extending) accepts a
 multipart `file` field, `.csv` or (`ING-03`) `.xlsx` (`.xlsm` and every
 other extension return `415 UNSUPPORTED_FILE_TYPE`), plus an optional

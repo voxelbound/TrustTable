@@ -190,6 +190,41 @@ class AnalysisStatusResponse(BaseModel):
     poll_interval_ms: int
 
 
+class CompletenessResponse(BaseModel):
+    """Missing values across the profiled cells (`UX-04`, D-070).
+
+    `scope` is `"full"` or `"sampled"` as the profile recorded it, so the
+    interface never states a sampled figure as if it covered every row.
+    `missing_share` is `null` when there are no cells to measure.
+    """
+
+    scope: str
+    population_size: int
+    sample_size: int
+    cells_total: int
+    cells_missing: int
+    missing_share: float | None
+
+
+class AnalysisSummaryResponse(BaseModel):
+    """Body for `GET /analyses/{analysis_id}/summary` (`UX-04`, D-070).
+
+    Counts only: no cell value, no row-number list and no content hash.
+    `rows_affected` is the number of *distinct* rows that at least one finding
+    points at; `findings_without_row_detail` is how many findings name no row
+    (for example a whole-column finding), so rows affected is never read as
+    "every other row is clean".
+    """
+
+    analysis_id: str
+    row_count: int
+    column_count: int
+    rows_affected: int
+    findings_total: int
+    findings_without_row_detail: int
+    completeness: CompletenessResponse
+
+
 class SampleMetadataResponse(BaseModel):
     """Mirrors `domain.parsing.SampleMetadata`."""
 
