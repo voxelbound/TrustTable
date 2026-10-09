@@ -1,6 +1,8 @@
 import { http, HttpResponse } from 'msw'
 import type {
   AiStatusResponse,
+  AnalysisHistoryItem,
+  AnalysisHistoryResponse,
   AnalysisResource,
   AnalysisStatusResponse,
   AnswerGuidedQuestionResponse,
@@ -446,6 +448,31 @@ export function makeStagedUploadResponse(
   }
 }
 
+export function makeHistoryItem(
+  overrides: Partial<AnalysisHistoryItem> = {},
+): AnalysisHistoryItem {
+  return {
+    analysis_id: 'history-analysis-1',
+    state: 'completed',
+    original_filename: 'sales.csv',
+    format: 'csv',
+    byte_size: 2048,
+    selected_worksheet: null,
+    source: 'upload',
+    created_at: '2026-10-08T10:00:00Z',
+    completed_at: '2026-10-08T10:00:05Z',
+    trust_label: 'Needs review',
+    finding_count: 3,
+    ...overrides,
+  }
+}
+
+export function makeHistoryResponse(
+  items: AnalysisHistoryItem[] = [],
+): AnalysisHistoryResponse {
+  return { items, limit: 20 }
+}
+
 export function makeAiStatusResponse(
   overrides: Partial<AiStatusResponse> = {},
 ): AiStatusResponse {
@@ -489,6 +516,9 @@ export const handlers = [
   }),
   http.post(`${BASE}/analyses`, () => {
     return HttpResponse.json(makeUploadAnalysisResponse(), { status: 202 })
+  }),
+  http.get(`${BASE}/analyses`, () => {
+    return HttpResponse.json(makeHistoryResponse())
   }),
   http.get(`${BASE}/analyses/:analysisId`, () => {
     return HttpResponse.json(makeAnalysisResource())

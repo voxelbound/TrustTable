@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/Button'
 import { getApiErrorCode, isApiErrorEnvelope } from '../../lib/apiError'
 import { useCreateDemoAnalysis } from '../analysis/api'
 import { useDiscardStagedUpload, useStageUpload } from './api'
+import { RecentAnalyses } from './RecentAnalyses'
 import {
   forgetStagedReference,
   readStagedReference,
@@ -275,6 +276,8 @@ export function WorkspaceRoute() {
             </div>
           )}
         </section>
+
+        <RecentAnalyses />
 
         <AiStatusPanel />
 

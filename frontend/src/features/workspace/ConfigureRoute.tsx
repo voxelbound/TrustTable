@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router'
+import { Link, Navigate, useNavigate } from 'react-router'
+import type { PreviousAnalysisNoticeResponse } from '../../api'
 import { AppShell } from '../../components/layout/AppShell'
 import { AiStatusPanel } from '../../components/provenance/AiStatusPanel'
 import { Alert } from '../../components/ui/Alert'
@@ -37,6 +38,46 @@ function formatKeptUntil(expiresAt: string | null | undefined): string | null {
 }
 
 const STEPS = ['Choose data', 'Configure', 'Run'] as const
+
+/** "Analysed before" (`UX-03`, D-069). Informational only: it never blocks Run
+ * and never claims how two files differ. An exact match means identical bytes;
+ * a name match means only that a file with this name was analysed. */
+function PreviouslyAnalysedNotice({
+  notice,
+}: {
+  notice: PreviousAnalysisNoticeResponse
+}) {
+  const when = new Date(notice.latest_analysed_at)
+  const analysedOn = Number.isNaN(when.getTime())
+    ? null
+    : when.toLocaleDateString()
+  const sameFile = notice.kind === 'same_file'
+  return (
+    <Alert
+      variant="info"
+      title={
+        sameFile
+          ? 'You have analyzed this exact file before'
+          : 'A file with this name was analyzed before'
+      }
+    >
+      <p>
+        {sameFile
+          ? `An analysis of this exact file${analysedOn === null ? '' : ` from ${analysedOn}`} is still stored${notice.count > 1 ? ` (${notice.count} analyses)` : ''}.`
+          : `${notice.count > 1 ? `${notice.count} earlier analyses` : 'An earlier analysis'} of a file named ${notice.latest_filename} ${notice.count > 1 ? 'are' : 'is'} still stored. This file is not identical to ${notice.count > 1 ? 'them' : 'it'}; TrustTable does not compare their contents.`}
+      </p>
+      <p className="mt-2">
+        <Link
+          to={`/analyses/${notice.latest_analysis_id}/overview`}
+          className="font-medium underline"
+        >
+          Open the earlier analysis
+        </Link>
+        , or run this file now to analyze it again.
+      </p>
+    </Alert>
+  )
+}
 
 /** The Configure step (`/configure`; `UX-02`, `docs/decision-log.md` D-068,
  * `docs/ui-specification.md` §4.2 and §12.2).
@@ -218,6 +259,11 @@ export function ConfigureRoute() {
                 </p>
               )}
             </section>
+
+            {data.previously_analysed !== null &&
+              data.previously_analysed !== undefined && (
+                <PreviouslyAnalysedNotice notice={data.previously_analysed} />
+              )}
 
             {data.worksheets !== null && data.worksheets !== undefined && (
               <fieldset className="rounded border border-slate-200 p-4 dark:border-slate-700">

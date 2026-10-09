@@ -494,6 +494,58 @@ class AnalysisNotRetryableError(Exception):
         self.state = state
 
 
+class AnalysisNotRerunnableError(Exception):
+    """Raised by `rerun_analysis` (`UX-03`, D-069) for a known analysis that
+    is still queued or running. Only an analysis that has reached a terminal
+    state (completed, failed or cancelled) may be rerun, so a rerun never
+    races the pipeline still working on the stored content's original."""
+
+    def __init__(self, analysis_id: str, state: AnalysisState) -> None:
+        super().__init__(f"Analysis not rerunnable in state {state.value}: {analysis_id}")
+        self.analysis_id = analysis_id
+        self.state = state
+
+
+@dataclass(frozen=True)
+class AnalysisSummary:
+    """A bounded, content-free view of one stored analysis (`UX-03`, D-069),
+    for the recent-analyses list and the seen-before lookup.
+
+    Carries no raw content, no content hash, no finding and no cell value:
+    only what a person needs to recognise an earlier analysis.
+    """
+
+    analysis_id: str
+    state: AnalysisState
+    original_filename: str
+    dataset_format: DatasetFormat
+    byte_size: int
+    selected_worksheet: str | None
+    source_type: DatasetSourceType
+    created_at: datetime
+    completed_at: datetime | None
+    trust_label: str | None
+    finding_count: int | None
+
+
+def summarize_analysis(analysis: Analysis) -> AnalysisSummary:
+    """Project a full `Analysis` onto its `AnalysisSummary`."""
+    assessment = analysis.trust_assessment
+    return AnalysisSummary(
+        analysis_id=analysis.analysis_id,
+        state=analysis.state,
+        original_filename=analysis.dataset.original_filename,
+        dataset_format=analysis.dataset.format,
+        byte_size=analysis.dataset.byte_size,
+        selected_worksheet=analysis.dataset.selected_worksheet,
+        source_type=analysis.dataset.source_type,
+        created_at=analysis.created_at,
+        completed_at=analysis.completed_at,
+        trust_label=assessment.label.value if assessment is not None else None,
+        finding_count=assessment.finding_count if assessment is not None else None,
+    )
+
+
 class UnknownRuleColumnError(Exception):
     """Raised by `create_rule` (`RULE-01` slice 1) when a requested column
     name does not match any of the analysis's own dataset columns."""
@@ -566,6 +618,26 @@ class AnalysisStoreProtocol(Protocol):
         it did not exist. `replace` never re-creates a deleted analysis."""
         ...
 
+    def list_recent(self, limit: int) -> tuple[AnalysisSummary, ...]:
+        """At most `limit` stored analyses, newest first, as content-free
+        summaries (`UX-03`, D-069)."""
+        ...
+
+    def find_completed_by_content_hash(
+        self, content_sha256: str, limit: int
+    ) -> tuple[AnalysisSummary, ...]:
+        """At most `limit` stored `COMPLETED` analyses whose uploaded bytes
+        have this SHA-256, newest first. A lookup over live analyses only:
+        deleting an analysis removes it from the result, and nothing outside
+        the analysis row remembers the digest (`UX-03`, D-069)."""
+        ...
+
+
+def _newest_first(analysis: Analysis) -> tuple[float, str]:
+    """Sort key for newest first, ties broken by `analysis_id` like the durable
+    store's `ORDER BY created_at DESC, analysis_id`."""
+    return (-analysis.created_at.timestamp(), analysis.analysis_id)
+
 
 class AnalysisStore:
     """A minimal in-memory dict-backed store. Whole-analysis writes have no
@@ -603,6 +675,26 @@ class AnalysisStore:
     def delete(self, analysis_id: str) -> bool:
         with self._enrichment_lock:
             return self._analyses.pop(analysis_id, None) is not None
+
+    def list_recent(self, limit: int) -> tuple[AnalysisSummary, ...]:
+        ordered = sorted(self._analyses.values(), key=_newest_first)
+        return tuple(summarize_analysis(a) for a in ordered[: max(limit, 0)])
+
+    def find_completed_by_content_hash(
+        self, content_sha256: str, limit: int
+    ) -> tuple[AnalysisSummary, ...]:
+        # Keyed on the SHA-256 of the stored bytes, exactly as the durable store
+        # is, never on the dataset's independently written `content_hash`.
+        matches = sorted(
+            (
+                a
+                for a in self._analyses.values()
+                if a.state is AnalysisState.COMPLETED
+                and hashlib.sha256(a.content).hexdigest() == content_sha256
+            ),
+            key=_newest_first,
+        )
+        return tuple(summarize_analysis(a) for a in matches[: max(limit, 0)])
 
     def update_ai_enrichment(
         self,
@@ -1199,7 +1291,44 @@ def retry_analysis(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
     original = get_status(store, analysis_id)
     if original.state is not AnalysisState.FAILED:
         raise AnalysisNotRetryableError(analysis_id, original.state)
+    retry = _queued_analysis_from(original, retry_source_analysis_id=original.analysis_id)
+    store.add(retry)
+    return retry
 
+
+def rerun_analysis(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
+    """Create a new, independent `QUEUED` analysis over a finished analysis's
+    own stored `content` (`UX-03`, D-069), exactly as `retry_analysis` does
+    for a failed one.
+
+    Any terminal analysis (completed, failed or cancelled) may be rerun; a
+    queued or running one may not. The new analysis starts empty: it carries
+    no findings, context, rules, reviews, reports or AI record of the
+    original, and records no link to it (`retry_source_analysis_id` is the
+    retry lineage and stays unset), so deleting either analysis never affects
+    the other. The original is read but never mutated. Like `retry_analysis`,
+    this does not run the pipeline or submit to a `JobPool`.
+
+    Raises `AnalysisNotFoundError` for an unknown `analysis_id` and
+    `AnalysisNotRerunnableError` for an analysis that is not yet terminal.
+    """
+    original = get_status(store, analysis_id)
+    if original.state not in _TERMINAL_STATES:
+        raise AnalysisNotRerunnableError(analysis_id, original.state)
+    rerun = _queued_analysis_from(original, retry_source_analysis_id=None)
+    store.add(rerun)
+    return rerun
+
+
+_TERMINAL_STATES = frozenset(
+    {AnalysisState.COMPLETED, AnalysisState.FAILED, AnalysisState.CANCELLED}
+)
+
+
+def _queued_analysis_from(original: Analysis, *, retry_source_analysis_id: str | None) -> Analysis:
+    """A fresh `QUEUED` analysis over `original`'s dataset content, with a new
+    `analysis_id` and `dataset_id`. Nothing derived from running the pipeline
+    is carried over."""
     now = datetime.now(UTC)
     dataset_id = str(uuid.uuid4())
     stored_filename = f"{dataset_id}.{original.dataset.format.value}"
@@ -1238,9 +1367,8 @@ def retry_analysis(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:
         completed_at=None,
         failed_at=None,
         cancelled_at=None,
-        retry_source_analysis_id=original.analysis_id,
+        retry_source_analysis_id=retry_source_analysis_id,
     )
-    store.add(retry)
     return retry
 
 

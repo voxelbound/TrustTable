@@ -94,6 +94,70 @@ export type AnalysisFailureResponse = {
 };
 
 /**
+ * AnalysisHistoryItem
+ */
+export type AnalysisHistoryItem = {
+    /**
+     * Analysis Id
+     */
+    analysis_id: string;
+    /**
+     * Byte Size
+     */
+    byte_size: number;
+    /**
+     * Completed At
+     */
+    completed_at: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Finding Count
+     */
+    finding_count: number | null;
+    /**
+     * Format
+     */
+    format: 'csv' | 'xlsx';
+    /**
+     * Original Filename
+     */
+    original_filename: string;
+    /**
+     * Selected Worksheet
+     */
+    selected_worksheet: string | null;
+    /**
+     * Source
+     */
+    source: 'upload' | 'demo';
+    /**
+     * State
+     */
+    state: 'queued' | 'validating' | 'parsing' | 'profiling' | 'detecting' | 'completed' | 'failed' | 'cancelled';
+    /**
+     * Trust Label
+     */
+    trust_label: string | null;
+};
+
+/**
+ * AnalysisHistoryResponse
+ */
+export type AnalysisHistoryResponse = {
+    /**
+     * Items
+     */
+    items: Array<AnalysisHistoryItem>;
+    /**
+     * Limit
+     */
+    limit: number;
+};
+
+/**
  * AnalysisProfileResponse
  *
  * Body for `GET /analyses/{analysis_id}/profile`, mirroring
@@ -1388,6 +1452,35 @@ export type ObservationsListResponse = {
 };
 
 /**
+ * PreviousAnalysisNoticeResponse
+ *
+ * `same_file`: the staged bytes match a completed analysis exactly.
+ * `same_name`: only the file name matches; no diff is implied.
+ */
+export type PreviousAnalysisNoticeResponse = {
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Kind
+     */
+    kind: 'same_file' | 'same_name';
+    /**
+     * Latest Analysed At
+     */
+    latest_analysed_at: string;
+    /**
+     * Latest Analysis Id
+     */
+    latest_analysis_id: string;
+    /**
+     * Latest Filename
+     */
+    latest_filename: string;
+};
+
+/**
  * ProfilingTimingResponse
  *
  * Mirrors `profiling.schemas.ProfilingTiming`.
@@ -2016,6 +2109,7 @@ export type StagedUploadResponse = {
      * Notices
      */
     notices: Array<StagedNotice>;
+    previously_analysed?: PreviousAnalysisNoticeResponse | null;
     /**
      * Problems
      */
@@ -2321,6 +2415,36 @@ export type GetAiStatusApiV1AiStatusGetResponses = {
 };
 
 export type GetAiStatusApiV1AiStatusGetResponse = GetAiStatusApiV1AiStatusGetResponses[keyof GetAiStatusApiV1AiStatusGetResponses];
+
+export type GetAnalysisHistoryApiV1AnalysesGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/v1/analyses';
+};
+
+export type GetAnalysisHistoryApiV1AnalysesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisHistoryApiV1AnalysesGetError = GetAnalysisHistoryApiV1AnalysesGetErrors[keyof GetAnalysisHistoryApiV1AnalysesGetErrors];
+
+export type GetAnalysisHistoryApiV1AnalysesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: AnalysisHistoryResponse;
+};
+
+export type GetAnalysisHistoryApiV1AnalysesGetResponse = GetAnalysisHistoryApiV1AnalysesGetResponses[keyof GetAnalysisHistoryApiV1AnalysesGetResponses];
 
 export type PostAnalysisUploadApiV1AnalysesPostData = {
     body: BodyPostAnalysisUploadApiV1AnalysesPost;
@@ -3146,6 +3270,36 @@ export type DownloadReportApiV1AnalysesAnalysisIdReportsReportIdDownloadGetRespo
      */
     200: unknown;
 };
+
+export type PostAnalysisRerunApiV1AnalysesAnalysisIdRerunPostData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/rerun';
+};
+
+export type PostAnalysisRerunApiV1AnalysesAnalysisIdRerunPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostAnalysisRerunApiV1AnalysesAnalysisIdRerunPostError = PostAnalysisRerunApiV1AnalysesAnalysisIdRerunPostErrors[keyof PostAnalysisRerunApiV1AnalysesAnalysisIdRerunPostErrors];
+
+export type PostAnalysisRerunApiV1AnalysesAnalysisIdRerunPostResponses = {
+    /**
+     * Successful Response
+     */
+    202: UploadAnalysisResponse;
+};
+
+export type PostAnalysisRerunApiV1AnalysesAnalysisIdRerunPostResponse = PostAnalysisRerunApiV1AnalysesAnalysisIdRerunPostResponses[keyof PostAnalysisRerunApiV1AnalysesAnalysisIdRerunPostResponses];
 
 export type PostAnalysisRetryApiV1AnalysesAnalysisIdRetryPostData = {
     body?: never;

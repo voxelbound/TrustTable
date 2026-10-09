@@ -11,6 +11,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from trusttable_backend.schemas.history import PreviousAnalysisNoticeResponse
+
 
 class StagedWorksheet(BaseModel):
     name: str
@@ -51,6 +53,9 @@ class StagedUploadResponse(BaseModel):
     notices: list[StagedNotice]
     checks: list[StagedCheckGroup]
     can_run: bool
+    #: Present only when a completed analysis that still exists matches this
+    #: file (`UX-03`, D-069). Never carries a digest.
+    previously_analysed: PreviousAnalysisNoticeResponse | None = None
 
 
 class StagedUploadReference(BaseModel):
