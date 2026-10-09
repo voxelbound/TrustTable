@@ -131,7 +131,9 @@ def test_the_staging_response_never_carries_a_hash_or_the_file_content(
         "notices",
         "checks",
         "can_run",
+        "previously_analysed",  # UX-03: null here, and never a digest
     }
+    assert body["previously_analysed"] is None
     assert "ada" not in serialized and "grace" not in serialized
 
 
