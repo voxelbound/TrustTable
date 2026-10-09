@@ -605,4 +605,85 @@ describe('ConfigureRoute', () => {
     expect(discarded).toEqual([{ staging_ref: STAGED_REF }])
     expect(readStagedReference()).toBeNull()
   })
+
+  describe('analysed before (UX-03)', () => {
+    const notice = (kind: 'same_file' | 'same_name', count = 1) => ({
+      kind,
+      count,
+      latest_analysis_id: 'earlier-1',
+      latest_analysed_at: '2026-10-01T09:30:00Z',
+      latest_filename: 'sales.csv',
+    })
+
+    it('shows nothing when the file has not been analysed before', async () => {
+      renderConfigure()
+      await screen.findByRole('heading', { name: 'Review your file' })
+      await screen.findByRole('region', { name: 'Your file' })
+      expect(screen.queryByText(/analyzed this exact file/)).toBeNull()
+      expect(screen.queryByText(/was analyzed before/)).toBeNull()
+    })
+
+    it('says this exact file was analysed before and links to that analysis', async () => {
+      server.use(
+        http.post(`${BASE}/staged-uploads/inspect`, () =>
+          HttpResponse.json(
+            makeStagedUploadResponse({
+              previously_analysed: notice('same_file'),
+            }),
+          ),
+        ),
+      )
+      renderConfigure()
+
+      expect(
+        await screen.findByText('You have analyzed this exact file before'),
+      ).toBeInTheDocument()
+      const link = screen.getByRole('link', {
+        name: 'Open the earlier analysis',
+      })
+      expect(link).toHaveAttribute('href', '/analyses/earlier-1/overview')
+      // It informs; it never blocks Run.
+      expect(screen.getByRole('button', { name: 'Run analysis' })).toBeEnabled()
+      expect(document.body.textContent).not.toMatch(/hash|sha-?256|digest/i)
+    })
+
+    it('gives only a name hint, with no claim about differences, for a same-name file', async () => {
+      server.use(
+        http.post(`${BASE}/staged-uploads/inspect`, () =>
+          HttpResponse.json(
+            makeStagedUploadResponse({
+              previously_analysed: notice('same_name', 2),
+            }),
+          ),
+        ),
+      )
+      renderConfigure()
+
+      expect(
+        await screen.findByText('A file with this name was analyzed before'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(/does not compare their contents/),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/exact file/)).toBeNull()
+    })
+
+    it('shows a stored file name as plain text, never as markup', async () => {
+      server.use(
+        http.post(`${BASE}/staged-uploads/inspect`, () =>
+          HttpResponse.json(
+            makeStagedUploadResponse({
+              previously_analysed: {
+                ...notice('same_name'),
+                latest_filename: '<b>x</b>.csv',
+              },
+            }),
+          ),
+        ),
+      )
+      renderConfigure()
+      expect(await screen.findByText(/<b>x<\/b>\.csv/)).toBeInTheDocument()
+      expect(document.querySelector('b')).toBeNull()
+    })
+  })
 })

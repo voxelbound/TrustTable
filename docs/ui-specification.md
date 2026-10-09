@@ -87,8 +87,28 @@ Local AI and privacy status from `GET /ai/status`, and shows a visible but disab
 *Compare datasets* area stating that comparison is planned and not implemented. The
 page header carries Home and a disabled Compare entry; Analyses, Settings and Help are not
 shown until their slices ship, because nothing unbuilt is presented as available
-(section 12.1). Recent analyses, reopen, rerun and the exact-file notice belong to
-`UX-03`.
+(section 12.1).
+
+**Implemented (`UX-03`, `docs/decision-log.md` D-069): recent analyses.** The Workspace
+lists the most recent analyses (20, newest first) from `GET /analyses`: file name (marked
+when it is the sales demo), a plain-language result (*Finished* with the number of findings,
+*Did not finish*, *Cancelled*, *In progress* or *Waiting to start*), the trust assessment
+once there is one, format, worksheet, size and when it was run. Each row offers:
+
+- *Open*: a finished analysis opens on its Overview, an unfinished one on its progress view;
+- *Run again* (finished, failed or cancelled analyses only): creates a new analysis from the
+  stored file through `POST /analyses/{id}/rerun` and opens it. The original is untouched,
+  and nothing is carried over from it (no findings, context, rules, reviews or reports);
+- *Delete*: permanent, behind the same accessible confirmation dialog as the analysis
+  screen, which says the stored file, findings, rules, reviews and reports are removed and
+  that TrustTable will no longer recognise the file as analysed before.
+
+With no analyses the list says so in words. A list that cannot be loaded says so and the
+rest of the Workspace stays usable. File names and labels are server text shown as plain
+text only. No fingerprint or content hash is shown or asked for. The Workspace list is the
+history surface of this slice: no separate *Analyses* navigation entry is added, and
+paging, search and filtering are not built (only the newest 20 are listed, and the list
+does not claim to be complete).
 
 Contents of the original Start screen (kept where still true):
 
@@ -124,6 +144,15 @@ reference, `/configure` returns to the Workspace. It shows, from `POST
   words;
 - one *Run analysis* action, which analyses exactly the staged bytes, and *Choose a
   different file*, which discards the staged copy.
+
+**Implemented (`UX-03`, D-069): "analysed before" notice.** When `previously_analysed` is
+present the step shows an informational notice and never blocks Run. For `same_file` it says
+that the user has analyzed this exact file before (with the date, and the number of stored
+analyses when there is more than one) and links to the most recent earlier analysis. For
+`same_name` it says only that a file with this name was analyzed before, that this file is
+not identical to it, and that TrustTable does not compare their contents; no difference is
+described and none is implied. The notice reflects analyses that still exist, so a file
+whose earlier analysis was deleted shows no notice. No hash is shown.
 
 If staging is refused because too many files are already waiting (`409 STAGING_FULL`),
 the Workspace says so in plain words, that waiting files are kept for up to the stated
@@ -547,8 +576,10 @@ frontend/
 > records the owner-confirmed target of the UI/UX redesign (`UX-01`,
 > `docs/decision-log.md` D-066, D-067). **Slice S1 (`UX-02`, D-068) is built: the
 > Workspace, the Configure step, the Run of the staged bytes, the Local AI and privacy
-> status and the disabled Compare area (sections 4.1 and 4.2). Nothing else in this
-> section is built, and nothing here may be presented in the interface as available
+> status and the disabled Compare area (sections 4.1 and 4.2). Slice S2 (`UX-03`, D-069)
+> is built: recent analyses with open, run again and delete on the Workspace, and the
+> "analysed before" notice on the Configure step (sections 4.1 and 4.2). Nothing else in
+> this section is built, and nothing here may be presented in the interface as available
 > until its slice ships.**
 > Proposal-level designs are marked as such and are to be confirmed in each slice's
 > specification, which needs a fresh, substantive independent review before

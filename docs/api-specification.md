@@ -250,6 +250,33 @@ Returns:
 - the new analysis resource (its own `analysis_id` is the "new attempt
   ID"), `status_url`, and `retry_source_analysis_id`
 
+### GET `/analyses` (`UX-03`, `docs/decision-log.md` D-069)
+
+**Implemented.** Recent analyses, newest first, for the Workspace list. Query `limit`
+(default 20, at most 50; outside 1 to 50 is `422`). Response `{items, limit}`, where each
+item is `{analysis_id, state, original_filename, format, byte_size, selected_worksheet,
+source, created_at, completed_at, trust_label, finding_count}`; `source` is `upload` or
+`demo`, and `trust_label` and `finding_count` are `null` until the analysis completes.
+
+The list is a bounded, content-free view of the analyses that exist now: it carries no raw
+content, no content hash, no finding and no cell value, and it reads only indexed summary
+columns, never the stored bytes. A deleted analysis is not listed. There is no cursor: the
+newest `limit` analyses are returned and nothing claims to be complete.
+
+### POST `/analyses/{analysis_id}/rerun` (`UX-03`, D-069)
+
+**Implemented.** Runs a finished analysis again. Any `completed`, `failed` or `cancelled`
+analysis may be rerun; a queued or running one is `409 ANALYSIS_NOT_RERUNNABLE`, and an
+unknown analysis is `404 ANALYSIS_NOT_FOUND`.
+
+It creates a new, independent analysis over the original's stored content, submitted to the
+same worker pool, and returns `202 Accepted` with the new analysis resource and its
+`status_url` (the same shape as `POST /analyses`). The new analysis starts empty: no
+findings, context, rules, reviews, reports or AI record are copied. Unlike retry it records
+no link to the original (`retry_source_analysis_id` stays `null`), so deleting either
+analysis never affects the other. The original is never mutated. The new analysis is read
+under the parser limits in force now, like any analysis.
+
 ### DELETE `/analyses/{analysis_id}`
 
 Deletes:
@@ -353,6 +380,13 @@ values are never retained or returned) and the response is a staged-upload resou
 | `notices` | Non-blocking `[{code, message, count}]`, counts only |
 | `checks` | `[{title, description}]`: one business-language group per registered detector category, never a detector name; the standard analysis always runs all of them |
 | `can_run` | `true` only when stored, no problem remains and (for `xlsx`) a worksheet is selected |
+| `previously_analysed` | `UX-03` (D-069): `null`, or `{kind, count, latest_analysis_id, latest_analysed_at, latest_filename}` when a completed analysis that still exists matches the file. `kind` is `same_file` (identical bytes) or `same_name` (only the file name, compared without regard to case, and not byte-identical; no difference is described). `count` is the number of matches found, at most 50. Never carries a digest. Present on `POST /staged-uploads` and `POST /staged-uploads/inspect` |
+
+The "analysed before" lookup (`UX-03`, D-069) is a lookup, not an identity. The digest of the
+staged bytes goes in and never comes out. An exact match uses the SHA-256 of the stored bytes,
+kept as an indexed column on the analysis row itself; nothing else remembers it, so deleting
+an analysis removes it from every later answer. Only `completed` analyses count (a failed or
+cancelled run analysed nothing). The name hint scans the 50 most recent analyses only.
 
 Status `201` when stored, `200` when the file was **not** stored because the file itself
 cannot be read (then `staging_ref` is `null`, `can_run` is `false` and `problems` says
@@ -400,9 +434,9 @@ the reference existed.
 
 All staged-upload responses carry `Cache-Control: no-store`.
 
-> **Not built here (`UX-03`):** listing analyses, rerun, and a notice that this exact
-> file was analysed before. The staged digest is internal, is not returned and is never
-> used as a dataset identity.
+> **Listing, rerun and the "analysed before" notice (`UX-03`, D-069)** are specified in
+> section 6 and in the `previously_analysed` field above. The staged digest is internal,
+> is not returned and is never used as a dataset identity.
 
 ## 8. Profile
 
@@ -1027,6 +1061,7 @@ call's own status via its own `ai_call_status` field.
 - ANALYSIS_FAILED
 - ANALYSIS_NOT_CANCELLABLE
 - ANALYSIS_NOT_RETRYABLE
+- ANALYSIS_NOT_RERUNNABLE
 - CONTEXT_VERSION_CONFLICT
 - INVALID_CONTEXT
 - FINDING_NOT_FOUND
@@ -1081,7 +1116,7 @@ Existing routes, including direct upload `POST /analyses`, keep their contracts.
 |---|---|---|
 | Configure step (`UX-02`) — **built by `UX-02`, section 7 (D-068)** | Stage a file once, inspect it, then Run the analysis over the exact staged bytes | Single-use opaque reference; server-computed integrity hash verified at consume; bounded count, bytes and expiry; startup and lazy cleanup; atomic consume; no durable Dataset; the same validation and parser limits as direct upload through one shared ingestion path; inspection returns worksheets, shape, readability problems and warnings, never cell values; this supersedes the unbuilt `POST /datasets/inspect` description in section 7 |
 | AI status (`UX-02`, `UX-09`) — **status route built by `UX-02`, section 4 (D-068)**; guided setup and connection testing remain `UX-09` | `GET /ai/status` | Honest enabled, ready and model-identity state; path-free and address-free labels; an abstract status that does not assume where a runtime runs |
-| History (`UX-03`) | List analyses; rerun as a new analysis from stored content; look up whether the exact same file was analysed before | The lookup is not a dataset identity; it reflects only analyses that still exist; no integrity hash in normal-user responses |
+| History (`UX-03`) — **built by `UX-03`, section 6 (D-069)** | `GET /analyses`; `POST /analyses/{id}/rerun`; `previously_analysed` on the staged-upload resource | The lookup is not a dataset identity; it reflects only analyses that still exist; none of the new responses carries an integrity hash. The pre-existing `dataset.content_hash` field of the analysis resource predates this slice and is unchanged by it (see D-069) |
 | Dashboard (`UX-04`) | Aggregates where client derivation from existing data is insufficient | Proposal-level |
 | Persisted AI enrichment (`UX-05`) | Start or resume, read status and read a saved result per finding, split from the deterministic explanation | Deterministic content never waits for a model call; the result is bound to the finding, confirmed-context version, model identity and prompt or contract version and is reported stale when the binding changes; start and status must not depend on one long request; bounded concurrency; saved output is deleted with its analysis |
 | Inspector (`UX-06`) | Bounded, finding-scoped row windows, including observation example rows | Server-side bounds; no shared-cache storage; unchanged privacy boundary (D-025); window and paging limits are set only after the performance spike |

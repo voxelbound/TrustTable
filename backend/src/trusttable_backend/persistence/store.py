@@ -16,15 +16,17 @@ distinguishing insert-only from update-only.
 
 from __future__ import annotations
 
+import hashlib
 import threading
 from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm.exc import StaleDataError
 
-from ..analysis.service import Analysis, AnalysisState
+from ..analysis.service import Analysis, AnalysisState, AnalysisSummary
 from ..domain.ai_enrichment import AiEnrichmentRecord
 from . import serializers
 from .database import build_session_factory
@@ -75,6 +77,50 @@ def _analysis_to_row_values(analysis: Analysis) -> dict[str, object]:
         "context_finalized": analysis.context_finalized,
         "retry_source_analysis_id": analysis.retry_source_analysis_id,
     }
+
+
+def _content_digest(analysis: Analysis) -> str:
+    """The lookup key for "this exact file was analysed before" (`UX-03`,
+    D-069): a digest of the very bytes stored beside it, never the dataset's
+    own independently written `content_hash` field. Computed only when a row is
+    first written, because an analysis's content never changes afterwards."""
+    return hashlib.sha256(analysis.content).hexdigest()
+
+
+def _row_to_summary(row: Any) -> AnalysisSummary:
+    """A content-free summary from a row loaded without its large columns."""
+    dataset = serializers.decode(row.dataset_json)
+    assessment = (
+        serializers.decode(row.trust_assessment_json)
+        if row.trust_assessment_json is not None
+        else None
+    )
+    return AnalysisSummary(
+        analysis_id=row.analysis_id,
+        state=AnalysisState(row.state),
+        original_filename=dataset.original_filename,
+        dataset_format=dataset.format,
+        byte_size=dataset.byte_size,
+        selected_worksheet=dataset.selected_worksheet,
+        source_type=dataset.source_type,
+        created_at=datetime.fromisoformat(row.created_at),
+        completed_at=_from_iso(row.completed_at),
+        trust_label=assessment.label.value if assessment is not None else None,
+        finding_count=assessment.finding_count if assessment is not None else None,
+    )
+
+
+#: The columns a summary needs. Selecting these (and not `content` or the large
+#: JSON columns) keeps the list and the lookup cheap and keeps raw bytes out of
+#: memory.
+_SUMMARY_COLUMNS = (
+    AnalysisRecord.analysis_id,
+    AnalysisRecord.state,
+    AnalysisRecord.created_at,
+    AnalysisRecord.completed_at,
+    AnalysisRecord.dataset_json,
+    AnalysisRecord.trust_assessment_json,
+)
 
 
 def _row_to_analysis(row: AnalysisRecord) -> Analysis:
@@ -143,9 +189,11 @@ class SqlAnalysisStore:
         with self._session_factory() as session:
             existing = session.get(AnalysisRecord, analysis.analysis_id)
             if existing is None:
-                session.add(AnalysisRecord(**values))
+                session.add(AnalysisRecord(**values, content_sha256=_content_digest(analysis)))
             else:
                 self._apply(existing, values)
+                if existing.content_sha256 is None:
+                    existing.content_sha256 = _content_digest(analysis)
             session.commit()
 
     def replace(self, analysis: Analysis) -> None:
@@ -224,6 +272,41 @@ class SqlAnalysisStore:
             if row is None:
                 return None
             return _row_to_analysis(row)
+
+    def list_recent(self, limit: int) -> tuple[AnalysisSummary, ...]:
+        """At most `limit` analyses, newest first, as content-free summaries
+        (`UX-03`, D-069). Reads only the summary columns, ordered by the
+        indexed `created_at`, so it never loads stored bytes."""
+        if limit <= 0:
+            return ()
+        with self._session_factory() as session:
+            stmt = (
+                select(*_SUMMARY_COLUMNS)
+                .order_by(AnalysisRecord.created_at.desc(), AnalysisRecord.analysis_id)
+                .limit(limit)
+            )
+            return tuple(_row_to_summary(row) for row in session.execute(stmt))
+
+    def find_completed_by_content_hash(
+        self, content_sha256: str, limit: int
+    ) -> tuple[AnalysisSummary, ...]:
+        """At most `limit` `COMPLETED` analyses whose stored bytes have this
+        SHA-256, newest first, through the indexed `content_sha256` column.
+        A lookup over live rows only (`UX-03`, D-069): a deleted analysis is
+        gone with its row, and nothing else remembers the digest."""
+        if limit <= 0:
+            return ()
+        with self._session_factory() as session:
+            stmt = (
+                select(*_SUMMARY_COLUMNS)
+                .where(
+                    AnalysisRecord.content_sha256 == content_sha256,
+                    AnalysisRecord.state == AnalysisState.COMPLETED.value,
+                )
+                .order_by(AnalysisRecord.created_at.desc(), AnalysisRecord.analysis_id)
+                .limit(limit)
+            )
+            return tuple(_row_to_summary(row) for row in session.execute(stmt))
 
     def non_terminal_analysis_ids(self) -> tuple[str, ...]:
         """Return every persisted `analysis_id` left in a non-terminal

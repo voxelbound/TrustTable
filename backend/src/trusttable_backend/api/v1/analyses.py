@@ -49,6 +49,7 @@ from trusttable_backend.analysis import (
     AnalysisFailure,
     AnalysisNotFoundError,
     AnalysisNotReadyError,
+    AnalysisNotRerunnableError,
     AnalysisNotRetryableError,
     AnalysisState,
     AnalysisStoreProtocol,
@@ -81,9 +82,11 @@ from trusttable_backend.analysis import (
     get_or_infer_context,
     get_status,
     record_ai_enrichment_call,
+    rerun_analysis,
     retry_analysis,
     set_finding_review,
 )
+from trusttable_backend.analysis.history import DEFAULT_HISTORY_LIMIT, MAX_HISTORY_LIMIT
 from trusttable_backend.config import get_settings
 from trusttable_backend.context_inference.ai_context import (
     ContextInferenceResult,
@@ -102,7 +105,7 @@ from trusttable_backend.domain.context import ContextField, ContextFieldValue, D
 from trusttable_backend.domain.evidence import Evidence
 from trusttable_backend.domain.explanation import FindingExplanation, ValidationRuleType
 from trusttable_backend.domain.observation import Observation
-from trusttable_backend.domain.parsing import Dataset, DatasetFormat
+from trusttable_backend.domain.parsing import Dataset, DatasetFormat, DatasetSourceType
 from trusttable_backend.domain.review import FindingReview, FindingReviewState
 from trusttable_backend.domain.row_context import RowContextWindow
 from trusttable_backend.domain.rules import (
@@ -180,6 +183,7 @@ from trusttable_backend.schemas.analysis import (
     ValidationRulesListResponse,
     WarningResponse,
 )
+from trusttable_backend.schemas.history import AnalysisHistoryItem, AnalysisHistoryResponse
 
 router = APIRouter(tags=["analyses"])
 
@@ -389,6 +393,15 @@ def _analysis_not_retryable(analysis_id: str, state: AnalysisState) -> AppError:
     return AppError(
         "ANALYSIS_NOT_RETRYABLE",
         "This analysis is not in a retryable state.",
+        status_code=409,
+        details={"analysis_id": analysis_id, "state": state.value},
+    )
+
+
+def _analysis_not_rerunnable(analysis_id: str, state: AnalysisState) -> AppError:
+    return AppError(
+        "ANALYSIS_NOT_RERUNNABLE",
+        "This analysis is still running; it can be run again once it has finished.",
         status_code=409,
         details={"analysis_id": analysis_id, "state": state.value},
     )
@@ -1233,6 +1246,39 @@ def post_demo_sales(request: Request) -> DemoAnalysisResponse:
     return DemoAnalysisResponse(analysis=_analysis_resource(analysis), status_url=status_url)
 
 
+@router.get("/analyses", response_model=AnalysisHistoryResponse)
+def get_analysis_history(
+    request: Request,
+    limit: Annotated[int, Query(ge=1, le=MAX_HISTORY_LIMIT)] = DEFAULT_HISTORY_LIMIT,
+) -> AnalysisHistoryResponse:
+    """Recent analyses, newest first, at most `limit` (`UX-03`, D-069).
+
+    A bounded, content-free view: no raw content, no content hash, no finding
+    and no cell value. It lists only analyses that exist now; a deleted
+    analysis is gone from it.
+    """
+    summaries = get_analysis_store(request).list_recent(limit)
+    return AnalysisHistoryResponse(
+        items=[
+            AnalysisHistoryItem(
+                analysis_id=s.analysis_id,
+                state=s.state.value,
+                original_filename=s.original_filename,
+                format=s.dataset_format.value,
+                byte_size=s.byte_size,
+                selected_worksheet=s.selected_worksheet,
+                source="demo" if s.source_type is DatasetSourceType.BUNDLED_DEMO else "upload",
+                created_at=s.created_at,
+                completed_at=s.completed_at,
+                trust_label=s.trust_label,
+                finding_count=s.finding_count,
+            )
+            for s in summaries
+        ],
+        limit=limit,
+    )
+
+
 @router.get("/analyses/{analysis_id}", response_model=AnalysisResource)
 def get_analysis(analysis_id: str, request: Request) -> AnalysisResource:
     """Return the full analysis resource (`docs/api-specification.md` §6)."""
@@ -1629,6 +1675,31 @@ def post_analysis_retry(analysis_id: str, request: Request) -> RetryAnalysisResp
         status_url=status_url,
         retry_source_analysis_id=analysis_id,
     )
+
+
+@router.post(
+    "/analyses/{analysis_id}/rerun", response_model=UploadAnalysisResponse, status_code=202
+)
+def post_analysis_rerun(analysis_id: str, request: Request) -> UploadAnalysisResponse:
+    """Run a finished analysis again: a new, independent analysis over the
+    stored content, submitted to the background worker pool (`UX-03`, D-069;
+    like `POST .../retry`, which is limited to a failed analysis).
+
+    Any completed, failed or cancelled analysis may be rerun. The new analysis
+    starts empty (no findings, context, rules, reviews, reports or AI record
+    are copied) and records no link to the original, so deleting either never
+    affects the other. `ANALYSIS_NOT_FOUND` (404) for an unknown analysis and
+    `ANALYSIS_NOT_RERUNNABLE` (409) while it is still queued or running.
+    """
+    store = get_analysis_store(request)
+    _get_or_404(store, analysis_id)
+    try:
+        rerun = rerun_analysis(store, analysis_id)
+    except AnalysisNotRerunnableError as exc:
+        raise _analysis_not_rerunnable(analysis_id, exc.state) from exc
+    get_job_pool(request).submit(rerun.analysis_id)
+    status_url = f"/api/v1/analyses/{rerun.analysis_id}/status"
+    return UploadAnalysisResponse(analysis=_analysis_resource(rerun), status_url=status_url)
 
 
 def _parse_create_rule_request(

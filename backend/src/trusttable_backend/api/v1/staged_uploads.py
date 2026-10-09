@@ -16,7 +16,8 @@ import hashlib
 from fastapi import APIRouter, Request, Response, UploadFile
 from starlette.concurrency import run_in_threadpool
 
-from trusttable_backend.api.v1.analyses import start_analysis_from_content
+from trusttable_backend.analysis.history import find_previous_analysis_notice
+from trusttable_backend.api.v1.analyses import get_analysis_store, start_analysis_from_content
 from trusttable_backend.errors import AppError
 from trusttable_backend.ingestion import (
     CSV_EXTENSION,
@@ -27,6 +28,7 @@ from trusttable_backend.ingestion import (
 )
 from trusttable_backend.persistence import SqlStagingStore, StagedUpload, StagingFullError
 from trusttable_backend.schemas.analysis import UploadAnalysisResponse
+from trusttable_backend.schemas.history import PreviousAnalysisNoticeResponse
 from trusttable_backend.schemas.staging import (
     StagedCheckGroup,
     StagedNotice,
@@ -73,6 +75,7 @@ def _resource(
     file_format: str,
     byte_size: int,
     inspection: FileInspection,
+    previously_analysed: PreviousAnalysisNoticeResponse | None = None,
 ) -> StagedUploadResponse:
     return StagedUploadResponse(
         staging_ref=staging_ref,
@@ -99,6 +102,27 @@ def _resource(
         ],
         checks=[StagedCheckGroup(title=g.title, description=g.description) for g in check_groups()],
         can_run=staging_ref is not None and inspection.can_run,
+        previously_analysed=previously_analysed,
+    )
+
+
+def _previous_notice(
+    request: Request, *, content_sha256: str, filename: str
+) -> PreviousAnalysisNoticeResponse | None:
+    """The "analysed before" notice for a staged file (`UX-03`, D-069): an
+    indexed lookup over the analyses that exist now. The digest goes in and
+    never comes out."""
+    notice = find_previous_analysis_notice(
+        get_analysis_store(request), content_sha256=content_sha256, filename=filename
+    )
+    if notice is None:
+        return None
+    return PreviousAnalysisNoticeResponse(
+        kind=notice.kind.value,
+        count=notice.count,
+        latest_analysis_id=notice.latest.analysis_id,
+        latest_analysed_at=notice.latest.completed_at or notice.latest.created_at,
+        latest_filename=notice.latest.original_filename,
     )
 
 
@@ -146,6 +170,11 @@ async def post_staged_upload(
         file_format=file_format,
         byte_size=staged.byte_size,
         inspection=inspection,
+        previously_analysed=await run_in_threadpool(
+            lambda: _previous_notice(
+                request, content_sha256=staged.content_sha256, filename=filename
+            )
+        ),
     )
 
 
@@ -170,6 +199,9 @@ def post_staged_upload_inspect(
         file_format=staged.format,
         byte_size=staged.byte_size,
         inspection=inspection,
+        previously_analysed=_previous_notice(
+            request, content_sha256=staged.content_sha256, filename=staged.filename
+        ),
     )
 
 

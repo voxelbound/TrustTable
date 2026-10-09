@@ -6,18 +6,98 @@
  * request body, never in a URL.
  */
 
-import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
+import {
+  deleteAnalysisResourceApiV1AnalysesAnalysisIdDelete,
   getAiStatusApiV1AiStatusGet,
+  getAnalysisHistoryApiV1AnalysesGet,
+  postAnalysisRerunApiV1AnalysesAnalysisIdRerunPost,
   postStagedUploadApiV1StagedUploadsPost,
   postStagedUploadDiscardApiV1StagedUploadsDiscardPost,
   postStagedUploadInspectApiV1StagedUploadsInspectPost,
   postStagedUploadRunApiV1StagedUploadsRunPost,
   type AiStatusResponse,
+  type AnalysisHistoryResponse,
   type StagedUploadResponse,
   type UploadAnalysisResponse,
 } from '../../api'
 import { ApiCallError } from '../analysis/api'
+
+/** The most recent analyses the Workspace lists (`UX-03`, D-069). */
+export const HISTORY_LIMIT = 20
+
+const HISTORY_KEY = ['analysis-history'] as const
+
+/** `GET /analyses` (`UX-03`): recent analyses, newest first. Content-free: the
+ * server returns no content hash, finding or cell value. Always refetched when
+ * the Workspace opens, so a deleted or finished analysis is never shown stale. */
+export function useAnalysisHistory() {
+  return useQuery<AnalysisHistoryResponse, ApiCallError>({
+    queryKey: HISTORY_KEY,
+    queryFn: async () => {
+      const result = await getAnalysisHistoryApiV1AnalysesGet({
+        query: { limit: HISTORY_LIMIT },
+      })
+      if (result.data === undefined) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    staleTime: 0,
+    retry: false,
+    refetchOnWindowFocus: false,
+  })
+}
+
+/** `POST /analyses/{id}/rerun` (`UX-03`): a new, independent analysis made from
+ * the stored content. The caller opens `response.analysis.analysis_id`. */
+export function useRerunAnalysis() {
+  const queryClient = useQueryClient()
+  return useMutation<UploadAnalysisResponse, ApiCallError, string>({
+    mutationFn: async (analysisId: string) => {
+      const result = await postAnalysisRerunApiV1AnalysesAnalysisIdRerunPost({
+        path: { analysis_id: analysisId },
+      })
+      if (result.data === undefined) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: HISTORY_KEY })
+    },
+  })
+}
+
+/** `DELETE /analyses/{id}` from the list (`UX-03`). Permanent. Every cached
+ * query for the analysis is removed, and the list and any open "analysed
+ * before" notice are refetched because they may have listed it. */
+export function useDeleteHistoryAnalysis() {
+  const queryClient = useQueryClient()
+  return useMutation<void, ApiCallError, string>({
+    mutationFn: async (analysisId: string) => {
+      const result = await deleteAnalysisResourceApiV1AnalysesAnalysisIdDelete({
+        path: { analysis_id: analysisId },
+      })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+    },
+    onSuccess: (_data, analysisId) => {
+      queryClient.removeQueries({
+        predicate: (query) =>
+          query.queryKey.length > 1 && query.queryKey[1] === analysisId,
+      })
+      void queryClient.invalidateQueries({ queryKey: HISTORY_KEY })
+      void queryClient.invalidateQueries({ queryKey: ['staged-upload'] })
+    },
+  })
+}
 
 const AI_STATUS_STALE_MS = 10_000
 

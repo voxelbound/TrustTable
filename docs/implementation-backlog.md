@@ -1106,6 +1106,13 @@ never becomes a dataset identity. Specification must settle the index and the ef
 of deletion on the lookup. "Differs from a previous version" is limited to a
 filename-based hint without a diff.
 
+Status: built (`D-069`). The Workspace lists the 20 newest analyses with open, run
+again and delete; `GET /analyses` and `POST /analyses/{id}/rerun` are built; the
+Configure step shows an "analysed before" notice from an indexed lookup over live,
+completed analyses, which forgets an analysis when it is deleted. The name hint is
+filename-only and describes no difference. Not built: paging, search, an *Analyses*
+navigation entry.
+
 ## UX-04 — S3: dashboard and progress
 
 Business-oriented Overview (trust verdict, severity and category distribution,

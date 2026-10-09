@@ -47,6 +47,8 @@ class AnalysisRecord(Base):
     __table_args__ = (
         Index("ix_analyses_state", "state"),
         Index("ix_analyses_retry_source_analysis_id", "retry_source_analysis_id"),
+        Index("ix_analyses_content_sha256", "content_sha256"),
+        Index("ix_analyses_created_at", "created_at"),
     )
 
     analysis_id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -105,6 +107,13 @@ class AnalysisRecord(Base):
     slice 2, `WP-076`, `DEC-013`) -- `NULL` for every analysis that is not
     itself a retry, including every row persisted before this column
     existed (`0002_add_retry_source_analysis_id.py`)."""
+
+    content_sha256: Mapped[str | None] = mapped_column(String, nullable=True)
+    """SHA-256 of `content` (`UX-03`, D-069), kept on the analysis row only so
+    the seen-before lookup is an indexed read. It lives and ends with the row:
+    deleting the analysis deletes it, no other table holds it, and no response
+    returns it. It is a lookup key, never a dataset identity. Written by
+    `store._analysis_to_row_values`; `0010` backfills earlier rows."""
 
 
 class ConfirmedRelationshipVersionRecord(Base):
