@@ -393,6 +393,29 @@ describe('OverviewRoute', () => {
     expect(screen.getByText('Review progress')).toBeVisible()
   })
 
+  it('UX-04: a failed findings request is shown as unknown, never as a clean file', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/findings', () =>
+        HttpResponse.json(
+          { error: { code: 'X', message: 'x' } },
+          { status: 500 },
+        ),
+      ),
+    )
+    renderOverview()
+
+    await screen.findByText('Dataset summary')
+    expect(
+      screen.getAllByText('The findings could not be loaded.'),
+    ).toHaveLength(3)
+    expect(screen.getByText('Not available')).toBeVisible()
+    expect(screen.queryByText('No findings were identified.')).toBeNull()
+    expect(
+      screen.queryByText('No finding points at a specific column.'),
+    ).toBeNull()
+    expect(screen.queryByText('There is nothing to review.')).toBeNull()
+  })
+
   it('UX-04: says AI explanations are separate and optional, and never claims AI ran', async () => {
     renderOverview()
 

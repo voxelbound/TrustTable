@@ -23,8 +23,10 @@ Framework-independent: no FastAPI or SQLAlchemy import.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from trusttable_backend.detectors.contract import FindingCandidate
+from trusttable_backend.domain.parsing import SamplingScope
 from trusttable_backend.profiling.schemas import DatasetProfile
 
 
@@ -36,7 +38,7 @@ class CompletenessSummary:
     `missing_share` is `None` when there are no cells to measure.
     """
 
-    scope: str
+    scope: Literal["full", "sampled"]
     population_size: int
     sample_size: int
     cells_total: int
@@ -78,8 +80,11 @@ def build_dashboard_summary(
     cells_total = row_count * column_count
     cells_missing = min(sum(entry.null_count for entry in profile.column_profiles), cells_total)
     sampling = profile.sampling
+    scope: Literal["full", "sampled"] = (
+        "full" if sampling.scope is SamplingScope.FULL else "sampled"
+    )
     completeness = CompletenessSummary(
-        scope=sampling.scope.value,
+        scope=scope,
         population_size=sampling.population_size,
         sample_size=sampling.sample_size,
         cells_total=cells_total,

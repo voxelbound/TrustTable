@@ -198,7 +198,7 @@ class CompletenessResponse(BaseModel):
     `missing_share` is `null` when there are no cells to measure.
     """
 
-    scope: str
+    scope: Literal["full", "sampled"]
     population_size: int
     sample_size: int
     cells_total: int

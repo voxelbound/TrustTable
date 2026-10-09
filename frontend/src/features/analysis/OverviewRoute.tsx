@@ -52,8 +52,12 @@ export function OverviewRoute() {
     )
   }
 
-  const findings = findingsQuery.data?.items ?? []
-  const topFindings = sortFindingsByPriority(findings).slice(0, 3)
+  // `null` means the request failed: an unknown result is never shown as
+  // "no findings", which would read as a clean file.
+  const findings = findingsQuery.isError
+    ? null
+    : (findingsQuery.data?.items ?? [])
+  const topFindings = sortFindingsByPriority(findings ?? []).slice(0, 3)
   const dataset = resourceQuery.data?.dataset
   const summary = summaryQuery.data
   const summaryState = summaryQuery.isError
@@ -99,7 +103,14 @@ export function OverviewRoute() {
         <h2 id="top-findings-heading" className={HEADING_CLASS}>
           Top findings
         </h2>
-        {topFindings.length === 0 ? (
+        {findings === null ? (
+          <p
+            role="alert"
+            className="mt-2 text-sm text-red-700 dark:text-red-300"
+          >
+            The findings could not be loaded.
+          </p>
+        ) : topFindings.length === 0 ? (
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
             No findings were identified.
           </p>
@@ -107,7 +118,7 @@ export function OverviewRoute() {
           <ul className="mt-2 flex flex-col gap-3">
             {topFindings.map((finding) => (
               <li
-                key={`${finding.detector_id}-${finding.calculated_observation}`}
+                key={finding.finding_id}
                 className="rounded border border-slate-200 p-3 dark:border-slate-800"
               >
                 <div className="flex items-center gap-2">

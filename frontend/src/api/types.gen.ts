@@ -605,7 +605,7 @@ export type CompletenessResponse = {
     /**
      * Scope
      */
-    scope: string;
+    scope: 'full' | 'sampled';
 };
 
 /**

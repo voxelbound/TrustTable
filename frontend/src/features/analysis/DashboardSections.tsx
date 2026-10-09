@@ -81,7 +81,8 @@ export function FindingDistribution({
   findings,
   findingsHref,
 }: {
-  findings: readonly FindingItem[]
+  /** `null` when the findings request failed: unknown is not "none". */
+  findings: readonly FindingItem[] | null
   findingsHref: ReactNode
 }) {
   return (
@@ -89,7 +90,11 @@ export function FindingDistribution({
       <h2 id="distribution-heading" className={HEADING_CLASS}>
         What was found
       </h2>
-      {findings.length === 0 ? (
+      {findings === null ? (
+        <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">
+          The findings could not be loaded.
+        </p>
+      ) : findings.length === 0 ? (
         <p className={`mt-2 ${MUTED_CLASS}`}>No findings were identified.</p>
       ) : (
         <div className="mt-3 grid gap-6 sm:grid-cols-2">
@@ -114,16 +119,21 @@ export function FindingDistribution({
 export function ColumnsWithMostFindings({
   findings,
 }: {
-  findings: readonly FindingItem[]
+  /** `null` when the findings request failed: unknown is not "none". */
+  findings: readonly FindingItem[] | null
 }) {
-  const columns = columnsWithMostFindings(findings)
+  const columns = columnsWithMostFindings(findings ?? [])
   const max = Math.max(...columns.map((column) => column.count), 0)
   return (
     <section aria-labelledby="columns-heading">
       <h2 id="columns-heading" className={HEADING_CLASS}>
         Columns with the most findings
       </h2>
-      {columns.length === 0 ? (
+      {findings === null ? (
+        <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">
+          The findings could not be loaded.
+        </p>
+      ) : columns.length === 0 ? (
         <p className={`mt-2 ${MUTED_CLASS}`}>
           No finding points at a specific column.
         </p>
@@ -244,8 +254,17 @@ function CompletenessFigure({ summary }: { summary: AnalysisSummaryResponse }) {
 function ReviewProgressFigure({
   findings,
 }: {
-  findings: readonly FindingItem[]
+  findings: readonly FindingItem[] | null
 }) {
+  if (findings === null) {
+    return (
+      <Figure
+        term="Review progress"
+        value="Not available"
+        note="The findings could not be loaded, so review progress is unknown."
+      />
+    )
+  }
   const progress = reviewProgress(findings)
   return (
     <Figure
@@ -281,7 +300,8 @@ export function AtAGlance({
 }: {
   summary: AnalysisSummaryResponse | undefined
   summaryState: 'loading' | 'error' | 'ready'
-  findings: readonly FindingItem[]
+  /** `null` when the findings request failed: unknown is not "none". */
+  findings: readonly FindingItem[] | null
 }) {
   return (
     <section aria-labelledby="glance-heading">

@@ -16,8 +16,10 @@ from typing import Any, cast
 from fastapi.testclient import TestClient
 
 from trusttable_backend.analysis import create_analysis
-from trusttable_backend.analysis.summary import distinct_affected_rows
+from trusttable_backend.analysis.summary import build_dashboard_summary, distinct_affected_rows
 from trusttable_backend.detectors.contract import FindingCandidate
+from trusttable_backend.domain.parsing import SamplingScope
+from trusttable_backend.profiling.schemas import DatasetProfile
 
 # Two identical rows (duplicate findings) that also share a missing value, so
 # several findings point at the same rows.
@@ -66,6 +68,90 @@ def test_distinct_rows_is_zero_with_no_findings_or_only_column_wide_findings() -
     assert distinct_affected_rows((_finding(()), _finding(()))) == 0
 
 
+# --- build_dashboard_summary with stand-in profiles (pure) --------------------
+
+
+def _profile(
+    *,
+    row_count: int,
+    column_count: int,
+    nulls: tuple[int, ...],
+    scope: SamplingScope,
+    population: int,
+    sample: int,
+) -> DatasetProfile:
+    return cast(
+        DatasetProfile,
+        SimpleNamespace(
+            dataset_metrics={"row_count": row_count, "column_count": column_count},
+            column_profiles=tuple(SimpleNamespace(null_count=n) for n in nulls),
+            sampling=SimpleNamespace(scope=scope, population_size=population, sample_size=sample),
+        ),
+    )
+
+
+def test_summary_carries_a_sampled_scope_and_its_sizes() -> None:
+    profile = _profile(
+        row_count=50,
+        column_count=2,
+        nulls=(5, 0),
+        scope=SamplingScope.SAMPLED,
+        population=1000,
+        sample=50,
+    )
+
+    summary = build_dashboard_summary(profile, (_finding((1, 2)), _finding((2,))))
+
+    completeness = summary.completeness
+    assert completeness.scope == "sampled"
+    assert (completeness.population_size, completeness.sample_size) == (1000, 50)
+    assert completeness.cells_total == 100  # profiled rows x columns, not population
+    assert completeness.cells_missing == 5
+    assert summary.row_count == 50  # the profiled rows, the same rows as the share
+    assert summary.rows_affected == 2
+    assert summary.findings_total == 2
+
+
+def test_summary_full_scope_is_reported_as_full() -> None:
+    profile = _profile(
+        row_count=10,
+        column_count=1,
+        nulls=(0,),
+        scope=SamplingScope.FULL,
+        population=10,
+        sample=10,
+    )
+    assert build_dashboard_summary(profile, ()).completeness.scope == "full"
+
+
+def test_summary_clamps_missing_cells_to_the_cell_total() -> None:
+    profile = _profile(
+        row_count=2,
+        column_count=1,
+        nulls=(9,),
+        scope=SamplingScope.FULL,
+        population=2,
+        sample=2,
+    )
+    completeness = build_dashboard_summary(profile, ()).completeness
+    assert completeness.cells_missing == completeness.cells_total == 2
+    assert completeness.missing_share == 1.0
+
+
+def test_summary_with_no_cells_is_not_measured_rather_than_zero() -> None:
+    profile = _profile(
+        row_count=0,
+        column_count=3,
+        nulls=(0, 0, 0),
+        scope=SamplingScope.FULL,
+        population=0,
+        sample=0,
+    )
+    completeness = build_dashboard_summary(profile, ()).completeness
+    assert completeness.cells_total == 0
+    assert completeness.missing_share is None
+
+
 # --- the route --------------------------------------------------------------
 
 
@@ -102,7 +188,8 @@ def test_summary_reports_shape_and_completeness_with_scope(client: TestClient) -
     assert summary["row_count"] == 6
     assert summary["column_count"] == 3
     completeness = summary["completeness"]
-    assert completeness["scope"] in {"full", "sampled"}
+    assert completeness["scope"] == "full"  # a 6-row file is never sampled
+    assert completeness["population_size"] == completeness["sample_size"] == 6
     assert completeness["cells_total"] == 18
     assert 0 < completeness["cells_missing"] <= completeness["cells_total"]
     assert completeness["missing_share"] == (
