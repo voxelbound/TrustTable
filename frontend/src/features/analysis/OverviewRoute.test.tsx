@@ -255,6 +255,44 @@ describe('OverviewRoute', () => {
     expect(figure.textContent).not.toContain('Measured on all')
   })
 
+  it('UX-04: rows affected also states the sample when the analysis is sampled', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/summary', () =>
+        HttpResponse.json(
+          makeSummaryResponse({
+            row_count: 50000,
+            rows_affected: 10,
+            completeness: {
+              scope: 'sampled',
+              population_size: 1000000,
+              sample_size: 50000,
+              cells_total: 300000,
+              cells_missing: 5,
+              missing_share: 5 / 300000,
+            },
+          }),
+        ),
+      ),
+    )
+    renderOverview()
+
+    const rows = (await screen.findByText('Rows affected')).closest(
+      'div',
+    ) as HTMLElement
+    expect(rows.textContent).toContain(
+      'a count within a sample of 50,000 of 1,000,000 rows, not the whole file',
+    )
+  })
+
+  it('UX-04: rows affected makes no sample claim when the scope is full', async () => {
+    renderOverview()
+
+    const rows = (await screen.findByText('Rows affected')).closest(
+      'div',
+    ) as HTMLElement
+    expect(rows.textContent).not.toContain('within a sample')
+  })
+
   it('UX-04: a full-scope completeness figure says it covers every row', async () => {
     renderOverview()
 

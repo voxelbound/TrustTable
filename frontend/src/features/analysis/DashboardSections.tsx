@@ -189,6 +189,15 @@ function RowsAffectedFigure({ summary }: { summary: AnalysisSummaryResponse }) {
       note={
         <>
           Rows that at least one finding points at, each counted once.
+          {summary.completeness.scope === 'sampled' && (
+            <>
+              {' '}
+              This is a count within a sample of{' '}
+              {summary.completeness.sample_size.toLocaleString()} of{' '}
+              {summary.completeness.population_size.toLocaleString()} rows, not
+              the whole file.
+            </>
+          )}
           {unlocated > 0 && (
             <>
               {' '}
