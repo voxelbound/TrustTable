@@ -633,6 +633,12 @@ class AnalysisStoreProtocol(Protocol):
         ...
 
 
+def _newest_first(analysis: Analysis) -> tuple[float, str]:
+    """Sort key for newest first, ties broken by `analysis_id` like the durable
+    store's `ORDER BY created_at DESC, analysis_id`."""
+    return (-analysis.created_at.timestamp(), analysis.analysis_id)
+
+
 class AnalysisStore:
     """A minimal in-memory dict-backed store. Whole-analysis writes have no
     concurrency safety (disclosed, matching this package's stated
@@ -671,20 +677,22 @@ class AnalysisStore:
             return self._analyses.pop(analysis_id, None) is not None
 
     def list_recent(self, limit: int) -> tuple[AnalysisSummary, ...]:
-        ordered = sorted(self._analyses.values(), key=lambda a: a.created_at, reverse=True)
+        ordered = sorted(self._analyses.values(), key=_newest_first)
         return tuple(summarize_analysis(a) for a in ordered[: max(limit, 0)])
 
     def find_completed_by_content_hash(
         self, content_sha256: str, limit: int
     ) -> tuple[AnalysisSummary, ...]:
+        # Keyed on the SHA-256 of the stored bytes, exactly as the durable store
+        # is, never on the dataset's independently written `content_hash`.
         matches = sorted(
             (
                 a
                 for a in self._analyses.values()
-                if a.state is AnalysisState.COMPLETED and a.dataset.content_hash == content_sha256
+                if a.state is AnalysisState.COMPLETED
+                and hashlib.sha256(a.content).hexdigest() == content_sha256
             ),
-            key=lambda a: a.created_at,
-            reverse=True,
+            key=_newest_first,
         )
         return tuple(summarize_analysis(a) for a in matches[: max(limit, 0)])
 

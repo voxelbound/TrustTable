@@ -63,9 +63,9 @@ def test_migration_0010_backfills_upgrades_downgrades_and_reupgrades_cleanly(
     command.downgrade(config, "-1")
     inspector = inspect(engine)
     assert "content_sha256" not in {c["name"] for c in inspector.get_columns("analyses")}
-    assert "ix_analyses_content_sha256" not in {
-        i["name"] for i in inspector.get_indexes("analyses")
-    }
+    remaining_indexes = {i["name"] for i in inspector.get_indexes("analyses")}
+    assert "ix_analyses_content_sha256" not in remaining_indexes
+    assert "ix_analyses_created_at" not in remaining_indexes
     assert "staged_uploads" in inspector.get_table_names()
 
     command.upgrade(config, "0010")

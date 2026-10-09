@@ -218,6 +218,92 @@ describe('RecentAnalyses', () => {
     expect(screen.getByText('sales.csv')).toBeInTheDocument()
   })
 
+  it('offers to run a failed analysis again', async () => {
+    serveHistory([
+      makeHistoryItem({
+        state: 'failed',
+        trust_label: null,
+        finding_count: null,
+      }),
+    ])
+    renderList()
+    expect(
+      await screen.findByRole('button', { name: 'Run sales.csv again' }),
+    ).toBeEnabled()
+  })
+
+  it('does not let an earlier failure mask a later one', async () => {
+    const live = serveHistory([makeHistoryItem({ analysis_id: 'a-1' })])
+    void live
+    server.use(
+      http.post(`${BASE}/analyses/:analysisId/rerun`, () =>
+        HttpResponse.json(
+          apiErrorBody('ANALYSIS_NOT_RERUNNABLE', 'Rerun refused.'),
+          { status: 409 },
+        ),
+      ),
+      http.delete(`${BASE}/analyses/:analysisId`, () =>
+        HttpResponse.json(apiErrorBody('INTERNAL_ERROR', 'Delete failed.'), {
+          status: 500,
+        }),
+      ),
+    )
+    renderList()
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Run sales.csv again' }),
+    )
+    expect(await screen.findByText('Rerun refused.')).toBeInTheDocument()
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Delete sales.csv' }),
+    )
+    // Starting another action clears the earlier message at once.
+    expect(screen.queryByText('Rerun refused.')).not.toBeInTheDocument()
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Delete permanently',
+      }),
+    )
+    expect(await screen.findByText('Delete failed.')).toBeInTheDocument()
+    expect(screen.queryByText('Rerun refused.')).not.toBeInTheDocument()
+  })
+
+  it('moves focus to the list heading after a deletion', async () => {
+    const live = serveHistory([makeHistoryItem({ analysis_id: 'a-1' })])
+    server.use(
+      http.delete(`${BASE}/analyses/:analysisId`, () => {
+        live.length = 0
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    renderList()
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Delete sales.csv' }),
+    )
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Delete permanently',
+      }),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Recent analyses' }),
+      ).toHaveFocus(),
+    )
+  })
+
+  it('warns that deleting a running analysis stops it first', async () => {
+    serveHistory([makeHistoryItem({ state: 'parsing', trust_label: null })])
+    renderList()
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Delete sales.csv' }),
+    )
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+      /still running; it is stopped first/,
+    )
+  })
+
   it('reports a list that cannot be loaded', async () => {
     server.use(
       http.get(`${BASE}/analyses`, () =>

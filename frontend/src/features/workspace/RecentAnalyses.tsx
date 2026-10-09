@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import type { AnalysisHistoryItem } from '../../api'
 import { Alert } from '../../components/ui/Alert'
@@ -73,9 +73,18 @@ export function RecentAnalyses() {
   const rerun = useRerunAnalysis()
   const remove = useDeleteHistoryAnalysis()
   const [deleting, setDeleting] = useState<AnalysisHistoryItem | null>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
   const busy = rerun.isPending || remove.isPending
 
+  // A new action starts from a clean slate, so an earlier failure never masks
+  // the outcome of the one the user just chose.
+  const clearErrors = () => {
+    rerun.reset()
+    remove.reset()
+  }
+
   const handleRerun = (item: AnalysisHistoryItem) => {
+    clearErrors()
     rerun.mutate(item.analysis_id, {
       onSuccess: (response) => {
         void navigate(`/analyses/${response.analysis.analysis_id}`)
@@ -88,7 +97,12 @@ export function RecentAnalyses() {
       return
     }
     remove.mutate(deleting.analysis_id, {
-      onSettled: () => setDeleting(null),
+      onSettled: () => {
+        setDeleting(null)
+        // The row is gone, so keyboard and screen-reader users keep their place
+        // by landing on the list's heading.
+        headingRef.current?.focus()
+      },
     })
   }
 
@@ -101,6 +115,8 @@ export function RecentAnalyses() {
     >
       <h2
         id="recent-heading"
+        ref={headingRef}
+        tabIndex={-1}
         className="text-lg font-medium text-slate-900 dark:text-slate-100"
       >
         Recent analyses
@@ -182,7 +198,10 @@ export function RecentAnalyses() {
                   variant="secondary"
                   disabled={busy}
                   aria-label={`Delete ${item.original_filename}`}
-                  onClick={() => setDeleting(item)}
+                  onClick={() => {
+                    clearErrors()
+                    setDeleting(item)
+                  }}
                 >
                   Delete
                 </Button>
@@ -212,7 +231,11 @@ export function RecentAnalyses() {
           <span className="font-medium">{deleting.original_filename}</span>,
           including the stored file, its findings, rules, reviews and every
           report. TrustTable will no longer recognise the file as analysed
-          before. This cannot be undone.
+          before.
+          {FINISHED_STATES.has(deleting.state)
+            ? ''
+            : ' This analysis is still running; it is stopped first.'}{' '}
+          This cannot be undone.
         </ConfirmDialog>
       )}
     </section>
