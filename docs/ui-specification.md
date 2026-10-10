@@ -588,9 +588,14 @@ frontend/
 > Workspace, the Configure step, the Run of the staged bytes, the Local AI and privacy
 > status and the disabled Compare area (sections 4.1 and 4.2). Slice S2 (`UX-03`, D-069)
 > is built: recent analyses with open, run again and delete on the Workspace, and the
-> "analysed before" notice on the Configure step (sections 4.1 and 4.2). Nothing else in
-> this section is built, and nothing here may be presented in the interface as available
-> until its slice ships.**
+> "analysed before" notice on the Configure step (sections 4.1 and 4.2). Slice S3
+> (`UX-04`, D-070) is built: the Overview and business-language progress (12.3).
+> **Slice S4 part a (`UX-05`, D-071) is built:** in the findings review the Review filter,
+> previous, next and next-unreviewed movement that follows the active filters, the
+> keyboard shortcuts P, N and U, and business labels (12.2, 12.4 and 12.5 are otherwise
+> unchanged). Persisted, non-blocking AI enrichment (12.5) is **not** built. Nothing else
+> in this section is built, and nothing here may be presented in the interface as
+> available until its slice ships.**
 > Proposal-level designs are marked as such and are to be confirmed in each slice's
 > specification, which needs a fresh, substantive independent review before
 > implementation.

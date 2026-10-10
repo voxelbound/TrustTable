@@ -27,6 +27,9 @@ export interface FindingRecord {
   affected_columns: FindingColumnReference[]
   affected_row_count: number
   evidence_count: number
+  /** Persisted review decision (`REV-01`); optional so list consumers that
+   * do not need it stay structurally compatible. */
+  review_state?: string
 }
 
 /** `Severity` enum values (`domain/value_objects.py`), most-severe
@@ -58,7 +61,22 @@ export function sortFindingsByPriority<T extends { priority_score: number }>(
 export interface FindingFilter {
   severity?: string
   category?: string
+  reviewState?: string
   search?: string
+}
+
+const SEVERITY_LABELS: Record<string, string> = {
+  critical: 'Critical',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+  informational: 'Informational',
+}
+
+/** Human-readable label for a severity; an unrecognized value is returned
+ * unchanged rather than hidden. */
+export function severityLabel(severity: string): string {
+  return SEVERITY_LABELS[severity] ?? severity
 }
 
 /** Case-insensitive substring search over the observation text and
@@ -75,6 +93,9 @@ export function filterFindings<T extends FindingRecord>(
       return false
     }
     if (filter.category && finding.category !== filter.category) {
+      return false
+    }
+    if (filter.reviewState && finding.review_state !== filter.reviewState) {
       return false
     }
     if (search) {

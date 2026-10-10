@@ -1144,6 +1144,14 @@ Specification must settle the execution model and restart behavior of enrichment
 retention and deletion of persisted output, bounded start and status, and a future
 batch seam as an interface only.
 
+Status: **partly built** (`D-071`); the item is not complete. Built (part a, frontend
+only): previous, next and next-unreviewed navigation over the filtered, priority-ordered
+list with the filters carried in the address, a review-state filter, keyboard shortcuts
+that are inert while typing, and business labels for category and severity. Not built
+(part b): persisted, non-blocking AI enrichment with its execution model, restart
+behavior, retention and deletion, bounded start and status, and the batch seam. A
+finding's explanation is still requested when the finding opens, as before.
+
 ## UX-06 — S5: finding-scoped data inspector
 
 Scrollable grid with sticky headers, affected-cell highlighting, previous and next
