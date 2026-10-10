@@ -1,8 +1,18 @@
 import { Link, useParams, useSearchParams } from 'react-router'
 import { FindingSeverityBadge } from '../../components/provenance/FindingSeverityBadge'
-import { reviewStateLabel } from '../../domain/finding'
-import { filterFindings, sortFindingsByPriority } from '../../domain/finding'
+import { categoryLabel } from '../../domain/dashboard'
+import {
+  REVIEW_STATES,
+  reviewStateLabel,
+  severityLabel,
+} from '../../domain/finding'
+import { navigateFindings } from '../../domain/findingNavigation'
 import { useAnalysisFindings } from './api'
+import {
+  carriedSearch,
+  findingFilterFromSearch,
+  visibleFindings,
+} from './findingListView'
 
 /** The Findings screen (`docs/ui-specification.md` §4.6). Filters/sort
  * are owned by URL search parameters (§6); filtering/sorting itself
@@ -16,6 +26,7 @@ export function FindingsRoute() {
 
   const severity = searchParams.get('severity') ?? ''
   const category = searchParams.get('category') ?? ''
+  const reviewFilter = searchParams.get('review') ?? ''
   const search = searchParams.get('search') ?? ''
 
   if (findingsQuery.isLoading) {
@@ -39,12 +50,13 @@ export function FindingsRoute() {
   }
 
   const allFindings = findingsQuery.data?.items ?? []
-  const filtered = filterFindings(allFindings, {
-    severity: severity || undefined,
-    category: category || undefined,
-    search: search || undefined,
-  })
-  const sorted = sortFindingsByPriority(filtered)
+  const sorted = visibleFindings(
+    allFindings,
+    findingFilterFromSearch(searchParams),
+  )
+  const carried = carriedSearch(searchParams)
+  // Navigating from outside the list: the first unreviewed finding shown.
+  const firstUnreviewedId = navigateFindings(sorted, '').nextUnreviewedId
 
   const severityOptions = Array.from(
     new Set(allFindings.map((finding) => finding.severity)),
@@ -91,7 +103,7 @@ export function FindingsRoute() {
             <option value="">All</option>
             {severityOptions.map((value) => (
               <option key={value} value={value}>
-                {value}
+                {severityLabel(value)}
               </option>
             ))}
           </select>
@@ -113,7 +125,29 @@ export function FindingsRoute() {
             <option value="">All</option>
             {categoryOptions.map((value) => (
               <option key={value} value={value}>
-                {value}
+                {categoryLabel(value)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor="review-filter"
+            className="text-xs font-medium text-slate-600 dark:text-slate-400"
+          >
+            Review
+          </label>
+          <select
+            id="review-filter"
+            value={reviewFilter}
+            onChange={(event) => updateParam('review', event.target.value)}
+            className="rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
+          >
+            <option value="">All</option>
+            {REVIEW_STATES.map((value) => (
+              <option key={value} value={value}>
+                {reviewStateLabel(value)}
               </option>
             ))}
           </select>
@@ -140,6 +174,21 @@ export function FindingsRoute() {
         {sorted.length} of {allFindings.length} finding
         {allFindings.length === 1 ? '' : 's'}
       </p>
+
+      {firstUnreviewedId ? (
+        <p className="text-sm">
+          <Link
+            to={`/analyses/${analysisId ?? ''}/findings/${firstUnreviewedId}${carried}`}
+            className="font-medium underline hover:no-underline"
+          >
+            Review the first unreviewed finding
+          </Link>
+        </p>
+      ) : sorted.length > 0 ? (
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Every finding shown has been reviewed.
+        </p>
+      ) : null}
 
       {sorted.length === 0 ? (
         <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -175,10 +224,10 @@ export function FindingsRoute() {
                 <td className="py-2 pr-4">
                   <FindingSeverityBadge severity={finding.severity} />
                 </td>
-                <td className="py-2 pr-4">{finding.category}</td>
+                <td className="py-2 pr-4">{categoryLabel(finding.category)}</td>
                 <td className="py-2 pr-4">
                   <Link
-                    to={`/analyses/${analysisId ?? ''}/findings/${finding.finding_id}`}
+                    to={`/analyses/${analysisId ?? ''}/findings/${finding.finding_id}${carried}`}
                     className="underline hover:no-underline"
                   >
                     {finding.calculated_observation}

@@ -195,6 +195,114 @@ describe('FindingsRoute', () => {
     )
   })
 
+  it('UX-05: review filter (via URL search parameters) narrows to one review state', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/findings', () =>
+        HttpResponse.json(
+          makeFindingsListResponse({
+            items: [
+              { ...FIXTURE_ITEMS[0], review_state: 'confirmed' },
+              FIXTURE_ITEMS[1],
+            ],
+          }),
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+
+    const router = renderFindings()
+    await screen.findByRole('table')
+
+    await user.selectOptions(screen.getByLabelText('Review'), 'unreviewed')
+
+    expect(await screen.findByText('1 of 2 findings')).toBeInTheDocument()
+    expect(screen.getByRole('table').textContent).toContain(
+      'category has inconsistent capitalization.',
+    )
+    expect(screen.getByRole('table').textContent).not.toContain(
+      'order_date has future dates.',
+    )
+    expect(router.state.location.search).toContain('review=unreviewed')
+  })
+
+  it('UX-05: reads an initial review filter from the URL', async () => {
+    useFixtureFindings()
+
+    renderFindings('?review=dismissed')
+
+    expect(
+      await screen.findByText('No findings match the current filters.'),
+    ).toBeInTheDocument()
+    expect((screen.getByLabelText('Review') as HTMLSelectElement).value).toBe(
+      'dismissed',
+    )
+  })
+
+  it('UX-05: shows category and severity in business wording, not raw identifiers', async () => {
+    useFixtureFindings()
+
+    renderFindings()
+
+    const table = await screen.findByRole('table')
+    expect(table.textContent).toContain('Valid values')
+    expect(table.textContent).toContain('Consistency')
+    expect(table.textContent).not.toContain('validity')
+    const category = screen.getByLabelText('Category') as HTMLSelectElement
+    expect(
+      Array.from(category.options).map((option) => option.textContent),
+    ).toEqual(['All', 'Consistency', 'Valid values'])
+    const severity = screen.getByLabelText('Severity') as HTMLSelectElement
+    expect(
+      Array.from(severity.options).map((option) => option.textContent),
+    ).toEqual(['All', 'Critical', 'Low'])
+  })
+
+  it('UX-05: links carry the active filters to the finding and offer the first unreviewed finding', async () => {
+    useFixtureFindings()
+
+    renderFindings('?severity=low')
+
+    const link = await screen.findByRole('link', {
+      name: 'category has inconsistent capitalization.',
+    })
+    expect(link).toHaveAttribute(
+      'href',
+      `/analyses/${ANALYSIS_ID}/findings/1?severity=low`,
+    )
+    expect(
+      screen.getByRole('link', { name: 'Review the first unreviewed finding' }),
+    ).toHaveAttribute(
+      'href',
+      `/analyses/${ANALYSIS_ID}/findings/1?severity=low`,
+    )
+  })
+
+  it('UX-05: when every shown finding is reviewed it says so instead of offering a link', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/findings', () =>
+        HttpResponse.json(
+          makeFindingsListResponse({
+            items: [
+              { ...FIXTURE_ITEMS[0], review_state: 'confirmed' },
+              { ...FIXTURE_ITEMS[1], review_state: 'dismissed' },
+            ],
+          }),
+        ),
+      ),
+    )
+
+    renderFindings()
+
+    expect(
+      await screen.findByText('Every finding shown has been reviewed.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', {
+        name: 'Review the first unreviewed finding',
+      }),
+    ).toBeNull()
+  })
+
   it('renders a "no findings match" message when filters exclude everything', async () => {
     useFixtureFindings()
 

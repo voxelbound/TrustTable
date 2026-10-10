@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { AiProvenance } from '../../components/provenance/AiProvenance'
 import type { AiCallStatus } from '../../components/provenance/aiProvenanceLabels'
 import { FindingSeverityBadge } from '../../components/provenance/FindingSeverityBadge'
@@ -8,13 +8,22 @@ import {
   RemediationSection,
   ValidationRuleSection,
 } from './FindingGuidanceSections'
+import { categoryLabel } from '../../domain/dashboard'
+import { navigateFindings } from '../../domain/findingNavigation'
+import { FindingNavigator } from './FindingNavigator'
 import { FindingReviewControls } from './FindingReviewControls'
 import { RowContext } from './RowContext'
 import {
+  useAnalysisFindings,
   useFindingDetail,
   useFindingEvidence,
   useFindingExplanation,
 } from './api'
+import {
+  carriedSearch,
+  findingFilterFromSearch,
+  visibleFindings,
+} from './findingListView'
 
 const PROMPT_INJECTION_CATEGORY = 'ai_processing_security'
 const REPRESENTATIVE_SAMPLE_TYPE = 'representative_sample'
@@ -55,8 +64,22 @@ export function FindingDetailRoute() {
   const detailQuery = useFindingDetail(analysisId, findingId)
   const evidenceQuery = useFindingEvidence(analysisId, findingId)
   const explanationQuery = useFindingExplanation(analysisId, findingId)
+  const findingsQuery = useAnalysisFindings(analysisId)
+  const [searchParams] = useSearchParams()
 
-  const backLink = `/analyses/${analysisId ?? ''}/findings`
+  const carried = carriedSearch(searchParams)
+  const backLink = `/analyses/${analysisId ?? ''}/findings${carried}`
+  const filter = findingFilterFromSearch(searchParams)
+  const filtered = Object.values(filter).some(Boolean)
+  // Navigation is an aid: if the list cannot be loaded the finding itself
+  // still renders, without movement controls.
+  const navigation =
+    analysisId && findingId && findingsQuery.data
+      ? navigateFindings(
+          visibleFindings(findingsQuery.data.items, filter),
+          findingId,
+        )
+      : null
 
   if (
     detailQuery.isLoading ||
@@ -146,11 +169,20 @@ export function FindingDetailRoute() {
         ← Back to findings
       </Link>
 
+      {analysisId && navigation && (
+        <FindingNavigator
+          analysisId={analysisId}
+          navigation={navigation}
+          search={carried}
+          filtered={filtered}
+        />
+      )}
+
       <section aria-labelledby="observation-heading">
         <div className="flex items-center gap-2">
           <FindingSeverityBadge severity={finding.severity} />
           <span className="text-sm text-slate-500 dark:text-slate-400">
-            {finding.category}
+            {categoryLabel(finding.category)}
           </span>
         </div>
         <h2

@@ -4,10 +4,72 @@ import {
   filterFindings,
   REVIEW_STATES,
   reviewStateLabel,
+  severityLabel,
   severityRank,
   sortFindingsByPriority,
   type FindingRecord,
 } from './finding'
+
+describe('severityLabel', () => {
+  it('names every known severity in business wording', () => {
+    expect(
+      ['critical', 'high', 'medium', 'low', 'informational'].map(severityLabel),
+    ).toEqual(['Critical', 'High', 'Medium', 'Low', 'Informational'])
+  })
+
+  it('returns an unknown severity unchanged instead of hiding it', () => {
+    expect(severityLabel('brand_new')).toBe('brand_new')
+  })
+})
+
+describe('filterFindings by review state', () => {
+  const findings = [
+    {
+      detector_id: 'd',
+      detector_version: '1',
+      category: 'validity',
+      severity: 'low',
+      confidence: 1,
+      priority_score: 1,
+      calculated_observation: 'one',
+      affected_columns: [],
+      affected_row_count: 1,
+      evidence_count: 1,
+      review_state: 'unreviewed',
+    },
+    {
+      detector_id: 'd',
+      detector_version: '1',
+      category: 'validity',
+      severity: 'low',
+      confidence: 1,
+      priority_score: 1,
+      calculated_observation: 'two',
+      affected_columns: [],
+      affected_row_count: 1,
+      evidence_count: 1,
+      review_state: 'dismissed',
+    },
+  ]
+
+  it('keeps only findings in the requested review state', () => {
+    expect(
+      filterFindings(findings, { reviewState: 'dismissed' }).map(
+        (finding) => finding.calculated_observation,
+      ),
+    ).toEqual(['two'])
+  })
+
+  it('applies no review filter when none is given', () => {
+    expect(filterFindings(findings, {})).toHaveLength(2)
+  })
+
+  it('combines with the other filters', () => {
+    expect(
+      filterFindings(findings, { reviewState: 'dismissed', severity: 'high' }),
+    ).toEqual([])
+  })
+})
 
 function makeFinding(overrides: Partial<FindingRecord> = {}): FindingRecord {
   return {
