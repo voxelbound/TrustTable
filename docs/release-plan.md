@@ -162,7 +162,7 @@ Current status: **in progress.** `v1.0` is the current milestone.
     name-based detectors (`line_total_mismatch`, `invalid_percentages`, and the review of
     `invalid_email_shape`) until they migrate; their exit condition is open and is carried by
     `DET-05`.
-- **UI/UX redesign — slices S1 to S3 and the first part of S4 built; every other slice planned and not built.** An
+- **UI/UX redesign — slices S1 to S4 built; every other slice planned and not built.** An
   owner-confirmed PLAN CHANGE makes the UI/UX redesign (`UX-01`, slices S1 to S8a) the next
   `v1.0` work, ahead of `DET-04` (D-066). Slice S1, the workspace and a deliberate start
   (`UX-02`, D-068), is built: choosing a file stages it for review and nothing is analyzed
@@ -171,11 +171,12 @@ Current status: **in progress.** `v1.0` is the current milestone.
   the exact file was analyzed before. Slice S3, the dashboard and progress (`UX-04`, D-070),
   is built: the Overview answers how much of the file the findings touch, how complete the
   data is, what has been reviewed, and where to look first, and progress is in business
-  wording with AI work shown as separate and optional. Slice S4 (`UX-05`) is split in two:
-  its first part, the findings review workspace (filtered previous, next and next-unreviewed
-  navigation, a review-state filter, keyboard support and business labels, D-071), is built;
-  its second part, persisted non-blocking AI enrichment, is planned and not built, so `UX-05`
-  is not complete. Slices S5 to S8a (`UX-06` to `UX-09`)
+  wording with AI work shown as separate and optional. Slice S4 (`UX-05`) is built in two
+  parts: the findings review workspace (filtered previous, next and next-unreviewed
+  navigation, a review-state filter, keyboard support and business labels, D-071), and
+  persisted non-blocking AI enrichment (a saved, binding-checked AI explanation prepared
+  on a bounded background worker, with the explanation route no longer calling a model,
+  D-072), so `UX-05` is complete. Slices S5 to S8a (`UX-06` to `UX-09`)
   are not built and not authorized. It does not place `DET-04`, `CCX-01`,
   `CCX-02`, `DET-05`, `DET-06`, `OBS-02`, `ING-04`, `STD-01`, `HARM-01` or `RULE-03` in any
   milestone, and nothing is removed from `v1.0`. The sequencing of accessibility,

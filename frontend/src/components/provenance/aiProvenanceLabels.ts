@@ -6,6 +6,7 @@ import type { AiProvenanceResponse } from '../../api'
  * fields. */
 export type AiCallStatus =
   | 'not_configured'
+  | 'not_attempted'
   | 'attempted_accepted'
   | 'attempted_rejected'
   | 'attempted_provider_error'
@@ -21,6 +22,8 @@ export function explanationCallStatusLabel(status: AiCallStatus): string {
       return 'an AI attempt for this analysis did not produce a usable result'
     case 'attempted_provider_error':
       return 'an AI attempt for this analysis could not complete'
+    case 'not_attempted':
+      return 'no current AI explanation is available for this finding'
     case 'not_configured':
     default:
       return 'no AI provider is configured'

@@ -736,18 +736,21 @@ Added (`AI-05`/`UI-02` slice 1, `WP-063`; documented retroactively by
 implemented"/"no route calls a provider" claims elsewhere in this repo
 after this route and §9's Context routes had already shipped).
 
-Always computes and, by default (`llm_provider="disabled"`), returns a
-deterministic explanation of the finding — no AI call, first
-implementation of `docs/product-requirements.md` §5.7's
-"deterministic explanations" AI-disabled-mode requirement. When a real
-AI provider is configured, additionally attempts a validated,
-evidence-grounded explanation through it; on acceptance the AI
-explanation is returned instead, on rejection or provider error the
-deterministic explanation is returned unchanged (graceful
-degradation). When the analysis's context has been finalized
-(`POST .../finalize`), the context fields **the user confirmed or
-corrected** are also made available to this call, grounding the analysis
-further; inferred or unknown fields are never sent (`AI-08`, D-040).
+Always computes and returns a deterministic explanation of the finding —
+no AI call, first implementation of `docs/product-requirements.md` §5.7's
+"deterministic explanations" AI-disabled-mode requirement.
+
+**This route never calls a model (`UX-05b`, D-072).** It answers at once. When
+a provider is configured it overlays a *saved* AI explanation, validated and
+evidence-grounded, **only while that explanation is current** (bound to this
+finding, the confirmed-context version, the model identity and the prompt and
+contract version, see the AI enrichment routes below); a rejected or failed
+attempt, a stale result, or none at all leaves the deterministic explanation
+unchanged (graceful degradation). When the analysis's context has been
+finalized (`POST .../finalize`), the context fields **the user confirmed or
+corrected** are made available to the enrichment call, grounding the analysis
+further; inferred or unknown fields are never sent (`AI-08`, D-040). Before
+`UX-05b` this route made that call within the request.
 
 **Four-section analysis (`AI-08`, D-040).** Despite its name (kept for
 compatibility), this resource returns one finding's whole grounded
@@ -798,8 +801,10 @@ Returns:
   `runtime_label` "llama.cpp", `model_label` "Qwen3.5 4B",
   `quantization` "Q4_K_M", `model_identifier`). This is what a UI shows;
   the raw configured model value never leaves the backend
-- `ai_call_status` (`WP-065`) — exactly one of `"not_configured"`
-  (no AI provider configured, no attempt made), `"attempted_accepted"`,
+- `ai_call_status` (`WP-065`; `"not_attempted"` added by `UX-05b`) — exactly
+  one of `"not_configured"` (no AI provider configured, no attempt made),
+  `"not_attempted"` (a provider is configured but no current AI explanation
+  exists: none requested, still preparing, or stale), `"attempted_accepted"`,
   `"attempted_rejected"` (a provider was called but its output, and any
   bounded retries, never validated), `"attempted_provider_error"` (a
   provider was called and failed to respond). Deliberately independent
@@ -824,6 +829,34 @@ Returns:
 
 Raises `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND` per the sibling finding
 routes.
+
+### Persisted AI enrichment: `GET` and `POST /analyses/{analysis_id}/findings/{finding_id}/ai-enrichment` (`UX-05b`, `docs/decision-log.md` D-072)
+
+The optional AI explanation of one finding is persisted and non-blocking. The model
+call runs on a bounded background worker; these two routes are short and never wait
+on a model.
+
+- `POST` starts or finds the enrichment and returns `202 Accepted` with the state.
+  It is **idempotent**: while a current enrichment is `preparing` or `ready` it makes
+  no further model call. A `failed` or `stale` enrichment is started again. With no
+  provider configured it returns the state `unavailable` and stores nothing. A start
+  past the bound of eight enrichments preparing at once is refused with `429
+  AI_ENRICHMENT_BUSY`; it is never queued without limit.
+- `GET` reports the state.
+
+Both return `finding_id`, `state`, `reason` and `poll_interval_ms`. `state` is
+exactly one of `unavailable`, `not_requested`, `preparing`, `ready`, `failed` or
+`stale`. `reason` is set only for `failed`: `interrupted` (the application restarted
+while it was running), `provider_error`, `rejected` (the output never validated),
+`superseded` or `unreadable`. `poll_interval_ms` is set only while `preparing`. No
+response carries model output, a path, an address or a prompt: a ready result is read
+through `GET .../explanation`.
+
+A saved result is bound to the finding, the confirmed-context version, the model
+identity and the prompt and contract version, and is `stale` (and not shown) when
+any of them changes. After a restart nothing is left `preparing`: it becomes `failed`
+with reason `interrupted`. Saved output is deleted with its analysis. What is sent
+to a model is unchanged. Raises `ANALYSIS_NOT_FOUND`/`FINDING_NOT_FOUND`.
 
 ### GET `/analyses/{analysis_id}/observations` (`DET-03` closure package 2; provisional, read-only; `docs/decision-log.md` D-063)
 
@@ -1157,14 +1190,14 @@ Existing routes, including direct upload `POST /analyses`, keep their contracts.
 | AI status (`UX-02`, `UX-09`) — **status route built by `UX-02`, section 4 (D-068)**; guided setup and connection testing remain `UX-09` | `GET /ai/status` | Honest enabled, ready and model-identity state; path-free and address-free labels; an abstract status that does not assume where a runtime runs |
 | History (`UX-03`) — **built by `UX-03`, section 6 (D-069)** | `GET /analyses`; `POST /analyses/{id}/rerun`; `previously_analysed` on the staged-upload resource | The lookup is not a dataset identity; it reflects only analyses that still exist; none of the new responses carries an integrity hash. The pre-existing `dataset.content_hash` field of the analysis resource predates this slice and is unchanged by it (see D-069) |
 | Dashboard (`UX-04`) — **built by `UX-04`, section 6 (D-070)** | `GET /analyses/{id}/summary` | Distinct affected rows, shape and completeness with its sampled-or-full scope; counts only, no cell value, row list or hash; severity and category distribution, columns with most findings and review progress are derived by the client from the findings list |
-| Persisted AI enrichment (`UX-05`) | Start or resume, read status and read a saved result per finding, split from the deterministic explanation | Deterministic content never waits for a model call; the result is bound to the finding, confirmed-context version, model identity and prompt or contract version and is reported stale when the binding changes; start and status must not depend on one long request; bounded concurrency; saved output is deleted with its analysis |
+| Persisted AI enrichment (`UX-05`) — **built by `UX-05b`, section 10 (D-072)** | `POST` and `GET .../findings/{id}/ai-enrichment`; `GET .../explanation` no longer calls a model | Deterministic content never waits for a model call; the result is bound to the finding, confirmed-context version, model identity and prompt or contract version and is reported stale when the binding changes; start and status must not depend on one long request; bounded concurrency; saved output is deleted with its analysis |
 | Inspector (`UX-06`) | Bounded, finding-scoped row windows, including observation example rows | Server-side bounds; no shared-cache storage; unchanged privacy boundary (D-025); window and paging limits are set only after the performance spike |
 | Settings (`UX-08`) | Read effective settings with their source (deployment override, stored, default); write allowlisted, typed, versioned stored settings; reset to default | Computed server-side; a stored value never exceeds a deployment override or a security or resource limit; unknown keys and values rejected; write-path protection and fail-closed behavior; a narrow Advanced response may expose effective runtime and model configuration and raw paths and URLs never appear in analysis, finding, report or other shareable responses |
 
-Behavior preserved: `GET .../findings/{finding_id}/explanation` and
-`GET .../findings/{finding_id}/rule-proposal` currently perform a model call per
-request where configured; the redesign must not make a screen depend on that, and the
-existing contracts stay until a slice specification changes them deliberately.
+Behavior preserved: `GET .../findings/{finding_id}/rule-proposal` still performs a
+model call per request where configured; the redesign must not make a screen depend
+on that, and the existing contract stays until a slice specification changes it
+deliberately. (`GET .../explanation` stopped doing so in `UX-05b`, D-072.)
 
 Not planned in this redesign: file-reading options (`ING-05`), rule creation, editing
 or reuse across analyses (`RULE-04`), selectable analysis methods, a general dataset

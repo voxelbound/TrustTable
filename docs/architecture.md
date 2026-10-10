@@ -1332,9 +1332,9 @@ Core rules:
 - pinned dependencies and images
 - generated SBOM
 
-## 12. Planned architecture for the UI/UX redesign (planned, not built; D-066)
+## 12. Planned architecture for the UI/UX redesign (D-066; items marked built are built)
 
-> Nothing in this section exists. These are requirements the owner-confirmed redesign
+> Items not marked built do not exist. These are requirements the owner-confirmed redesign
 > places on the architecture. Where more than one valid mechanism exists, none is
 > approved here; each slice specification chooses and is reviewed independently.
 
@@ -1349,11 +1349,17 @@ Core rules:
   a default; packaging must not set a managed key. Deployment configuration and security
   or resource limits stay in environment configuration and are never overridable by a
   stored value.
-- **AI enrichment.** Persisted per finding, bound to finding identity, confirmed-context
-  version, model identity and prompt or contract version, with a status that survives
-  restart (a result must not stay "preparing" after a restart), bounded start and
-  status, and no dependency on one long browser request. The existing job facility is
-  reused where it fits. A future user-initiated batch is an interface only.
+- **AI enrichment (built by `UX-05b`, D-072).** Persisted per finding, bound to finding
+  identity, confirmed-context version, model identity and prompt or contract version,
+  with a status that survives restart (a result must not stay "preparing" after a
+  restart), bounded start and status, and no dependency on one long browser request.
+  Built as: a `finding_enrichments` table (one row per analysis and finding, a digest
+  of the binding, only an accepted validated explanation stored, deleted with its
+  analysis); a bounded in-process `EnrichmentPool` (the same one-instance model as
+  `JobPool`, `ADR-004`) with the preparing bound counted from the stored rows; startup
+  reconciliation that fails every row left `preparing` as `interrupted`; and short
+  `POST`/`GET .../ai-enrichment` routes. `GET .../explanation` no longer calls a model.
+  A future user-initiated batch is an interface only.
 - **Inspector.** A data path separate from canonical evidence, AI payload assembly and
   report assembly, with bounded server-side windows and a performance spike on the real
   parse path (the stored file is re-parsed on every row-context call today) before any

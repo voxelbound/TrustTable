@@ -10,6 +10,7 @@ import {
 } from './FindingGuidanceSections'
 import { categoryLabel } from '../../domain/dashboard'
 import { navigateFindings } from '../../domain/findingNavigation'
+import { FindingAiPanel } from './FindingAiPanel'
 import { FindingNavigator } from './FindingNavigator'
 import { FindingReviewControls } from './FindingReviewControls'
 import { RowContext } from './RowContext'
@@ -37,7 +38,10 @@ const REPRESENTATIVE_SAMPLE_TYPE = 'representative_sample'
  * business impact, Remediation and Validation rule are one coherent
  * analysis, all from the same `GET .../explanation` response — a single
  * validated AI response when one was accepted, TrustTable's deterministic
- * built-in guidance otherwise, never a placeholder. Each kind of statement
+ * built-in guidance otherwise, never a placeholder. **`UX-05b` (D-066 item
+ * 7):** that response never waits on a model; a saved AI result is overlaid on
+ * it only while current, and `FindingAiPanel` reports the AI state apart from
+ * the guidance (preparing, failed, busy). Each kind of statement
  * stays distinguishable: deterministic observation/evidence above, AI
  * interpretation (labelled with a human-readable identity, never a
  * filesystem path), conditional vs. context-informed potential impact (never
@@ -221,6 +225,12 @@ export function FindingDetailRoute() {
                 : ''}
               . The full raw dataset is never sent.
             </p>
+          )}
+          {analysisId && (
+            <FindingAiPanel
+              analysisId={analysisId}
+              findingId={finding.finding_id}
+            />
           )}
         </section>
       )}

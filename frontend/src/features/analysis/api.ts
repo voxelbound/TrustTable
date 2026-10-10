@@ -28,6 +28,7 @@ import {
   getAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGet,
   getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet,
   getAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGet,
+  getFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentGet,
   listReportsApiV1AnalysesAnalysisIdReportsGet,
   postAnalysisCancelApiV1AnalysesAnalysisIdCancelPost,
   postAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePost,
@@ -35,6 +36,7 @@ import {
   postAnalysisRetryApiV1AnalysesAnalysisIdRetryPost,
   postAnalysisUploadApiV1AnalysesPost,
   postDemoSalesApiV1DemoSalesPost,
+  postFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPost,
   putAnalysisContextApiV1AnalysesAnalysisIdContextPut,
   putAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdReviewPut,
   type AnalysisProfileResponse,
@@ -45,6 +47,7 @@ import {
   type ClarificationQuestionListResponse,
   type ContextResponse,
   type DemoAnalysisResponse,
+  type FindingAiEnrichmentResponse,
   type ReportListResponse,
   type ReportOptionsModel,
   type ReportResponse,
@@ -429,6 +432,78 @@ export function useFindingExplanation(
       return result.data
     },
     enabled: Boolean(analysisId) && Boolean(findingId),
+  })
+}
+
+export const FINDING_AI_ENRICHMENT_QUERY_KEY = 'analysis-finding-ai-enrichment'
+const ENRICHMENT_POLL_FALLBACK_MS = 1000
+
+/** `GET .../findings/{finding_id}/ai-enrichment` (`UX-05b`): the state of one
+ * finding's persisted, non-blocking AI enrichment. A short request that never
+ * waits on a model; it is polled only while the enrichment is `preparing`, at
+ * the interval the backend names, and stops as soon as it is anything else. */
+export function useFindingAiEnrichment(
+  analysisId: string | undefined,
+  findingId: string | undefined,
+) {
+  return useQuery<FindingAiEnrichmentResponse, ApiCallError>({
+    queryKey: [FINDING_AI_ENRICHMENT_QUERY_KEY, analysisId, findingId],
+    queryFn: async () => {
+      const result =
+        await getFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentGet(
+          {
+            path: {
+              analysis_id: analysisId as string,
+              finding_id: findingId as string,
+            },
+          },
+        )
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled: Boolean(analysisId) && Boolean(findingId),
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (data?.state !== 'preparing') {
+        return false
+      }
+      return data.poll_interval_ms ?? ENRICHMENT_POLL_FALLBACK_MS
+    },
+  })
+}
+
+/** `POST .../findings/{finding_id}/ai-enrichment` (`UX-05b`): start (or find)
+ * the enrichment. It returns at once; the model call runs on the backend. The
+ * returned state replaces the cached status, which then polls itself. */
+export function useStartFindingAiEnrichment(
+  analysisId: string | undefined,
+  findingId: string | undefined,
+) {
+  const queryClient = useQueryClient()
+  return useMutation<FindingAiEnrichmentResponse, ApiCallError, void>({
+    mutationFn: async () => {
+      const result =
+        await postFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPost(
+          {
+            path: {
+              analysis_id: analysisId as string,
+              finding_id: findingId as string,
+            },
+          },
+        )
+      if (result.data === undefined) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(
+        [FINDING_AI_ENRICHMENT_QUERY_KEY, analysisId, findingId],
+        data,
+      )
+    },
   })
 }
 

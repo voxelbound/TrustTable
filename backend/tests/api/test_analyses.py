@@ -41,6 +41,8 @@ from trusttable_backend.config import get_settings
 from trusttable_backend.persistence.models import AnalysisRecord
 from trusttable_backend.request_context import REQUEST_ID_HEADER
 
+from ..enrichment_support import get_ai_explanation
+
 _VALID_AI_OUTPUT = {
     "schema_version": "1",
     "narrative": "A validated AI narrative.",
@@ -876,7 +878,7 @@ def test_get_analysis_finding_explanation_with_mock_provider_is_ai_interpretatio
     monkeypatch.setenv("LLM_PROVIDER", "mock")
     get_settings.cache_clear()
 
-    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/0/explanation")
+    response = get_ai_explanation(client, created["analysis_id"], "0")
 
     assert response.status_code == 200
     body = response.json()
@@ -910,7 +912,7 @@ def test_get_analysis_finding_explanation_rejected_output_falls_back_with_status
     get_settings.cache_clear()
     monkeypatch.setattr(analyses_module, "create_provider", lambda *a, **kw: _RejectingProvider())
 
-    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/0/explanation")
+    response = get_ai_explanation(client, created["analysis_id"], "0")
 
     assert response.status_code == 200
     body = response.json()
@@ -939,7 +941,7 @@ def test_get_analysis_finding_explanation_provider_error_falls_back_with_status(
     get_settings.cache_clear()
     monkeypatch.setattr(analyses_module, "create_provider", lambda *a, **kw: _ErroringProvider())
 
-    response = client.get(f"/api/v1/analyses/{created['analysis_id']}/findings/0/explanation")
+    response = get_ai_explanation(client, created["analysis_id"], "0")
 
     assert response.status_code == 200
     body = response.json()
@@ -976,9 +978,7 @@ def test_get_analysis_finding_explanation_ai_call_status_independent_of_security
     monkeypatch.setenv("LLM_PROVIDER", "mock")
     get_settings.cache_clear()
 
-    explanation_response = client.get(
-        f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/explanation"
-    )
+    explanation_response = get_ai_explanation(client, analysis_id, finding_id)
     detail_response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}")
 
     assert explanation_response.status_code == 200
@@ -1017,9 +1017,7 @@ def test_get_analysis_finding_explanation_preserves_canonical_evidence_when_sani
     monkeypatch.setenv("LLM_PROVIDER", "mock")
     get_settings.cache_clear()
 
-    explanation_response = client.get(
-        f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/explanation"
-    )
+    explanation_response = get_ai_explanation(client, analysis_id, finding_id)
 
     assert explanation_response.status_code == 200
     body = explanation_response.json()
@@ -1052,7 +1050,7 @@ def test_get_analysis_finding_explanation_confirmed_context_sent_to_model_after_
     monkeypatch.setenv("LLM_PROVIDER", "mock")
     get_settings.cache_clear()
 
-    before_finalize = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/explanation")
+    before_finalize = get_ai_explanation(client, analysis_id, "0")
     assert before_finalize.json()["confirmed_context_sent_to_model"] is False
     assert before_finalize.json()["evidence_sent_to_model"] is True
 
@@ -1069,7 +1067,9 @@ def test_get_analysis_finding_explanation_confirmed_context_sent_to_model_after_
     )
     assert finalize_response.status_code == 202
 
-    after_finalize = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/explanation")
+    # The confirmed context changed, so the earlier enrichment is stale; a new
+    # one is requested under the new binding.
+    after_finalize = get_ai_explanation(client, analysis_id, "0")
 
     assert after_finalize.status_code == 200
     after_body = after_finalize.json()
@@ -1096,7 +1096,7 @@ def test_finalizing_without_confirming_anything_sends_no_context_to_the_model(
     assert finalize_response.status_code == 202
     recording.requests.clear()
 
-    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/explanation")
+    response = get_ai_explanation(client, analysis_id, "0")
 
     assert response.status_code == 200
     body = response.json()
@@ -1472,7 +1472,7 @@ def test_get_analysis_finding_explanation_uses_confirmed_context_after_finalize(
     assert finalize_response.status_code == 202
     recording.requests.clear()  # isolate the explanation call's own request
 
-    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/explanation")
+    response = get_ai_explanation(client, analysis_id, "0")
 
     assert response.status_code == 200
     assert len(recording.requests) == 1
@@ -1504,7 +1504,7 @@ def test_get_analysis_finding_explanation_ignores_unfinalized_context(
     client.get(f"/api/v1/analyses/{analysis_id}/context")
     recording.requests.clear()
 
-    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/explanation")
+    response = get_ai_explanation(client, analysis_id, "0")
 
     assert response.status_code == 200
     assert len(recording.requests) == 1

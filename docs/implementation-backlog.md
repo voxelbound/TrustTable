@@ -1144,13 +1144,18 @@ Specification must settle the execution model and restart behavior of enrichment
 retention and deletion of persisted output, bounded start and status, and a future
 batch seam as an interface only.
 
-Status: **partly built** (`D-071`); the item is not complete. Built (part a, frontend
-only): previous, next and next-unreviewed navigation over the filtered, priority-ordered
-list with the filters carried in the address, a review-state filter, keyboard shortcuts
-that are inert while typing, and business labels for category and severity. Not built
-(part b): persisted, non-blocking AI enrichment with its execution model, restart
-behavior, retention and deletion, bounded start and status, and the batch seam. A
-finding's explanation is still requested when the finding opens, as before.
+Status: **built** (`D-071`, `D-072`). Part a (frontend only): previous, next and
+next-unreviewed navigation over the filtered, priority-ordered list with the filters
+carried in the address, a review-state filter, keyboard shortcuts that are inert while
+typing, and business labels for category and severity. Part b: persisted, non-blocking
+AI enrichment per finding. The explanation route no longer calls a model; a short
+`POST`/`GET .../ai-enrichment` pair starts and reports it; the call runs on a bounded
+in-process worker; a saved result is bound to the finding, confirmed-context version,
+model identity and prompt or contract version and is stale when any changes; a restart
+fails anything left preparing; saved output is deleted with its analysis; the screen
+shows the built-in guidance at once with a separate AI state. Not built, and not part
+of this item: AI for all findings at once (the batch seam is an interface only), and
+`rule-proposal`, which still calls the model within its request.
 
 ## UX-06 — S5: finding-scoped data inspector
 

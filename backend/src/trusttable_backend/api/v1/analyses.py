@@ -35,6 +35,7 @@ creating a new, independent analysis over the same dataset content — see
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from functools import partial
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request, UploadFile
@@ -88,7 +89,7 @@ from trusttable_backend.analysis import (
 )
 from trusttable_backend.analysis.history import DEFAULT_HISTORY_LIMIT, MAX_HISTORY_LIMIT
 from trusttable_backend.analysis.summary import build_dashboard_summary
-from trusttable_backend.config import get_settings
+from trusttable_backend.config import Settings, get_settings
 from trusttable_backend.context_inference.ai_context import (
     ContextInferenceResult,
     build_context_inference_envelope,
@@ -105,6 +106,7 @@ from trusttable_backend.domain.clarification import ClarificationAnswer, Clarifi
 from trusttable_backend.domain.context import ContextField, ContextFieldValue, DatasetContext
 from trusttable_backend.domain.evidence import Evidence
 from trusttable_backend.domain.explanation import FindingExplanation, ValidationRuleType
+from trusttable_backend.domain.finding_enrichment import EnrichmentReason, EnrichmentStatus
 from trusttable_backend.domain.observation import Observation
 from trusttable_backend.domain.parsing import Dataset, DatasetFormat, DatasetSourceType
 from trusttable_backend.domain.review import FindingReview, FindingReviewState
@@ -116,6 +118,7 @@ from trusttable_backend.domain.rules import (
     ValidationRule,
 )
 from trusttable_backend.domain.value_objects import ColumnReference, Severity
+from trusttable_backend.enrichment import AiEnrichmentState, compute_binding_digest, derive_state
 from trusttable_backend.errors import AppError
 from trusttable_backend.explanation.ai_explanation import (
     build_finding_explanation_envelope,
@@ -129,7 +132,12 @@ from trusttable_backend.ingestion import (
     require_worksheet_applies,
     validate_upload_name,
 )
-from trusttable_backend.jobs import JobPool
+from trusttable_backend.jobs import EnrichmentPool, JobPool
+from trusttable_backend.persistence.enrichment_store import (
+    AI_CALL_NOT_ATTEMPTED,
+    BeginOutcome,
+    SqlEnrichmentStore,
+)
 from trusttable_backend.profiling.schemas import ColumnProfile, DatasetProfile, ProfilingWarning
 from trusttable_backend.risk.scoring import TrustAssessment
 from trusttable_backend.rules.ai_generation import (
@@ -159,6 +167,7 @@ from trusttable_backend.schemas.analysis import (
     DatasetSummaryResponse,
     DemoAnalysisResponse,
     FinalizeContextRequest,
+    FindingAiEnrichmentResponse,
     FindingDetailResponse,
     FindingEvidenceItem,
     FindingEvidenceListResponse,
@@ -219,6 +228,18 @@ def get_job_pool(request: Request) -> JobPool:
     """
     job_pool: JobPool = request.app.state.job_pool
     return job_pool
+
+
+def get_enrichment_store(request: Request) -> SqlEnrichmentStore:
+    """Return the app's durable per-finding AI enrichment store (`UX-05b`)."""
+    enrichment_store: SqlEnrichmentStore = request.app.state.enrichment_store
+    return enrichment_store
+
+
+def get_enrichment_pool(request: Request) -> EnrichmentPool:
+    """Return the app's bounded AI enrichment pool (`UX-05b`)."""
+    enrichment_pool: EnrichmentPool = request.app.state.enrichment_pool
+    return enrichment_pool
 
 
 _AI_CALL_STATUS_OUTCOME = {
@@ -791,63 +812,31 @@ def get_analysis_finding_explanation(
     store = get_analysis_store(request)
     analysis = _get_or_404(store, analysis_id)
     finding = _get_finding_or_404(store, analysis_id, finding_id)
-    evidence = get_finding_evidence(store, analysis_id, finding_id)
     explanation = build_deterministic_explanation(finding)
     ai_call_status = "not_configured"
     evidence_sent_to_model = False
     confirmed_context_sent_to_model = False
 
+    # `UX-05b`: this route never calls a model. It answers at once with the
+    # deterministic four sections and overlays a *current* saved AI
+    # enrichment, if there is one. Requesting an enrichment is
+    # `POST .../ai-enrichment`; it runs on a worker, not in this request.
     settings = get_settings()
     if settings.llm_provider != "disabled":
-        # `AI-08`: only user-confirmed/corrected fields, and only once the
-        # context is finalized. Inferred or unknown fields are never sent.
-        confirmed_context = confirmed_context_for_finding_analysis(
-            analysis.context, finalized=analysis.context_finalized
-        )
-        # The AI path is an optional enrichment: whatever goes wrong on it —
-        # a misconfigured provider (an empty `LLM_MODEL`, a malformed base
-        # URL) or anything unexpected — the deterministic four sections are
-        # still returned with a truthful status, never a 500 that removes
-        # them. Nothing about the failure is echoed or logged.
-        ai_call_status = "attempted_provider_error"
-        try:
-            provider = create_provider(
-                settings.llm_provider,
-                base_url=settings.llm_base_url,
-                model_identifier=settings.llm_model,
-                timeout_seconds=float(settings.llm_timeout_seconds),
-            )
-            envelope = build_finding_explanation_envelope(
-                finding, evidence, confirmed_context=confirmed_context
-            )
-        except Exception:
-            # Nothing was built or sent.
-            pass
-        else:
-            # Conservative from here on: a request may have been made.
-            evidence_sent_to_model = True
-            confirmed_context_sent_to_model = confirmed_context is not None
-            try:
-                result = run_finding_explanation(provider, envelope, evidence)
-            except Exception:
-                pass
-            else:
-                if result.accepted and result.explanation is not None:
-                    explanation = result.explanation
-                    ai_call_status = "attempted_accepted"
-                elif result.provider_error is not None:
-                    ai_call_status = "attempted_provider_error"
-                else:
-                    ai_call_status = "attempted_rejected"
+        ai_call_status = AI_CALL_NOT_ATTEMPTED
+        saved = get_enrichment_store(request).get(analysis_id, finding_id)
+        if saved is not None and saved.binding_digest == _enrichment_binding(
+            analysis, finding_id, settings
+        ):
+            if saved.status is EnrichmentStatus.READY and saved.explanation is not None:
+                explanation = saved.explanation
+                ai_call_status = "attempted_accepted"
+            elif saved.status is EnrichmentStatus.FAILED:
+                ai_call_status = saved.ai_call_status
+            if saved.status is not EnrichmentStatus.PREPARING:
+                evidence_sent_to_model = saved.evidence_sent_to_model
+                confirmed_context_sent_to_model = saved.confirmed_context_sent_to_model
 
-    if ai_call_status != "not_configured":
-        _record_enrichment(
-            store,
-            analysis_id,
-            _AI_CALL_STATUS_OUTCOME[ai_call_status],
-            evidence_sent=evidence_sent_to_model,
-            confirmed_context_sent=confirmed_context_sent_to_model,
-        )
     return _finding_explanation_response(
         finding_id,
         explanation,
@@ -855,6 +844,248 @@ def get_analysis_finding_explanation(
         evidence_sent_to_model=evidence_sent_to_model,
         confirmed_context_sent_to_model=confirmed_context_sent_to_model,
     )
+
+
+# --- Persisted, non-blocking AI enrichment (`UX-05b`, D-066 item 7) ----------
+
+_ENRICHMENT_POLL_INTERVAL_MS = 1000
+
+
+def _enrichment_binding(analysis: Analysis, finding_id: str, settings: Settings) -> str:
+    """The binding a saved enrichment is valid for right now: this finding,
+    the confirmed-context version, the configured model and the prompt and
+    contract versions (`enrichment.binding`)."""
+    return compute_binding_digest(
+        finding_id=finding_id,
+        context_version=analysis.context_version,
+        context_finalized=analysis.context_finalized,
+        provider_name=settings.llm_provider,
+        model_identifier=settings.llm_model,
+    )
+
+
+def _enrichment_response(
+    finding_id: str, state: AiEnrichmentState, reason: EnrichmentReason | None
+) -> FindingAiEnrichmentResponse:
+    return FindingAiEnrichmentResponse(
+        finding_id=finding_id,
+        state=state.value,
+        reason=reason.value if state is AiEnrichmentState.FAILED and reason is not None else None,
+        poll_interval_ms=(
+            _ENRICHMENT_POLL_INTERVAL_MS if state is AiEnrichmentState.PREPARING else None
+        ),
+    )
+
+
+def _execute_finding_enrichment(
+    store: AnalysisStoreProtocol,
+    enrichment_store: SqlEnrichmentStore,
+    analysis_id: str,
+    finding_id: str,
+    binding_digest: str,
+) -> None:
+    """The model call for one finding, run on an enrichment worker thread.
+
+    Nothing that goes wrong with the model, the provider or a lookup is raised:
+    the row ends `failed` (or `ready`) and the deterministic content is
+    untouched. Only a failure to write the result itself can propagate, and then
+    the row is failed by the next start's reconciliation. It sends exactly what the
+    explanation route used to send (bounded finding evidence and, once the
+    context is finalized, the confirmed context only: `AI-08`, D-038) and
+    records the attempt in the analysis's call counters exactly once (D-047).
+    Nothing about a failure, and no model output, is logged.
+    """
+    settings = get_settings()
+    status = EnrichmentStatus.FAILED
+    reason: EnrichmentReason | None = EnrichmentReason.PROVIDER_ERROR
+    ai_call_status = AI_CALL_NOT_ATTEMPTED
+    evidence_sent = False
+    confirmed_context_sent = False
+    explanation: FindingExplanation | None = None
+    try:
+        analysis = store.get(analysis_id)
+        if analysis is None:
+            return  # deleted while queued: its enrichment is already gone
+        finding = get_finding(store, analysis_id, finding_id)
+        evidence = get_finding_evidence(store, analysis_id, finding_id)
+        if _enrichment_binding(analysis, finding_id, settings) != binding_digest:
+            # The context or the model changed after the request: this attempt
+            # would be stale on arrival. No model call is made.
+            reason = EnrichmentReason.SUPERSEDED
+        else:
+            # `AI-08`: only user-confirmed/corrected fields, and only once the
+            # context is finalized. Inferred or unknown fields are never sent.
+            confirmed_context = confirmed_context_for_finding_analysis(
+                analysis.context, finalized=analysis.context_finalized
+            )
+            ai_call_status = "attempted_provider_error"
+            try:
+                provider = create_provider(
+                    settings.llm_provider,
+                    base_url=settings.llm_base_url,
+                    model_identifier=settings.llm_model,
+                    timeout_seconds=float(settings.llm_timeout_seconds),
+                )
+                envelope = build_finding_explanation_envelope(
+                    finding, evidence, confirmed_context=confirmed_context
+                )
+            except Exception:
+                pass  # nothing was built or sent
+            else:
+                # Conservative from here on: a request may have been made.
+                evidence_sent = True
+                confirmed_context_sent = confirmed_context is not None
+                try:
+                    result = run_finding_explanation(provider, envelope, evidence)
+                except Exception:
+                    pass
+                else:
+                    if result.accepted and result.explanation is not None:
+                        status, reason = EnrichmentStatus.READY, None
+                        explanation = result.explanation
+                        ai_call_status = "attempted_accepted"
+                    elif result.provider_error is not None:
+                        ai_call_status = "attempted_provider_error"
+                    else:
+                        reason = EnrichmentReason.REJECTED
+                        ai_call_status = "attempted_rejected"
+    except Exception:
+        # A lookup failed before any model call: the enrichment failed, the
+        # deterministic content is unaffected.
+        status, reason, explanation = EnrichmentStatus.FAILED, EnrichmentReason.PROVIDER_ERROR, None
+        ai_call_status = AI_CALL_NOT_ATTEMPTED if not evidence_sent else ai_call_status
+
+    # The attempt is counted *before* the row is finished, so whoever sees the
+    # enrichment as finished also sees it in the call counters (D-047); the row
+    # is finished even if counting fails, so it can never stay `preparing`.
+    try:
+        if ai_call_status != AI_CALL_NOT_ATTEMPTED:
+            _record_enrichment(
+                store,
+                analysis_id,
+                _AI_CALL_STATUS_OUTCOME[ai_call_status],
+                evidence_sent=evidence_sent,
+                confirmed_context_sent=confirmed_context_sent,
+            )
+    finally:
+        enrichment_store.complete(
+            analysis_id,
+            finding_id,
+            binding_digest=binding_digest,
+            status=status,
+            reason=reason,
+            ai_call_status=ai_call_status,
+            evidence_sent_to_model=evidence_sent,
+            confirmed_context_sent_to_model=confirmed_context_sent,
+            explanation=explanation,
+        )
+
+
+@router.get(
+    "/analyses/{analysis_id}/findings/{finding_id}/ai-enrichment",
+    response_model=FindingAiEnrichmentResponse,
+)
+def get_finding_ai_enrichment(
+    analysis_id: str, finding_id: str, request: Request
+) -> FindingAiEnrichmentResponse:
+    """Report the state of one finding's AI enrichment (`UX-05b`). A short,
+    read-only request that never calls a model; poll it while `preparing`."""
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    _get_finding_or_404(store, analysis_id, finding_id)
+    settings = get_settings()
+    saved = get_enrichment_store(request).get(analysis_id, finding_id)
+    state = derive_state(
+        provider_enabled=settings.llm_provider != "disabled",
+        current_binding_digest=_enrichment_binding(analysis, finding_id, settings),
+        enrichment=saved,
+    )
+    return _enrichment_response(finding_id, state, saved.reason if saved else None)
+
+
+@router.post(
+    "/analyses/{analysis_id}/findings/{finding_id}/ai-enrichment",
+    response_model=FindingAiEnrichmentResponse,
+    status_code=202,
+)
+def post_finding_ai_enrichment(
+    analysis_id: str, finding_id: str, request: Request
+) -> FindingAiEnrichmentResponse:
+    """Start (or find) the AI enrichment of one finding (`UX-05b`).
+
+    Returns at once; the model call runs on a bounded background worker. It is
+    idempotent: while a current enrichment is `preparing` or `ready` it only
+    reports it and never makes another model call. A `failed` or `stale` one is
+    started again. No model configured is not an error: the state is
+    `unavailable`. A burst past the bound is refused with `429`
+    `AI_ENRICHMENT_BUSY` rather than queued without limit. What is sent to a
+    model is unchanged.
+    """
+    store = get_analysis_store(request)
+    analysis = _get_or_404(store, analysis_id)
+    _get_finding_or_404(store, analysis_id, finding_id)
+    settings = get_settings()
+    if settings.llm_provider == "disabled":
+        return _enrichment_response(finding_id, AiEnrichmentState.UNAVAILABLE, None)
+
+    enrichment_store = get_enrichment_store(request)
+    pool = get_enrichment_pool(request)
+    binding = _enrichment_binding(analysis, finding_id, settings)
+    begun = enrichment_store.begin(
+        analysis_id,
+        finding_id,
+        binding_digest=binding,
+        # Conservative until the attempt completes ("may have been sent").
+        evidence_sent_to_model=True,
+        confirmed_context_sent_to_model=confirmed_context_for_finding_analysis(
+            analysis.context, finalized=analysis.context_finalized
+        )
+        is not None,
+        max_preparing=pool.max_preparing,
+    )
+    if begun.outcome is BeginOutcome.ANALYSIS_MISSING:
+        raise _not_found(analysis_id)
+    if begun.outcome is BeginOutcome.BUSY:
+        raise AppError(
+            "AI_ENRICHMENT_BUSY",
+            "AI explanations are busy right now. Try again shortly.",
+            status_code=429,
+            details={"analysis_id": analysis_id, "finding_id": finding_id},
+        )
+    if begun.outcome is BeginOutcome.STARTED:
+        try:
+            pool.submit(
+                partial(
+                    _execute_finding_enrichment,
+                    store,
+                    enrichment_store,
+                    analysis_id,
+                    finding_id,
+                    binding,
+                )
+            )
+        except RuntimeError:
+            # The pool is shutting down: no worker will ever finish this row.
+            enrichment_store.complete(
+                analysis_id,
+                finding_id,
+                binding_digest=binding,
+                status=EnrichmentStatus.FAILED,
+                reason=EnrichmentReason.INTERRUPTED,
+                ai_call_status=AI_CALL_NOT_ATTEMPTED,
+                evidence_sent_to_model=False,
+                confirmed_context_sent_to_model=False,
+                explanation=None,
+            )
+            raise AppError(
+                "AI_ENRICHMENT_UNAVAILABLE",
+                "AI explanations are unavailable right now. Try again shortly.",
+                status_code=503,
+                details={"analysis_id": analysis_id, "finding_id": finding_id},
+            ) from None
+    saved = begun.enrichment
+    state = derive_state(provider_enabled=True, current_binding_digest=binding, enrichment=saved)
+    return _enrichment_response(finding_id, state, saved.reason if saved else None)
 
 
 # --- Context confirmation (`API-02`, `UI-02` slice 2, `WP-064`) --------
