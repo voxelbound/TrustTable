@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pytest
@@ -523,6 +524,91 @@ def test_a_burst_past_the_bound_is_refused_as_busy_not_queued(
     assert wait_for_enrichment(client, analysis_id, "0")["state"] == "ready"
     # The slot is free again.
     assert request_enrichment(client, analysis_id, "1")["state"] == "ready"
+
+
+def test_simultaneous_starts_for_one_finding_make_one_model_call(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    analysis_id = _completed_demo(client)
+    gate = threading.Event()
+    provider = _CountingProvider(gate=gate)
+    _configure(monkeypatch, provider)
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            responses = list(
+                executor.map(lambda _: client.post(enrichment_url(analysis_id, "0")), range(8))
+            )
+        assert {response.status_code for response in responses} == {202}
+        assert {response.json()["state"] for response in responses} == {"preparing"}
+        assert provider.entered.wait(timeout=10)
+    finally:
+        gate.set()
+    assert wait_for_enrichment(client, analysis_id, "0")["state"] == "ready"
+    assert provider.calls == 1
+
+
+def test_simultaneous_starts_for_different_findings_never_exceed_the_bound(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    analysis_id = _completed_demo(client)
+    gate = threading.Event()
+    provider = _CountingProvider(gate=gate)
+    _configure(monkeypatch, provider)
+    client.app.state.enrichment_pool.max_preparing = 2  # type: ignore[attr-defined]
+    findings = [str(index) for index in range(6)]
+
+    try:
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            responses = list(
+                executor.map(lambda f: client.post(enrichment_url(analysis_id, f)), findings)
+            )
+        accepted = [r for r in responses if r.status_code == 202]
+        refused = [r for r in responses if r.status_code == 429]
+        assert len(accepted) == 2
+        assert len(refused) == 4
+        assert {r.json()["error"]["code"] for r in refused} == {"AI_ENRICHMENT_BUSY"}
+        assert client.app.state.enrichment_store.count_preparing() == 2  # type: ignore[attr-defined]
+    finally:
+        gate.set()
+    client.app.state.enrichment_pool.shutdown(wait=True)  # type: ignore[attr-defined]
+    assert provider.calls == 2
+
+
+def test_a_start_after_the_pool_has_shut_down_is_refused_and_leaves_nothing_preparing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    analysis_id = _completed_demo(client)
+    provider = _CountingProvider()
+    _configure(monkeypatch, provider)
+    client.app.state.enrichment_pool.shutdown(wait=True)  # type: ignore[attr-defined]
+
+    refused = client.post(enrichment_url(analysis_id, "0"))
+
+    assert refused.status_code == 503
+    assert refused.json()["error"]["code"] == "AI_ENRICHMENT_UNAVAILABLE"
+    assert provider.calls == 0
+    store = client.app.state.enrichment_store  # type: ignore[attr-defined]
+    assert store.count_preparing() == 0
+    status = _status(client, analysis_id)
+    assert (status["state"], status["reason"]) == ("failed", "interrupted")
+
+
+def test_the_saved_text_never_reaches_the_logs(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    analysis_id = _completed_demo(client)
+    _configure(monkeypatch, _CountingProvider())
+    caplog.set_level(logging.DEBUG)
+
+    request_enrichment(client, analysis_id, "0")
+    body = _explanation(client, analysis_id)
+
+    assert body["provenance"] == "ai_interpretation"
+    assert body["narrative"]
+    assert body["narrative"] not in caplog.text
+    for item in body["remediation"]:
+        assert item["action_summary"] not in caplog.text
 
 
 # --- Restart ----------------------------------------------------------------

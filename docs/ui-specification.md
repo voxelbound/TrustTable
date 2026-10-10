@@ -685,9 +685,11 @@ while it runs, the page updates by itself when it is ready, and nothing is shown
 ready result beyond the explanation sections labelled as AI interpretation. A failed
 attempt says the built-in guidance is shown and offers *Try AI explanation again*; a
 busy refusal says so and offers the same button; neither is retried automatically. A
-stale result is never shown as current. With no model configured the note is absent
-and the existing provenance line says no AI provider is configured. Saved text is
-rendered as text, never as markup.
+stale result is never shown as current; it is requested again automatically under
+the new binding and the note reads *preparing* meanwhile. A status that cannot be
+read is stated. With no model configured the note is absent and the existing
+provenance line says no AI provider is configured. Saved text is rendered as text,
+never as markup.
 
 ### 12.6 Settings
 

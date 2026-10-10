@@ -275,6 +275,34 @@ describe('FindingAiPanel (UX-05b)', () => {
     expect(document.querySelector('b')).toBeNull()
   })
 
+  it('an unreadable AI status is stated, the built-in guidance stays and nothing is requested', async () => {
+    let posts = 0
+    server.use(
+      http.get(`${BASE}/ai-enrichment`, () =>
+        HttpResponse.json(apiErrorBody('INTERNAL_ERROR', 'Something failed.'), {
+          status: 500,
+        }),
+      ),
+      http.post(`${BASE}/ai-enrichment`, () => {
+        posts += 1
+        return HttpResponse.json(makeFindingAiEnrichmentResponse(), {
+          status: 202,
+        })
+      }),
+    )
+
+    renderDetail()
+
+    expect(
+      await screen.findByText(/The AI explanation status could not be read/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Remediation' }),
+    ).toBeInTheDocument()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(posts).toBe(0)
+  })
+
   it('the deterministic page does not wait for the AI status', async () => {
     server.use(
       http.get(`${BASE}/ai-enrichment`, async () => {

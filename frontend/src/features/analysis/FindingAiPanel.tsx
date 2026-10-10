@@ -126,7 +126,20 @@ export function FindingAiPanel({
     )
   }
 
-  // `unavailable` (no AI is configured), `ready` (the sections show it), or a
-  // status that could not be read: nothing to add, the guidance stands.
+  if (status.isError) {
+    return (
+      <p
+        role="status"
+        aria-live="polite"
+        className="mt-2 text-sm text-slate-600 dark:text-slate-400"
+      >
+        The AI explanation status could not be read, so the built-in guidance is
+        shown.
+      </p>
+    )
+  }
+
+  // `unavailable` (no AI is configured) or `ready` (the sections show it):
+  // nothing to add, the guidance stands.
   return null
 }
