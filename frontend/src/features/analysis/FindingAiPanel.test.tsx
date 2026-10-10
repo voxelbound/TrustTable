@@ -166,10 +166,16 @@ describe('FindingAiPanel (UX-05b)', () => {
   })
 
   it('a failed enrichment keeps the guidance, says so, and is retried only when asked', async () => {
+    // After the person asks again the backend reports it as preparing and
+    // keeps doing so (a long interval, so this test never races the poll).
     const calls = scriptEnrichment([
       makeFindingAiEnrichmentResponse({
         state: 'failed',
         reason: 'provider_error',
+      }),
+      makeFindingAiEnrichmentResponse({
+        state: 'preparing',
+        poll_interval_ms: 1_000_000,
       }),
     ])
     const user = userEvent.setup()
