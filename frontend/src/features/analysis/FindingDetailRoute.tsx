@@ -227,7 +227,10 @@ export function FindingDetailRoute() {
             </p>
           )}
           {analysisId && (
+            // Keyed so that moving to another finding starts the panel afresh:
+            // its request state (a busy refusal, say) belongs to one finding.
             <FindingAiPanel
+              key={finding.finding_id}
               analysisId={analysisId}
               findingId={finding.finding_id}
             />

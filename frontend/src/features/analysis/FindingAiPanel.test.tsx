@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import {
   apiErrorBody,
   makeFindingAiEnrichmentResponse,
+  makeFindingDetailResponse,
   makeFindingExplanationResponse,
 } from '../../test/msw/handlers'
 import { server } from '../../test/msw/server'
@@ -15,7 +16,7 @@ import { FindingDetailRoute } from './FindingDetailRoute'
 const ANALYSIS_ID = 'ai-panel-under-test'
 const BASE = 'http://localhost/api/v1/analyses/:analysisId/findings/:findingId'
 
-function renderDetail() {
+function renderDetail(findingId = '0') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -27,13 +28,14 @@ function renderDetail() {
       },
       { path: '/analyses/:analysisId/findings', element: <p>Findings</p> },
     ],
-    { initialEntries: [`/analyses/${ANALYSIS_ID}/findings/0`] },
+    { initialEntries: [`/analyses/${ANALYSIS_ID}/findings/${findingId}`] },
   )
   render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+  return router
 }
 
 const AI_EXPLANATION = makeFindingExplanationResponse({
@@ -279,6 +281,54 @@ describe('FindingAiPanel (UX-05b)', () => {
     ).toBeInTheDocument()
     expect(document.querySelector('img')).toBeNull()
     expect(document.querySelector('b')).toBeNull()
+  })
+
+  it('an error from one finding is not shown on another finding opened next', async () => {
+    // Previous and Next move between findings that are already loaded, so the
+    // route is not unmounted in between: the panel must start afresh for each.
+    server.use(
+      http.get(BASE, ({ params }) =>
+        HttpResponse.json(
+          makeFindingDetailResponse({ finding_id: String(params.findingId) }),
+        ),
+      ),
+      http.get(`${BASE}/ai-enrichment`, ({ params }) =>
+        HttpResponse.json(
+          makeFindingAiEnrichmentResponse({
+            finding_id: String(params.findingId),
+            state: params.findingId === '0' ? 'not_requested' : 'unavailable',
+          }),
+        ),
+      ),
+      http.post(`${BASE}/ai-enrichment`, () =>
+        HttpResponse.json(
+          apiErrorBody(
+            'AI_ENRICHMENT_BUSY',
+            'AI explanations are busy right now. Try again shortly.',
+          ),
+          { status: 429 },
+        ),
+      ),
+    )
+    const router = renderDetail('1')
+    await screen.findByRole('heading', { name: 'Explanation' })
+
+    await act(async () => {
+      await router.navigate(`/analyses/${ANALYSIS_ID}/findings/0`)
+    })
+    expect(
+      await screen.findByText(/AI explanations are busy right now/),
+    ).toBeInTheDocument()
+
+    // Back to the finding that is already loaded and has no AI to ask for.
+    await act(async () => {
+      await router.navigate(`/analyses/${ANALYSIS_ID}/findings/1`)
+    })
+    await screen.findByRole('heading', { name: 'Explanation' })
+    expect(screen.queryByText(/AI explanations are busy right now/)).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Try AI explanation again' }),
+    ).toBeNull()
   })
 
   it('an unreadable AI status is stated, the built-in guidance stays and nothing is requested', async () => {
