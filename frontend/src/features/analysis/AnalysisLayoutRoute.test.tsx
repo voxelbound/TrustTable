@@ -55,7 +55,7 @@ describe('AnalysisLayoutRoute', () => {
     renderLayout()
 
     expect(
-      await screen.findByText('Validating the dataset.'),
+      await screen.findByText('Checking that the file can be read.'),
     ).toBeInTheDocument()
     expect(screen.queryByText('Overview screen')).not.toBeInTheDocument()
   })
@@ -81,14 +81,16 @@ describe('AnalysisLayoutRoute', () => {
 
     renderLayout()
 
-    expect(await screen.findByText('Analysis is queued.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Your analysis is waiting to start.'),
+    ).toBeInTheDocument()
     expect(callCount).toBe(1)
 
     await waitFor(() => expect(callCount).toBeGreaterThanOrEqual(2), {
       timeout: 3000,
     })
     expect(
-      await screen.findByText('Validating the dataset.'),
+      await screen.findByText('Checking that the file can be read.'),
     ).toBeInTheDocument()
 
     await waitFor(() => expect(callCount).toBeGreaterThanOrEqual(3), {
@@ -229,7 +231,7 @@ describe('AnalysisLayoutRoute', () => {
     )
 
     renderLayout()
-    await screen.findByText('Validating the dataset.')
+    await screen.findByText('Checking that the file can be read.')
 
     expect(
       screen.queryByRole('link', { name: 'Report' }),

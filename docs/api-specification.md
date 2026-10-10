@@ -277,6 +277,45 @@ no link to the original (`retry_source_analysis_id` stays `null`), so deleting e
 analysis never affects the other. The original is never mutated. The new analysis is read
 under the parser limits in force now, like any analysis.
 
+### GET `/analyses/{analysis_id}/summary` (`UX-04`, D-070)
+
+**Implemented.** The dashboard figures a browser cannot derive from the list responses.
+Response:
+
+```json
+{
+  "analysis_id": "…",
+  "row_count": 300,
+  "column_count": 6,
+  "rows_affected": 40,
+  "findings_total": 2,
+  "findings_without_row_detail": 0,
+  "completeness": {
+    "scope": "full",
+    "population_size": 300,
+    "sample_size": 300,
+    "cells_total": 1800,
+    "cells_missing": 18,
+    "missing_share": 0.01
+  }
+}
+```
+
+- `rows_affected` is the number of **distinct** rows that at least one finding points at.
+  Overlapping findings are unioned, never added up. Observations are not findings and are
+  not counted.
+- `findings_without_row_detail` is how many findings name no row (for example a whole-column
+  finding). It exists so a client never reads `rows_affected` as "every other row is clean".
+- `completeness` is the share of profiled cells that are empty. `scope` is `full` or
+  `sampled` exactly as the dataset profile recorded it, and `population_size` and
+  `sample_size` travel with it, so a sampled figure is never stated as covering every row.
+  `missing_share` is `null` when there are no cells to measure.
+
+The response holds counts only: no cell value, no row-number list and no content hash.
+`409 INVALID_ANALYSIS_STATE` until the analysis has completed (the same rule as the profile
+route), and `404 ANALYSIS_NOT_FOUND` for an unknown analysis. The route reads the stored
+profile and findings; it starts no work and calls no model.
+
 ### DELETE `/analyses/{analysis_id}`
 
 Deletes:
@@ -1117,7 +1156,7 @@ Existing routes, including direct upload `POST /analyses`, keep their contracts.
 | Configure step (`UX-02`) — **built by `UX-02`, section 7 (D-068)** | Stage a file once, inspect it, then Run the analysis over the exact staged bytes | Single-use opaque reference; server-computed integrity hash verified at consume; bounded count, bytes and expiry; startup and lazy cleanup; atomic consume; no durable Dataset; the same validation and parser limits as direct upload through one shared ingestion path; inspection returns worksheets, shape, readability problems and warnings, never cell values; this supersedes the unbuilt `POST /datasets/inspect` description in section 7 |
 | AI status (`UX-02`, `UX-09`) — **status route built by `UX-02`, section 4 (D-068)**; guided setup and connection testing remain `UX-09` | `GET /ai/status` | Honest enabled, ready and model-identity state; path-free and address-free labels; an abstract status that does not assume where a runtime runs |
 | History (`UX-03`) — **built by `UX-03`, section 6 (D-069)** | `GET /analyses`; `POST /analyses/{id}/rerun`; `previously_analysed` on the staged-upload resource | The lookup is not a dataset identity; it reflects only analyses that still exist; none of the new responses carries an integrity hash. The pre-existing `dataset.content_hash` field of the analysis resource predates this slice and is unchanged by it (see D-069) |
-| Dashboard (`UX-04`) | Aggregates where client derivation from existing data is insufficient | Proposal-level |
+| Dashboard (`UX-04`) — **built by `UX-04`, section 6 (D-070)** | `GET /analyses/{id}/summary` | Distinct affected rows, shape and completeness with its sampled-or-full scope; counts only, no cell value, row list or hash; severity and category distribution, columns with most findings and review progress are derived by the client from the findings list |
 | Persisted AI enrichment (`UX-05`) | Start or resume, read status and read a saved result per finding, split from the deterministic explanation | Deterministic content never waits for a model call; the result is bound to the finding, confirmed-context version, model identity and prompt or contract version and is reported stale when the binding changes; start and status must not depend on one long request; bounded concurrency; saved output is deleted with its analysis |
 | Inspector (`UX-06`) | Bounded, finding-scoped row windows, including observation example rows | Server-side bounds; no shared-cache storage; unchanged privacy boundary (D-025); window and paging limits are set only after the performance spike |
 | Settings (`UX-08`) | Read effective settings with their source (deployment override, stored, default); write allowlisted, typed, versioned stored settings; reset to default | Computed server-side; a stored value never exceeds a deployment override or a security or resource limit; unknown keys and values rejected; write-path protection and fail-closed behavior; a narrow Advanced response may expose effective runtime and model configuration and raw paths and URLs never appear in analysis, finding, report or other shareable responses |

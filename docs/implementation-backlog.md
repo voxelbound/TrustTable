@@ -1123,6 +1123,16 @@ they answer a concrete question. Backend: an aggregate summary where client
 derivation is insufficient. The metrics and visualizations are proposals to be
 confirmed in the slice specification.
 
+Status: built (`D-070`). The Overview shows the trust assessment, an *At a glance*
+group (distinct rows affected, cells filled in with their sampled-or-full scope, review
+progress), the distribution of findings by severity and by kind of problem, the
+columns with the most findings, the top findings, observations as *Worth knowing* and
+the dataset summary; progress uses business wording and states that AI work is
+separate and optional. `GET /analyses/{id}/summary` is built and carries counts only.
+Not built: trends, comparison with an earlier analysis, a data-quality percentage
+beside the trust assessment, a numeric progress or time estimate. `UX-05` onward remain
+planned and unauthorized.
+
 ## UX-05 — S4: findings review workspace
 
 Previous, next and next-unreviewed navigation, review-state filtering, keyboard

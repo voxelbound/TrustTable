@@ -87,6 +87,7 @@ from trusttable_backend.analysis import (
     set_finding_review,
 )
 from trusttable_backend.analysis.history import DEFAULT_HISTORY_LIMIT, MAX_HISTORY_LIMIT
+from trusttable_backend.analysis.summary import build_dashboard_summary
 from trusttable_backend.config import get_settings
 from trusttable_backend.context_inference.ai_context import (
     ContextInferenceResult,
@@ -141,6 +142,7 @@ from trusttable_backend.schemas.analysis import (
     AnalysisProfileResponse,
     AnalysisResource,
     AnalysisStatusResponse,
+    AnalysisSummaryResponse,
     AnswerGuidedQuestionRequest,
     AnswerGuidedQuestionResponse,
     BusinessImpactStatementResponse,
@@ -149,6 +151,7 @@ from trusttable_backend.schemas.analysis import (
     ClarificationQuestionResponse,
     ColumnProfileResponse,
     ColumnReferenceResponse,
+    CompletenessResponse,
     ConfirmContextFieldsRequest,
     ContextFieldValueResponse,
     ContextResponse,
@@ -1311,6 +1314,41 @@ def get_analysis_profile(analysis_id: str, request: Request) -> AnalysisProfileR
             details={"analysis_id": analysis_id, "state": analysis.state.value},
         )
     return _profile_response(analysis.dataset_profile)
+
+
+@router.get("/analyses/{analysis_id}/summary", response_model=AnalysisSummaryResponse)
+def get_analysis_summary(analysis_id: str, request: Request) -> AnalysisSummaryResponse:
+    """Return the dashboard figures a browser cannot derive (`UX-04`, D-070).
+
+    Counts only, no cell value or row list. `409 INVALID_ANALYSIS_STATE` until
+    the analysis has completed, like the profile route it is computed from.
+    """
+    analysis = _get_or_404(get_analysis_store(request), analysis_id)
+    if analysis.dataset_profile is None:
+        raise AppError(
+            "INVALID_ANALYSIS_STATE",
+            "The summary is not available for this analysis in its current state.",
+            status_code=409,
+            details={"analysis_id": analysis_id, "state": analysis.state.value},
+        )
+    summary = build_dashboard_summary(analysis.dataset_profile, analysis.findings)
+    completeness = summary.completeness
+    return AnalysisSummaryResponse(
+        analysis_id=analysis.analysis_id,
+        row_count=summary.row_count,
+        column_count=summary.column_count,
+        rows_affected=summary.rows_affected,
+        findings_total=summary.findings_total,
+        findings_without_row_detail=summary.findings_without_row_detail,
+        completeness=CompletenessResponse(
+            scope=completeness.scope,
+            population_size=completeness.population_size,
+            sample_size=completeness.sample_size,
+            cells_total=completeness.cells_total,
+            cells_missing=completeness.cells_missing,
+            missing_share=completeness.missing_share,
+        ),
+    )
 
 
 @router.get("/analyses/{analysis_id}/findings", response_model=FindingsListResponse)

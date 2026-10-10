@@ -27,6 +27,7 @@ import {
   getAnalysisProfileApiV1AnalysesAnalysisIdProfileGet,
   getAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGet,
   getAnalysisStatusApiV1AnalysesAnalysisIdStatusGet,
+  getAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGet,
   listReportsApiV1AnalysesAnalysisIdReportsGet,
   postAnalysisCancelApiV1AnalysesAnalysisIdCancelPost,
   postAnalysisFinalizeApiV1AnalysesAnalysisIdFinalizePost,
@@ -39,6 +40,7 @@ import {
   type AnalysisProfileResponse,
   type AnalysisResource,
   type AnalysisStatusResponse,
+  type AnalysisSummaryResponse,
   type AnswerGuidedQuestionResponse,
   type ClarificationQuestionListResponse,
   type ContextResponse,
@@ -247,6 +249,28 @@ export function useAnalysisObservations(
         await getAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGet({
           path: { analysis_id: analysisId as string },
         })
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled: Boolean(analysisId) && (options?.enabled ?? true),
+  })
+}
+
+/** `GET .../summary` (`UX-04`, D-070): the dashboard figures a browser
+ * cannot derive from the list responses (distinct affected rows, shape,
+ * completeness with its sampled-or-full scope). Counts only. */
+export function useAnalysisSummary(
+  analysisId: string | undefined,
+  options?: QueryEnabledOption,
+) {
+  return useQuery<AnalysisSummaryResponse, ApiCallError>({
+    queryKey: ['analysis-summary', analysisId],
+    queryFn: async () => {
+      const result = await getAnalysisSummaryApiV1AnalysesAnalysisIdSummaryGet({
+        path: { analysis_id: analysisId as string },
+      })
       if (result.error) {
         throw new ApiCallError(result.error)
       }
