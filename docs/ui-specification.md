@@ -592,8 +592,9 @@ frontend/
 > (`UX-04`, D-070) is built: the Overview and business-language progress (12.3).
 > **Slice S4 part a (`UX-05`, D-071) is built:** in the findings review the Review filter,
 > previous, next and next-unreviewed movement that follows the active filters, the
-> keyboard shortcuts P, N and U, and business labels (12.2, 12.4 and 12.5 are otherwise
-> unchanged). Persisted, non-blocking AI enrichment (12.5) is **not** built. Nothing else
+> keyboard shortcuts P, N and U, and business labels (12.2 and 12.4 are otherwise
+> unchanged). **Slice S4 part b (`UX-05`, D-072) is built:** persisted, non-blocking AI
+> enrichment (12.5), so `UX-05` is complete. Nothing else
 > in this section is built, and nothing here may be presented in the interface as
 > available until its slice ships.**
 > Proposal-level designs are marked as such and are to be confirmed in each slice's
@@ -676,6 +677,19 @@ built-in guidance render immediately. The AI area has its own state: preparing, 
 unavailable or failed, and marks a result stale when the finding, the confirmed
 context, the model or the prompt contract it was bound to has changed. There are no
 automatic explanations for every finding.
+
+**Built (`UX-05b`, D-072).** The finding screen shows the built-in guidance at once and
+a separate AI note beside the explanation. Opening a finding requests its AI
+explanation (once per finding and state); the note reads *AI explanation: preparing…*
+while it runs, the page updates by itself when it is ready, and nothing is shown for a
+ready result beyond the explanation sections labelled as AI interpretation. A failed
+attempt says the built-in guidance is shown and offers *Try AI explanation again*; a
+busy refusal says so and offers the same button; neither is retried automatically. A
+stale result is never shown as current; it is requested again automatically under
+the new binding and the note reads *preparing* meanwhile. A status that cannot be
+read is stated. With no model configured the note is absent and the existing
+provenance line says no AI provider is configured. Saved text is rendered as text,
+never as markup.
 
 ### 12.6 Settings
 

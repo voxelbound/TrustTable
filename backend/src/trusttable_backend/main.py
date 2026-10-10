@@ -37,8 +37,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from trusttable_backend.api.v1.router import router as api_v1_router
 from trusttable_backend.config import get_settings
+from trusttable_backend.enrichment.reconcile import reconcile_interrupted_enrichments
 from trusttable_backend.errors import AppError
-from trusttable_backend.jobs import JobPool
+from trusttable_backend.jobs import EnrichmentPool, JobPool
 from trusttable_backend.persistence import (
     SqlAnalysisStore,
     SqlRelationshipStore,
@@ -48,6 +49,7 @@ from trusttable_backend.persistence import (
     reconcile_interrupted_analyses,
     run_migrations,
 )
+from trusttable_backend.persistence.enrichment_store import SqlEnrichmentStore
 from trusttable_backend.request_context import (
     REQUEST_ID_HEADER,
     RequestIdMiddleware,
@@ -201,11 +203,18 @@ def create_app() -> FastAPI:
     # not only the next time staging is used (`UX-02`, D-068).
     staging_store.purge_expired()
     job_pool = JobPool(store, settings.background_worker_count)
+    # `UX-05b`: an AI enrichment a restart left `preparing` can never finish
+    # (its worker is gone). It is failed here, before the pool accepts work,
+    # so nothing stays "preparing" for ever.
+    enrichment_store = SqlEnrichmentStore(engine)
+    reconcile_interrupted_enrichments(enrichment_store, store, settings)
+    enrichment_pool = EnrichmentPool()
 
     @asynccontextmanager
     async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
         job_pool.shutdown(wait=True)
+        enrichment_pool.shutdown(wait=True)
         engine.dispose()
 
     app = FastAPI(
@@ -228,4 +237,6 @@ def create_app() -> FastAPI:
     app.state.report_store = SqlReportStore(engine)
     app.state.relationship_store = SqlRelationshipStore(engine)
     app.state.job_pool = job_pool
+    app.state.enrichment_store = enrichment_store
+    app.state.enrichment_pool = enrichment_pool
     return app

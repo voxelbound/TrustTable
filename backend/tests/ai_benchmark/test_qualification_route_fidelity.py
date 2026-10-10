@@ -47,6 +47,7 @@ from trusttable_backend.ai_provider.factory import create_provider as real_creat
 from trusttable_backend.analysis.service import create_analysis, run_analysis
 from trusttable_backend.config import Settings, get_settings
 
+from ..enrichment_support import get_ai_explanation
 from .test_qualification import (
     EDITABLE_FIELD_NAMES,
     INVALID_OUTPUT,
@@ -157,7 +158,7 @@ def first_finding_by_detector(client: TestClient, analysis_id: str) -> dict[str,
 
 
 def route_ai_call_status(client: TestClient, analysis_id: str, finding_id: str) -> str:
-    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/explanation")
+    response = get_ai_explanation(client, analysis_id, finding_id)
     assert response.status_code == 200
     return str(response.json()["ai_call_status"])
 

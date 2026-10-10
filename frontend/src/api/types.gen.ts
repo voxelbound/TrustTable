@@ -987,6 +987,42 @@ export type FinalizeContextRequest = {
 };
 
 /**
+ * FindingAiEnrichmentResponse
+ *
+ * Body for `GET`/`POST /analyses/{analysis_id}/findings/{finding_id}/
+ * ai-enrichment` (`UX-05b`, D-066 item 7): the state of one finding's
+ * persisted, non-blocking AI enrichment. It never carries the model's
+ * output (that is read through `.../explanation` only while current) and
+ * never a model path, address or prompt.
+ *
+ * `state` is exactly one of `unavailable` (no model is configured),
+ * `not_requested`, `preparing`, `ready`, `failed` or `stale` (the saved
+ * result was produced under a different finding/context/model/prompt
+ * binding and is not shown as current). `reason` explains a `failed`
+ * state (`interrupted`, `provider_error`, `rejected`, `superseded`,
+ * `unreadable`) and is `null` otherwise. `poll_interval_ms` is set only
+ * while `preparing`.
+ */
+export type FindingAiEnrichmentResponse = {
+    /**
+     * Finding Id
+     */
+    finding_id: string;
+    /**
+     * Poll Interval Ms
+     */
+    poll_interval_ms: number | null;
+    /**
+     * Reason
+     */
+    reason: string | null;
+    /**
+     * State
+     */
+    state: string;
+};
+
+/**
  * FindingDetailResponse
  *
  * Body for `GET /analyses/{analysis_id}/findings/{finding_id}`
@@ -1179,6 +1215,11 @@ export type FindingEvidenceListResponse = {
  *
  * - `"not_configured"` — `Settings.llm_provider == "disabled"`; no AI
  * call was attempted for this request.
+ * - `"not_attempted"` (`UX-05b`) — a provider is configured but no AI
+ * enrichment of this finding is current: none was requested, it is
+ * still preparing, or the saved one is stale. This route never calls a
+ * model; it overlays only a *current* saved enrichment
+ * (`POST`/`GET .../ai-enrichment` start and report it).
  * - `"attempted_accepted"` — a provider was called and its output was
  * accepted; `provenance == "ai_interpretation"`.
  * - `"attempted_rejected"` — a provider was called, its output (and
@@ -2909,6 +2950,74 @@ export type GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetRespons
 };
 
 export type GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponse = GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses[keyof GetAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGetResponses];
+
+export type GetFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Finding Id
+         */
+        finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/findings/{finding_id}/ai-enrichment';
+};
+
+export type GetFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentGetError = GetFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentGetErrors[keyof GetFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentGetErrors];
+
+export type GetFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: FindingAiEnrichmentResponse;
+};
+
+export type GetFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentGetResponse = GetFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentGetResponses[keyof GetFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentGetResponses];
+
+export type PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Finding Id
+         */
+        finding_id: string;
+    };
+    query?: never;
+    url: '/api/v1/analyses/{analysis_id}/findings/{finding_id}/ai-enrichment';
+};
+
+export type PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostError = PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostErrors[keyof PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostErrors];
+
+export type PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostResponses = {
+    /**
+     * Successful Response
+     */
+    202: FindingAiEnrichmentResponse;
+};
+
+export type PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostResponse = PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostResponses[keyof PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostResponses];
 
 export type GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetData = {
     body?: never;

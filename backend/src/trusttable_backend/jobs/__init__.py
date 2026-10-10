@@ -8,6 +8,7 @@ cooperative cancellation. See `pool.py`'s own docstring for detail.
 
 from __future__ import annotations
 
+from .enrichment_pool import EnrichmentPool
 from .pool import JobPool
 
-__all__ = ["JobPool"]
+__all__ = ["EnrichmentPool", "JobPool"]

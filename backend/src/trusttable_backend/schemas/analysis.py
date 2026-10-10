@@ -604,6 +604,11 @@ class FindingExplanationResponse(BaseModel):
 
     - `"not_configured"` — `Settings.llm_provider == "disabled"`; no AI
       call was attempted for this request.
+    - `"not_attempted"` (`UX-05b`) — a provider is configured but no AI
+      enrichment of this finding is current: none was requested, it is
+      still preparing, or the saved one is stale. This route never calls a
+      model; it overlays only a *current* saved enrichment
+      (`POST`/`GET .../ai-enrichment` start and report it).
     - `"attempted_accepted"` — a provider was called and its output was
       accepted; `provenance == "ai_interpretation"`.
     - `"attempted_rejected"` — a provider was called, its output (and
@@ -654,6 +659,28 @@ class FindingExplanationResponse(BaseModel):
     business_impact: list[BusinessImpactStatementResponse]
     remediation: list[RemediationOptionResponse]
     validation_rule: ProposedValidationRuleResponse | None
+
+
+class FindingAiEnrichmentResponse(BaseModel):
+    """Body for `GET`/`POST /analyses/{analysis_id}/findings/{finding_id}/
+    ai-enrichment` (`UX-05b`, D-066 item 7): the state of one finding's
+    persisted, non-blocking AI enrichment. It never carries the model's
+    output (that is read through `.../explanation` only while current) and
+    never a model path, address or prompt.
+
+    `state` is exactly one of `unavailable` (no model is configured),
+    `not_requested`, `preparing`, `ready`, `failed` or `stale` (the saved
+    result was produced under a different finding/context/model/prompt
+    binding and is not shown as current). `reason` explains a `failed`
+    state (`interrupted`, `provider_error`, `rejected`, `superseded`,
+    `unreadable`) and is `null` otherwise. `poll_interval_ms` is set only
+    while `preparing`.
+    """
+
+    finding_id: str
+    state: str
+    reason: str | None
+    poll_interval_ms: int | None
 
 
 class ContextFieldValueResponse(BaseModel):

@@ -10,6 +10,7 @@ import type {
   ClarificationQuestionListResponse,
   ContextResponse,
   DemoAnalysisResponse,
+  FindingAiEnrichmentResponse,
   FindingDetailResponse,
   FindingEvidenceListResponse,
   FindingExplanationResponse,
@@ -222,6 +223,21 @@ export function makeFindingEvidenceListResponse(
     },
   ]
   return { total_items: items.length, ...overrides, items }
+}
+
+/** The state of one finding's AI enrichment (`UX-05b`). The default is
+ * `unavailable`: no AI is configured, so the screens that are not about AI see
+ * no AI panel. */
+export function makeFindingAiEnrichmentResponse(
+  overrides: Partial<FindingAiEnrichmentResponse> = {},
+): FindingAiEnrichmentResponse {
+  return {
+    finding_id: '0',
+    state: 'unavailable',
+    reason: null,
+    poll_interval_ms: null,
+    ...overrides,
+  }
 }
 
 export function makeFindingExplanationResponse(
@@ -570,6 +586,20 @@ export const handlers = [
     `${BASE}/analyses/:analysisId/findings/:findingId/explanation`,
     () => {
       return HttpResponse.json(makeFindingExplanationResponse())
+    },
+  ),
+  http.get(
+    `${BASE}/analyses/:analysisId/findings/:findingId/ai-enrichment`,
+    () => {
+      return HttpResponse.json(makeFindingAiEnrichmentResponse())
+    },
+  ),
+  http.post(
+    `${BASE}/analyses/:analysisId/findings/:findingId/ai-enrichment`,
+    () => {
+      return HttpResponse.json(makeFindingAiEnrichmentResponse(), {
+        status: 202,
+      })
     },
   ),
   http.put(

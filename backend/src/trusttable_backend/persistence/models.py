@@ -177,6 +177,33 @@ class ReportRecord(Base):
     content_sha256: Mapped[str] = mapped_column(String, nullable=False)
 
 
+class FindingEnrichmentRecord(Base):
+    """One persisted AI enrichment of one finding (`UX-05b`, D-066 item 7).
+
+    Stores data only; the rules live in `persistence.enrichment_store` and
+    `enrichment`. `binding_digest` is a SHA-256 over the binding the result
+    was produced under, never the binding's raw parts (a model path would
+    otherwise be stored in the clear). `result_json` holds the validated
+    explanation of an accepted result only; every other outcome stores none.
+    Rows end with their analysis (`SqlAnalysisStore.delete`).
+    """
+
+    __tablename__ = "finding_enrichments"
+    __table_args__ = (Index("ix_finding_enrichments_status", "status"),)
+
+    analysis_id: Mapped[str] = mapped_column(String, primary_key=True)
+    finding_id: Mapped[str] = mapped_column(String, primary_key=True)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    binding_digest: Mapped[str] = mapped_column(String, nullable=False)
+    reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    ai_call_status: Mapped[str] = mapped_column(String, nullable=False)
+    evidence_sent_to_model: Mapped[bool] = mapped_column(nullable=False)
+    confirmed_context_sent_to_model: Mapped[bool] = mapped_column(nullable=False)
+    result_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class StagedUploadRecord(Base):
     """One temporarily staged upload (`UX-02`, `docs/decision-log.md` D-068).
 

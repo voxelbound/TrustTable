@@ -18,6 +18,8 @@ from trusttable_backend.config import get_settings
 from trusttable_backend.context_inference.ai_context import ContextInferenceResult
 from trusttable_backend.explanation.deterministic import build_deterministic_explanation
 
+from ..enrichment_support import get_ai_explanation
+
 _TERMINAL = {"completed", "failed", "cancelled"}
 _ZERO = "No AI enrichment call is recorded as attempted."
 _NOT_RECORDED = "Per-request AI enrichment is not recorded for this analysis."
@@ -66,7 +68,7 @@ def _counts(client: TestClient, analysis_id: str) -> tuple[int, int, int]:
 
 
 def _explain(client: TestClient, analysis_id: str, finding: str = "0") -> dict[str, Any]:
-    response = client.get(f"/api/v1/analyses/{analysis_id}/findings/{finding}/explanation")
+    response = get_ai_explanation(client, analysis_id, finding)
     assert response.status_code == 200
     body: dict[str, Any] = response.json()
     return body
@@ -109,9 +111,13 @@ def test_each_explanation_outcome_is_recorded_once(
     )
     monkeypatch.setattr(analyses_module, "run_finding_explanation", lambda *a, **k: next(results))
 
-    statuses = [_explain(client, analysis_id)["ai_call_status"] for _ in range(3)]
+    # One enrichment per finding: asking again for the same finding under the
+    # same binding is idempotent and makes (and records) no further call.
+    statuses = [_explain(client, analysis_id, finding_id)["ai_call_status"] for finding_id in "012"]
 
     assert statuses == ["attempted_accepted", "attempted_rejected", "attempted_provider_error"]
+    assert _counts(client, analysis_id) == (1, 1, 1)
+    assert _explain(client, analysis_id, "0")["ai_call_status"] == "attempted_accepted"
     assert _counts(client, analysis_id) == (1, 1, 1)
     record = _record(client, analysis_id)
     assert record.evidence_sent_to_model
