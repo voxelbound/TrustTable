@@ -702,6 +702,18 @@ offers no previous or next. Only rows the server offers can be asked for; a refu
 stated with a way back to the first window. Values are text, never markup, and long
 values stay shortened until revealed.
 
+**Built for the supporting areas and help (`UX-07`, D-075).** A completed analysis shows
+two labelled groups: *Review* (Overview, Findings, Observations, About this data) and *Act
+and Export* (Reports, Rules, Technical details). Observations has its own screen at
+`/analyses/{id}/observations`. About this data (the context screen), Observations, Reports,
+Rules and Technical details each open with where the area sits, its purpose, when it is
+available, why it matters and the next step. Rules say they are not applied to later files
+or other datasets and cannot be created or edited there. A **Help** link in the workspace
+navigation opens `/help`: findings and observations, the trust assessment, where a statement
+comes from, sampled and full, AI assistance and Rules, in plain words and with no claim that
+a result proves the data correct. Loading and empty states use one plain pattern. Technical
+details stay visible to everyone because Advanced mode is part of `UX-08`.
+
 ### 12.5 AI enrichment
 
 On demand, persisted and non-blocking per finding. Deterministic content, evidence and

@@ -116,6 +116,73 @@ describe('RulesRoute', () => {
     ).toBeInTheDocument()
   })
 
+  it('UX-07: is a hand-off area for this analysis only and offers no creation, authoring or editing', async () => {
+    useRuleList([makeRule()])
+    renderRules()
+
+    await screen.findByText('Quantity must be between 1 and 100')
+    expect(screen.getByText('Act and Export')).toBeInTheDocument()
+    expect(
+      screen.getByText(/not apply these rules to later files or to other/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/rules cannot be created or edited here/),
+    ).toBeInTheDocument()
+
+    // Listing, running, deleting and export stay; nothing creates or edits.
+    const buttons = screen.getAllByRole('button').map((b) => b.textContent)
+    expect(buttons).toEqual(
+      expect.arrayContaining([
+        'Show details',
+        'Run rule',
+        'Delete rule',
+        'Download JSON',
+        'Download YAML',
+      ]),
+    )
+    for (const control of [
+      ...screen.queryAllByRole('button'),
+      ...screen.queryAllByRole('link'),
+    ]) {
+      expect(control.textContent).not.toMatch(
+        /\b(create|add|new|edit|author)\b/i,
+      )
+    }
+    expect(screen.queryAllByRole('textbox')).toHaveLength(0)
+  })
+
+  it('UX-07: no text on the screen, including a rule’s expanded details, implies that a rule can be created, authored or edited', async () => {
+    const user = userEvent.setup()
+    useRuleList([
+      makeRule({
+        last_result: makeResult({
+          example_failures: [
+            { row_number: 3, reason: 'Value 500 is above 100' },
+          ],
+        }),
+      }),
+    ])
+    renderRules()
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: /Show details of rule Quantity must be between 1 and 100/,
+      }),
+    )
+    expect(
+      screen.getByText(/A rule cannot be changed here/),
+    ).toBeInTheDocument()
+
+    // The two sentences that deny creation and editing are the only
+    // permitted mentions of those words.
+    const text = (document.body.textContent ?? '')
+      .replace('rules cannot be created or edited here', '')
+      .replace('A rule cannot be changed here', '')
+    expect(text).not.toMatch(
+      /\b(create|created|creating|creation|author|authored|authoring|edit|edited|editing|add a rule|new rule)\b/i,
+    )
+  })
+
   it('lists each rule with description, state, severity, provenance and counts', async () => {
     useRuleList([
       makeRule(),

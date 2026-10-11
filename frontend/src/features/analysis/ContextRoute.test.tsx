@@ -38,13 +38,26 @@ describe('ContextRoute', () => {
     renderContext()
 
     expect(
-      await screen.findByRole('heading', { name: 'Context' }),
+      await screen.findByRole('heading', { name: 'About this data' }),
     ).toBeInTheDocument()
     expect(screen.getByLabelText('Domain', { selector: 'input' })).toHaveValue(
       'Sales / order transactions',
     )
     expect(screen.getAllByText('Calculated').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Deterministic fallback').length).toBe(2)
+  })
+
+  it('UX-07: states purpose, availability, why it matters and the next step, and links to what the sources mean', async () => {
+    renderContext()
+
+    await screen.findByRole('heading', { name: 'About this data' })
+    expect(screen.getByText('Review')).toBeInTheDocument()
+    expect(screen.getByText('When it is available')).toBeInTheDocument()
+    expect(screen.getByText('Why it matters')).toBeInTheDocument()
+    expect(screen.getByText('Next step')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'What do the sources mean?' }),
+    ).toHaveAttribute('href', '/help#provenance')
   })
 
   it('renders read-only role fields with their list values', async () => {

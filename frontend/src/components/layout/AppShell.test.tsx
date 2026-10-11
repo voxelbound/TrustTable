@@ -38,9 +38,19 @@ describe('AppShell navigation', () => {
     renderShell()
 
     const nav = screen.getByRole('navigation', { name: 'Workspace' })
-    for (const unbuilt of ['Analyses', 'Settings', 'Help']) {
+    for (const unbuilt of ['Analyses', 'Settings']) {
       expect(within(nav).queryByText(unbuilt)).not.toBeInTheDocument()
     }
+  })
+
+  it('UX-07: offers Help, which exists', () => {
+    renderShell()
+
+    const nav = screen.getByRole('navigation', { name: 'Workspace' })
+    expect(within(nav).getByRole('link', { name: 'Help' })).toHaveAttribute(
+      'href',
+      '/help',
+    )
   })
 
   it('still shows the dataset name and status on an analysis route', () => {

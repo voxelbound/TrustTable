@@ -3,6 +3,8 @@ import { useParams } from 'react-router'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { SectionIntro } from '../../components/ui/SectionIntro'
+import { StateNote } from '../../components/ui/StateNote'
 import type { ValidationRuleResponse } from '../../api'
 import {
   useDeleteRule,
@@ -148,8 +150,8 @@ function RuleCard({
             ))}
           </dl>
           <p className="text-xs text-slate-600 dark:text-slate-400">
-            Parameters are shown read-only. To change a rule, delete it and
-            create it again.
+            Parameters are shown read-only. A rule cannot be changed here;
+            delete it if you no longer want it.
           </p>
           {result !== null && result.example_failures.length > 0 && (
             <div>
@@ -211,6 +213,19 @@ export function RulesRoute() {
 
   return (
     <div className="flex flex-col gap-8">
+      <SectionIntro
+        title="Rules"
+        group="Act and Export"
+        purpose="Executable validation rules for this analysis, which you can validate and export for the team responsible for the data source or pipeline."
+        availability="Once the analysis has completed. The rules listed belong to this analysis only."
+        why="An exported rule gives the owner of the data a check they can run where the data is produced."
+        next="Run a rule to see its result, delete one you do not want, and export the validated rules for the data owner."
+      />
+      <p className="-mt-4 text-sm text-slate-600 dark:text-slate-400">
+        TrustTable does not apply these rules to later files or to other
+        datasets, and rules cannot be created or edited here.
+      </p>
+
       <section aria-labelledby="rules-heading">
         <h2
           id="rules-heading"
@@ -224,13 +239,7 @@ export function RulesRoute() {
           rule anywhere else.
         </p>
         {rulesQuery.isLoading ? (
-          <p
-            role="status"
-            aria-live="polite"
-            className="mt-2 text-sm text-slate-600 dark:text-slate-400"
-          >
-            Loading rules…
-          </p>
+          <StateNote kind="loading">Loading rules…</StateNote>
         ) : rulesQuery.isError ? (
           <div className="mt-2">
             <Alert variant="error" title="Could not load rules">
@@ -238,9 +247,9 @@ export function RulesRoute() {
             </Alert>
           </div>
         ) : rules.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          <StateNote kind="empty">
             No validation rules exist for this analysis yet.
-          </p>
+          </StateNote>
         ) : (
           <ul className="mt-3 flex flex-col gap-3">
             {rules.map((rule) => (

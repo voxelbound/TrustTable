@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate, useParams } from 'react-router'
+import { NavLink, Outlet, useNavigate, useParams } from 'react-router'
 import { AppShell } from '../../components/layout/AppShell'
 import { AnalysisStageProgress } from '../../components/provenance/AnalysisStageProgress'
 import { Alert } from '../../components/ui/Alert'
@@ -7,6 +7,32 @@ import { AnalysisActions } from './AnalysisActions'
 import { useAnalysisResource, useAnalysisStatus } from './api'
 
 const RESOURCE_STATES = new Set(['completed', 'failed', 'cancelled'])
+
+/** The areas of a completed analysis, grouped as the workflow names them
+ * (`UX-07`, D-075; `docs/ui-specification.md` §12.2). Every entry is a route
+ * that exists; nothing is listed for a capability that is not built. */
+const SECTION_GROUPS: {
+  label: string
+  items: { path: string; label: string }[]
+}[] = [
+  {
+    label: 'Review',
+    items: [
+      { path: 'overview', label: 'Overview' },
+      { path: 'findings', label: 'Findings' },
+      { path: 'observations', label: 'Observations' },
+      { path: 'context', label: 'About this data' },
+    ],
+  },
+  {
+    label: 'Act and Export',
+    items: [
+      { path: 'report', label: 'Reports' },
+      { path: 'rules', label: 'Rules' },
+      { path: 'technical', label: 'Technical details' },
+    ],
+  },
+]
 
 /** The analysis layout route (`docs/ui-specification.md` §3). Polls
  * status while in progress (`AnalysisStageProgress`), then branches on
@@ -106,31 +132,29 @@ export function AnalysisLayoutRoute() {
   return (
     <AppShell datasetName={datasetName} statusText="Completed">
       {actions}
-      <nav aria-label="Analysis sections" className="mt-4 flex gap-4 text-sm">
-        <Link
-          to={`/analyses/${analysisId ?? ''}/overview`}
-          className="font-medium text-slate-900 underline dark:text-slate-100"
-        >
-          Overview
-        </Link>
-        <Link
-          to={`/analyses/${analysisId ?? ''}/rules`}
-          className="font-medium text-slate-900 underline dark:text-slate-100"
-        >
-          Rules
-        </Link>
-        <Link
-          to={`/analyses/${analysisId ?? ''}/report`}
-          className="font-medium text-slate-900 underline dark:text-slate-100"
-        >
-          Report
-        </Link>
-        <Link
-          to={`/analyses/${analysisId ?? ''}/technical`}
-          className="font-medium text-slate-900 underline dark:text-slate-100"
-        >
-          Technical
-        </Link>
+      <nav
+        aria-label="Analysis sections"
+        className="mt-4 flex flex-wrap gap-x-10 gap-y-3 text-sm"
+      >
+        {SECTION_GROUPS.map((group) => (
+          <div key={group.label}>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              {group.label}
+            </p>
+            <ul className="mt-1 flex flex-wrap gap-4">
+              {group.items.map((item) => (
+                <li key={item.path}>
+                  <NavLink
+                    to={`/analyses/${analysisId ?? ''}/${item.path}`}
+                    className="font-medium text-slate-900 underline dark:text-slate-100"
+                  >
+                    {item.label}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </nav>
       <div className="mt-6">
         <Outlet />
