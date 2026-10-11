@@ -1344,11 +1344,20 @@ Core rules:
   ingestion path so validation, limits and integrity logic are not duplicated.
   Content is stored in the database today (`Analysis.content`); documentation that says
   a file is stored is to be read accordingly.
-- **Settings.** Effective value = explicit deployment override, then stored setting,
-  then default, computed on the server. Override detection never compares a value with
-  a default; packaging must not set a managed key. Deployment configuration and security
-  or resource limits stay in environment configuration and are never overridable by a
-  stored value.
+- **Settings (built by `UX-08a`, D-076).** Effective value = explicit deployment override,
+  then stored setting, then default, computed on the server. Override detection never
+  compares a value with a default; packaging must not set a managed key. Deployment
+  configuration and security or resource limits stay in environment configuration and are
+  never overridable by a stored value. Built as: an `app_settings` table (one row per
+  allowlisted key, a nullable JSON value and a version that only increases, so a reset
+  keeps the row); `persistence.settings_store.SqlSettingsStore` (closed allowlist, exact
+  type check, compare-and-swap on the version); `product_settings` (the pure precedence
+  rule: an override is `llm_provider` being in the settings object's explicitly-set fields,
+  that is from the environment or `.env`, never a comparison with the default);
+  `effective_settings` (reads the stored value fresh on every request and fails closed to
+  off); and the `/settings` routes. Every AI consumer reads the effective settings
+  object instead of the raw deployment settings, and an enrichment worker reads it again
+  when it starts, so turning AI off supersedes queued work.
 - **AI enrichment (built by `UX-05b`, D-072).** Persisted per finding, bound to finding
   identity, confirmed-context version, model identity and prompt or contract version,
   with a status that survives restart (a result must not stay "preparing" after a

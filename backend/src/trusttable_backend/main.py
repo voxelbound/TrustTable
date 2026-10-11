@@ -37,6 +37,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from trusttable_backend.api.v1.router import router as api_v1_router
 from trusttable_backend.config import get_settings
+from trusttable_backend.effective_settings import resolve_current_ai
 from trusttable_backend.enrichment.reconcile import reconcile_interrupted_enrichments
 from trusttable_backend.errors import AppError
 from trusttable_backend.jobs import EnrichmentPool, JobPool
@@ -50,6 +51,7 @@ from trusttable_backend.persistence import (
     run_migrations,
 )
 from trusttable_backend.persistence.enrichment_store import SqlEnrichmentStore
+from trusttable_backend.persistence.settings_store import SqlSettingsStore
 from trusttable_backend.request_context import (
     REQUEST_ID_HEADER,
     RequestIdMiddleware,
@@ -207,7 +209,10 @@ def create_app() -> FastAPI:
     # (its worker is gone). It is failed here, before the pool accepts work,
     # so nothing stays "preparing" for ever.
     enrichment_store = SqlEnrichmentStore(engine)
-    reconcile_interrupted_enrichments(enrichment_store, store, settings)
+    settings_store = SqlSettingsStore(engine)
+    reconcile_interrupted_enrichments(
+        enrichment_store, store, resolve_current_ai(settings_store, settings).settings
+    )
     enrichment_pool = EnrichmentPool()
 
     @asynccontextmanager
@@ -239,4 +244,5 @@ def create_app() -> FastAPI:
     app.state.job_pool = job_pool
     app.state.enrichment_store = enrichment_store
     app.state.enrichment_pool = enrichment_pool
+    app.state.settings_store = settings_store
     return app

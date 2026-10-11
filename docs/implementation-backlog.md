@@ -1215,6 +1215,18 @@ behavior, the narrow Advanced exception, commenting out UI-managed settings in
 `.env.example` with the tests that pin it, a test that packaging creates no explicit
 override, and the plain explanation for installations that copied the old file.
 
+Status: **in progress** (`D-076`). Part a (`UX-08a`) is built: an additive `app_settings`
+table (migration 0012), one allowlisted boolean setting (`ai_assistance`), the effective
+value computed on the server as explicit deployment override, then stored value, then
+off (an override is `LLM_PROVIDER` set in the environment or `.env`, never inferred), the
+`/settings` API with versioned writes and reset, AI status, enrichment, explanation and
+rule proposal following the effective value, an Advanced-only response for the runtime
+and model configuration, `LLM_PROVIDER` commented out in `.env.example` with tests that
+packaging sets no managed key, and the two settings that nothing consumes documented
+honestly. Remaining (`UX-08b`): the Settings screen with an explanation for every normal
+setting, and Advanced mode with its effect on Technical details; `UX-08` is completed
+there. No AI profile setting, no retention setting.
+
 ## UX-09 — S8a: Local AI status and guided setup
 
 Honest status, compatibility and readiness checks, connection testing and guided

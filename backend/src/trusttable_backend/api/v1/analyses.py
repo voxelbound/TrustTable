@@ -126,6 +126,7 @@ from trusttable_backend.domain.rules import (
     ValidationRule,
 )
 from trusttable_backend.domain.value_objects import ColumnReference, Severity
+from trusttable_backend.effective_settings import resolve_current_ai
 from trusttable_backend.enrichment import AiEnrichmentState, compute_binding_digest, derive_state
 from trusttable_backend.errors import AppError
 from trusttable_backend.explanation.ai_explanation import (
@@ -146,6 +147,7 @@ from trusttable_backend.persistence.enrichment_store import (
     BeginOutcome,
     SqlEnrichmentStore,
 )
+from trusttable_backend.persistence.settings_store import SqlSettingsStore
 from trusttable_backend.profiling.schemas import ColumnProfile, DatasetProfile, ProfilingWarning
 from trusttable_backend.risk.scoring import TrustAssessment
 from trusttable_backend.rules.ai_generation import (
@@ -260,6 +262,20 @@ def get_enrichment_pool(request: Request) -> EnrichmentPool:
     return enrichment_pool
 
 
+def get_settings_store(request: Request) -> SqlSettingsStore:
+    """Return the app's durable product-settings store (`UX-08a`)."""
+    settings_store: SqlSettingsStore = request.app.state.settings_store
+    return settings_store
+
+
+def _effective_settings(request: Request) -> Settings:
+    """The deployment settings with the effective AI-assistance setting applied
+    (`UX-08a`): an explicit deployment override, else the stored value, else off.
+    Every AI consumer reads this instead of the raw deployment settings, so a
+    change made in the product takes effect on the next request."""
+    return resolve_current_ai(get_settings_store(request)).settings
+
+
 _AI_CALL_STATUS_OUTCOME = {
     "attempted_accepted": EnrichmentOutcome.ACCEPTED,
     "attempted_rejected": EnrichmentOutcome.REJECTED,
@@ -274,12 +290,14 @@ def _record_enrichment(
     *,
     evidence_sent: bool,
     confirmed_context_sent: bool,
+    settings: Settings | None = None,
 ) -> None:
     """Record one attempted AI enrichment call on the analysis (`EXP-01`
     slice 4). Every route that can reach a model calls this exactly once
     per attempt; a deployment with AI disabled never does. Only the
-    outcome, the sent flags and a derived location are stored."""
-    settings = get_settings()
+    outcome, the sent flags and a derived location are stored. `settings` are
+    the effective settings the attempt ran under (`UX-08a`)."""
+    settings = settings if settings is not None else get_settings()
     record_ai_enrichment_call(
         store,
         analysis_id,
@@ -926,7 +944,7 @@ def get_analysis_finding_explanation(
     # deterministic four sections and overlays a *current* saved AI
     # enrichment, if there is one. Requesting an enrichment is
     # `POST .../ai-enrichment`; it runs on a worker, not in this request.
-    settings = get_settings()
+    settings = _effective_settings(request)
     if settings.llm_provider != "disabled":
         ai_call_status = AI_CALL_NOT_ATTEMPTED
         saved = get_enrichment_store(request).get(analysis_id, finding_id)
@@ -988,8 +1006,12 @@ def _execute_finding_enrichment(
     analysis_id: str,
     finding_id: str,
     binding_digest: str,
+    settings_store: SqlSettingsStore | None = None,
 ) -> None:
     """The model call for one finding, run on an enrichment worker thread.
+    The effective settings are read again here (`UX-08a`): if AI assistance was
+    turned off, or the model changed, since the request, the binding check below
+    fails the attempt as superseded and no model call is made.
 
     Nothing that goes wrong with the model, the provider or a lookup is raised:
     the row ends `failed` (or `ready`) and the deterministic content is
@@ -1000,7 +1022,11 @@ def _execute_finding_enrichment(
     records the attempt in the analysis's call counters exactly once (D-047).
     Nothing about a failure, and no model output, is logged.
     """
-    settings = get_settings()
+    settings = (
+        resolve_current_ai(settings_store).settings
+        if settings_store is not None
+        else get_settings()
+    )
     status = EnrichmentStatus.FAILED
     reason: EnrichmentReason | None = EnrichmentReason.PROVIDER_ERROR
     ai_call_status = AI_CALL_NOT_ATTEMPTED
@@ -1071,6 +1097,7 @@ def _execute_finding_enrichment(
                 _AI_CALL_STATUS_OUTCOME[ai_call_status],
                 evidence_sent=evidence_sent,
                 confirmed_context_sent=confirmed_context_sent,
+                settings=settings,
             )
     finally:
         enrichment_store.complete(
@@ -1098,7 +1125,7 @@ def get_finding_ai_enrichment(
     store = get_analysis_store(request)
     analysis = _get_or_404(store, analysis_id)
     _get_finding_or_404(store, analysis_id, finding_id)
-    settings = get_settings()
+    settings = _effective_settings(request)
     saved = get_enrichment_store(request).get(analysis_id, finding_id)
     state = derive_state(
         provider_enabled=settings.llm_provider != "disabled",
@@ -1129,7 +1156,7 @@ def post_finding_ai_enrichment(
     store = get_analysis_store(request)
     analysis = _get_or_404(store, analysis_id)
     _get_finding_or_404(store, analysis_id, finding_id)
-    settings = get_settings()
+    settings = _effective_settings(request)
     if settings.llm_provider == "disabled":
         return _enrichment_response(finding_id, AiEnrichmentState.UNAVAILABLE, None)
 
@@ -1167,6 +1194,7 @@ def post_finding_ai_enrichment(
                     analysis_id,
                     finding_id,
                     binding,
+                    get_settings_store(request),
                 )
             )
         except RuntimeError:
@@ -1327,7 +1355,7 @@ def get_analysis_context(analysis_id: str, request: Request) -> ContextResponse:
         raise _analysis_not_ready(analysis_id, analysis.state) from exc
     updated = get_status(store, analysis_id)
 
-    settings = get_settings()
+    settings = _effective_settings(request)
     if settings.llm_provider != "disabled" and is_first_inference:
         assert updated.dataset_profile is not None  # guaranteed by COMPLETED invariant
         # Optional enrichment: a misconfigured or misbehaving provider must
@@ -1372,6 +1400,7 @@ def get_analysis_context(analysis_id: str, request: Request) -> ContextResponse:
             outcome,
             evidence_sent=evidence_sent,
             confirmed_context_sent=False,
+            settings=settings,
         )
 
     return _context_response(updated.context_version, context)
@@ -2029,9 +2058,10 @@ def get_analysis_finding_rule_proposal(
     ai_call_status = "not_configured"
     evidence_sent_to_model = False
 
+    settings = _effective_settings(request)
     if not offer.available:
-        settings = get_settings()
-        if settings.llm_provider != "disabled":
+        ai_enabled = settings.llm_provider != "disabled"
+        if ai_enabled:
             try:
                 context = build_ai_rule_generation_context(store, analysis_id, finding_id)
             except AiAssistanceNotAvailableError:
@@ -2080,6 +2110,7 @@ def get_analysis_finding_rule_proposal(
             _AI_CALL_STATUS_OUTCOME[ai_call_status],
             evidence_sent=evidence_sent_to_model,
             confirmed_context_sent=False,
+            settings=settings,
         )
     return RuleProposalResponse(
         available=offer.available,

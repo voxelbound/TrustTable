@@ -129,7 +129,12 @@ def test_the_env_example_matches_the_real_defaults_it_documents() -> None:
     # Hermetic: the documented defaults are the built-in ones, whatever a developer's own
     # repository-root `.env` sets (a local `.env` with `LLM_PROVIDER=llama_cpp` is normal).
     defaults = Settings(_env_file=None)
-    assert env["LLM_PROVIDER"] == defaults.llm_provider == "disabled"
+    # `UX-08a`: LLM_PROVIDER is managed in the product, so the file must not set it (a copied
+    # file would otherwise be an explicit deployment override); the commented line still
+    # documents the real default.
+    assert "LLM_PROVIDER" not in env
+    assert "# LLM_PROVIDER=disabled" in read(ENV_EXAMPLE).splitlines()
+    assert defaults.llm_provider == "disabled"
     assert env["LLM_BASE_URL"] == defaults.llm_base_url
     assert env["LLM_TIMEOUT_SECONDS"] == str(defaults.llm_timeout_seconds)
     assert {key.lower() for key in env} <= set(Settings.model_fields)

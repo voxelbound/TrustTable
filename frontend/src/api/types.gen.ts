@@ -5,6 +5,47 @@ export type ClientOptions = {
 };
 
 /**
+ * AdvancedSettingsResponse
+ *
+ * The effective AI runtime and model configuration, for the person who
+ * administers the installation. Not part of any analysis, finding or report.
+ */
+export type AdvancedSettingsResponse = {
+    /**
+     * Ai Assistance Source
+     */
+    ai_assistance_source: 'deployment' | 'stored' | 'default';
+    /**
+     * Ai Provider
+     */
+    ai_provider: string;
+    /**
+     * Context Window
+     */
+    context_window: number;
+    /**
+     * Max Sample Values
+     */
+    max_sample_values: number;
+    /**
+     * Model Identifier
+     */
+    model_identifier: string | null;
+    /**
+     * Runtime Address
+     */
+    runtime_address: string | null;
+    /**
+     * Sample Values Sent
+     */
+    sample_values_sent: boolean;
+    /**
+     * Timeout Seconds
+     */
+    timeout_seconds: number;
+};
+
+/**
  * AiProvenanceResponse
  *
  * Human-readable provenance of an accepted AI interpretation
@@ -2209,6 +2250,62 @@ export type SecurityExposureResponse = {
 };
 
 /**
+ * SettingItemResponse
+ */
+export type SettingItemResponse = {
+    /**
+     * Key
+     */
+    key: 'ai_assistance';
+    /**
+     * Managed By Installation
+     */
+    managed_by_installation: boolean;
+    /**
+     * Note
+     */
+    note: string | null;
+    /**
+     * Source
+     */
+    source: 'deployment' | 'stored' | 'default';
+    /**
+     * Value
+     */
+    value: boolean;
+    /**
+     * Version
+     */
+    version: number;
+};
+
+/**
+ * SettingWriteRequest
+ *
+ * Set one allowlisted setting. Strict types: `1` and `"true"` are not booleans.
+ */
+export type SettingWriteRequest = {
+    /**
+     * Expected Version
+     */
+    expected_version: number;
+    /**
+     * Value
+     */
+    value: boolean;
+};
+
+/**
+ * SettingsResponse
+ */
+export type SettingsResponse = {
+    /**
+     * Settings
+     */
+    settings: Array<SettingItemResponse>;
+};
+
+/**
  * StagedCheckGroup
  */
 export type StagedCheckGroup = {
@@ -3979,6 +4076,103 @@ export type GetReadinessApiV1HealthReadyGetResponses = {
 };
 
 export type GetReadinessApiV1HealthReadyGetResponse = GetReadinessApiV1HealthReadyGetResponses[keyof GetReadinessApiV1HealthReadyGetResponses];
+
+export type GetSettingsRouteApiV1SettingsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/settings';
+};
+
+export type GetSettingsRouteApiV1SettingsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SettingsResponse;
+};
+
+export type GetSettingsRouteApiV1SettingsGetResponse = GetSettingsRouteApiV1SettingsGetResponses[keyof GetSettingsRouteApiV1SettingsGetResponses];
+
+export type GetAdvancedSettingsApiV1SettingsAdvancedGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/settings/advanced';
+};
+
+export type GetAdvancedSettingsApiV1SettingsAdvancedGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: AdvancedSettingsResponse;
+};
+
+export type GetAdvancedSettingsApiV1SettingsAdvancedGetResponse = GetAdvancedSettingsApiV1SettingsAdvancedGetResponses[keyof GetAdvancedSettingsApiV1SettingsAdvancedGetResponses];
+
+export type ResetSettingApiV1SettingsKeyDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Key
+         */
+        key: string;
+    };
+    query: {
+        /**
+         * Expected Version
+         */
+        expected_version: number;
+    };
+    url: '/api/v1/settings/{key}';
+};
+
+export type ResetSettingApiV1SettingsKeyDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ResetSettingApiV1SettingsKeyDeleteError = ResetSettingApiV1SettingsKeyDeleteErrors[keyof ResetSettingApiV1SettingsKeyDeleteErrors];
+
+export type ResetSettingApiV1SettingsKeyDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: SettingItemResponse;
+};
+
+export type ResetSettingApiV1SettingsKeyDeleteResponse = ResetSettingApiV1SettingsKeyDeleteResponses[keyof ResetSettingApiV1SettingsKeyDeleteResponses];
+
+export type PutSettingApiV1SettingsKeyPutData = {
+    body: SettingWriteRequest;
+    path: {
+        /**
+         * Key
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/api/v1/settings/{key}';
+};
+
+export type PutSettingApiV1SettingsKeyPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutSettingApiV1SettingsKeyPutError = PutSettingApiV1SettingsKeyPutErrors[keyof PutSettingApiV1SettingsKeyPutErrors];
+
+export type PutSettingApiV1SettingsKeyPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: SettingItemResponse;
+};
+
+export type PutSettingApiV1SettingsKeyPutResponse = PutSettingApiV1SettingsKeyPutResponses[keyof PutSettingApiV1SettingsKeyPutResponses];
 
 export type PostStagedUploadApiV1StagedUploadsPostData = {
     body: BodyPostStagedUploadApiV1StagedUploadsPost;

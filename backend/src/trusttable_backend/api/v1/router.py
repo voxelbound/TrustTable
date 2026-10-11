@@ -11,6 +11,7 @@ from trusttable_backend.api.v1 import (
     exports,
     health,
     reports,
+    settings,
     staged_uploads,
     version,
 )
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(health.router)
 router.include_router(version.router)
 router.include_router(ai_status.router)
+router.include_router(settings.router)
 router.include_router(analyses.router)
 router.include_router(staged_uploads.router)
 router.include_router(confirmed_relationships.router)

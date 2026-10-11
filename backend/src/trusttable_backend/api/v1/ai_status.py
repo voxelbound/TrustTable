@@ -2,26 +2,33 @@
 
 A thin route over `trusttable_backend.ai_status`: one bounded liveness probe at
 most, no model completion, no dataset content, no address or path in the
-response.
+response. It reports the *effective* AI assistance (`UX-08a`): an explicit
+deployment override, else the stored product setting, else off.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 from trusttable_backend.ai_status import compute_ai_status
-from trusttable_backend.config import get_settings
+from trusttable_backend.effective_settings import resolve_for_request
 from trusttable_backend.schemas.staging import AiStatusResponse
 
 router = APIRouter(tags=["ai"])
 
 
 @router.get("/ai/status", response_model=AiStatusResponse)
-async def get_ai_status(response: Response) -> AiStatusResponse:
-    """The honest Local AI status for the current deployment configuration."""
+async def get_ai_status(request: Request, response: Response) -> AiStatusResponse:
+    """The honest Local AI status for the effective AI assistance setting."""
     response.headers["Cache-Control"] = "no-store"
-    status = await run_in_threadpool(compute_ai_status, get_settings())
+    resolution = resolve_for_request(request)
+    status = await run_in_threadpool(
+        compute_ai_status,
+        resolution.settings,
+        assistance_requested=resolution.enabled and not resolution.runtime_configured,
+        unavailable_reason=resolution.unavailable_reason,
+    )
     return AiStatusResponse(
         assistance=status.assistance,
         state=status.state,

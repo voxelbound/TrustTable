@@ -870,7 +870,10 @@ The Dataset lifecycle can outlive or contain multiple analyses only when explici
 - **Stored settings.** A small allowlisted, typed and versioned set of user-facing
   product settings with the precedence explicit deployment override, then stored value,
   then built-in default. The source of each effective value (override, stored, default)
-  is reported. It is not a general key and value configuration surface.
+  is reported. It is not a general key and value configuration surface. Built by
+  `UX-08a` (D-076) with exactly one key, `ai_assistance` (boolean); a stored value carries
+  a version that only increases, and a reset removes the value, not the row. It never
+  affects a finding, a score, a priority, a report or what is sent to a model.
 - **Inspector windows** are read-only views over stored content, bound to a finding or
   an observation's example rows, and are not `Evidence`. Section 13's rules stand. A
   window is bounded in rows and in characters; one clipped by the character bound
