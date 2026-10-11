@@ -71,6 +71,19 @@ describe('HelpRoute', () => {
     ).toBeVisible()
   })
 
+  it('UX-07: states every condition for exporting a rule, as the export applies them (enabled, and a latest run that completed without error)', () => {
+    renderHelp()
+
+    const section = screen
+      .getByRole('heading', { name: 'Rules' })
+      .closest('section') as HTMLElement
+    expect(
+      within(section).getByText(
+        /export the rules that are enabled and whose latest run completed without error/,
+      ),
+    ).toBeVisible()
+  })
+
   it('UX-07: says AI is optional and separate, and that rules are not applied elsewhere or editable here', () => {
     renderHelp()
 

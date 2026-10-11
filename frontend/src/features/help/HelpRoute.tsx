@@ -62,7 +62,7 @@ const TOPICS: Topic[] = [
     id: 'rules',
     title: 'Rules',
     body: [
-      'Rules are checks associated with this analysis. You can run them again, delete them and export those that ran without error, so that the team who owns the data source can use them.',
+      'Rules are checks associated with this analysis. You can run them again, delete them and export the rules that are enabled and whose latest run completed without error, so that the team who owns the data source can use them.',
       'TrustTable does not apply them to later files or to other datasets, and it does not change your data. Rules cannot be created or edited here.',
     ],
   },
