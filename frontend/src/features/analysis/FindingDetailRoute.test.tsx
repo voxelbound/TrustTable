@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
@@ -681,19 +680,33 @@ describe('FindingDetailRoute', () => {
     ).toBeInTheDocument()
   })
 
-  it('WP-038 (FIND-01): renders the Row context section with the anchor row highlighted', async () => {
+  it('UX-06: offers the data inspector for a finding with affected rows, without loading any row values itself', async () => {
+    let rowContextRequests = 0
+    server.use(
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/row-context',
+        () => {
+          rowContextRequests += 1
+          return HttpResponse.json(makeRowContextResponse())
+        },
+      ),
+    )
+
     renderDetail()
 
     expect(
-      await screen.findByRole('heading', { name: 'Row context' }),
+      await screen.findByRole('heading', { name: 'Rows in the data' }),
     ).toBeInTheDocument()
-    const anchorCell = await screen.findByText('2099-01-01')
-    const anchorRow = anchorCell.closest('tr')
-    expect(anchorRow).not.toBeNull()
-    expect(anchorRow).toHaveAttribute('aria-current', 'true')
+    const link = screen.getByRole('link', { name: 'Inspect the affected rows' })
+    expect(link).toHaveAttribute(
+      'href',
+      `/analyses/${ANALYSIS_ID}/findings/${FINDING_ID}/inspector`,
+    )
+    // Row values are read only when the reader opens the inspector.
+    expect(rowContextRequests).toBe(0)
   })
 
-  it('WP-038 (FIND-01): does not render Row context for a finding with zero affected rows', async () => {
+  it('UX-06: does not offer the inspector for a finding with zero affected rows', async () => {
     server.use(
       http.get(
         'http://localhost/api/v1/analyses/:analysisId/findings/:findingId',
@@ -710,69 +723,11 @@ describe('FindingDetailRoute', () => {
     renderDetail()
 
     await screen.findByRole('heading', { name: 'Observation' })
-    expect(screen.queryByRole('heading', { name: 'Row context' })).toBeNull()
-  })
-
-  it("WP-038 (FIND-01): Prev/Next jump between a finding's multiple affected rows", async () => {
-    const user = userEvent.setup()
-    server.use(
-      http.get(
-        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/row-context',
-        ({ request }) => {
-          const url = new URL(request.url)
-          const anchorRow = url.searchParams.get('anchor_row')
-          return HttpResponse.json(
-            makeRowContextResponse({
-              rows: [
-                {
-                  row_number: Number(anchorRow),
-                  is_anchor: true,
-                  is_affected_by_finding: true,
-                  values: [`row-${anchorRow}`, 'x'],
-                },
-              ],
-              actual_before: 0,
-              actual_after: 0,
-              truncated_at_start: false,
-              truncated_at_end: false,
-            }),
-          )
-        },
-      ),
-    )
-
-    renderDetail()
-
-    expect(await screen.findByText('Affected row 1 of 2')).toBeInTheDocument()
-    expect(await screen.findByText('row-4')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Next' }))
-
-    expect(await screen.findByText('Affected row 2 of 2')).toBeInTheDocument()
-    expect(await screen.findByText('row-17')).toBeInTheDocument()
-  })
-
-  it('WP-038 (FIND-01): Show more rows expands the requested window', async () => {
-    const user = userEvent.setup()
-    let lastBefore: string | null = null
-    server.use(
-      http.get(
-        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/row-context',
-        ({ request }) => {
-          const url = new URL(request.url)
-          lastBefore = url.searchParams.get('before')
-          return HttpResponse.json(makeRowContextResponse())
-        },
-      ),
-    )
-
-    renderDetail()
-
-    const expandButton = await screen.findByRole('button', {
-      name: 'Show more rows',
-    })
-    await user.click(expandButton)
-
-    expect(lastBefore).toBe('8')
+    expect(
+      screen.queryByRole('heading', { name: 'Rows in the data' }),
+    ).toBeNull()
+    expect(
+      screen.queryByRole('link', { name: 'Inspect the affected rows' }),
+    ).toBeNull()
   })
 })

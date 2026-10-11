@@ -1360,10 +1360,16 @@ Core rules:
   reconciliation that fails every row left `preparing` as `interrupted`; and short
   `POST`/`GET .../ai-enrichment` routes. `GET .../explanation` no longer calls a model.
   A future user-initiated batch is an interface only.
-- **Inspector.** A data path separate from canonical evidence, AI payload assembly and
-  report assembly, with bounded server-side windows and a performance spike on the real
-  parse path (the stored file is re-parsed on every row-context call today) before any
-  limit is set.
+- **Inspector (part a built by `UX-06a`, D-073).** A data path separate from canonical
+  evidence, AI payload assembly and report assembly, with bounded server-side windows.
+  The measurement on the real parse path (`backend/scripts/measure_inspector_parse.py`)
+  found the stored file is re-parsed on every row-context call at a cost proportional
+  to the file (about 30 ms per MiB of CSV, about 0.8 s per MiB of workbook, memory about
+  twelve times the CSV size), so no window limit depends on it; the 25-row limit stays,
+  at most two reads run at once per process (`429 INSPECTOR_BUSY`), a window carries at
+  most about one million characters of cell text (`size_limited`), the response is
+  `Cache-Control: no-store`, and no parsed-rows cache was added. Reaching the inspector
+  from observations and a window for column-wide findings remain `UX-06` part b.
 - **Local AI status (`UX-09`).** Defined against an abstract provider and readiness
   contract that does not assume where a runtime runs, so the unapproved S8b choice
   (`LAI-01`) is not made implicitly. The runtime is currently provisioned outside the

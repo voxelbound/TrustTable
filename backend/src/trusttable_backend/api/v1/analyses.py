@@ -34,11 +34,12 @@ creating a new, independent analysis over the same dataset content — see
 
 from __future__ import annotations
 
+import threading
 from datetime import UTC, date, datetime
 from functools import partial
 from typing import Annotated
 
-from fastapi import APIRouter, Form, Query, Request, UploadFile
+from fastapi import APIRouter, Form, Query, Request, Response, UploadFile
 from starlette.concurrency import run_in_threadpool
 
 from trusttable_backend.ai_provider.display import describe_provenance, sanitize_model_identifier
@@ -198,6 +199,12 @@ from trusttable_backend.schemas.analysis import (
 from trusttable_backend.schemas.history import AnalysisHistoryItem, AnalysisHistoryResponse
 
 router = APIRouter(tags=["analyses"])
+
+#: Every inspector window read parses the stored file again; measured at about
+#: 12 times the file size in memory (`UX-06`, D-073), so only this many run at
+#: once in a process and a further request is refused rather than queued.
+_MAX_CONCURRENT_INSPECTOR_READS = 2
+_INSPECTOR_READ_GATE = threading.BoundedSemaphore(_MAX_CONCURRENT_INSPECTOR_READS)
 
 #: Fixed, safe per-state polling message (`docs/api-specification.md` §6's
 #: "current message"). Never derived from dataset content.
@@ -663,6 +670,7 @@ def _row_context_response(window: RowContextWindow) -> RowContextResponse:
         truncated_at_start=window.truncated_at_start,
         truncated_at_end=window.truncated_at_end,
         max_window=window.max_window,
+        size_limited=window.size_limited,
         rows=[
             RowContextEntryResponse(
                 row_number=entry.row_reference.row_number,
@@ -1719,6 +1727,7 @@ def get_analysis_finding_row_context(
     analysis_id: str,
     finding_id: str,
     request: Request,
+    response: Response,
     anchor_row: int = Query(...),
     before: int = Query(3, ge=0),
     after: int = Query(3, ge=0),
@@ -1734,9 +1743,23 @@ def get_analysis_finding_row_context(
     beyond the server's bounded maximum, or beyond the file's own start/
     end, are clamped rather than rejected — see the response's own
     `requested_*`/`actual_*`/`truncated_at_*` fields.
+
+    `UX-06` (D-073): the response carries row values and is marked
+    `Cache-Control: no-store` so no shared or browser cache keeps it; every call
+    parses the stored file again, so at most `_MAX_CONCURRENT_INSPECTOR_READS`
+    run at once and a further one is refused with `INSPECTOR_BUSY` (429); and a
+    window is limited in size as well as in rows (`size_limited`).
     """
+    response.headers["Cache-Control"] = "no-store"
     store = get_analysis_store(request)
     _get_finding_or_404(store, analysis_id, finding_id)
+    if not _INSPECTOR_READ_GATE.acquire(blocking=False):
+        raise AppError(
+            "INSPECTOR_BUSY",
+            "The data inspector is busy right now. Try again shortly.",
+            status_code=429,
+            details={"analysis_id": analysis_id, "finding_id": finding_id},
+        )
     try:
         window = get_finding_row_context(
             store, analysis_id, finding_id, anchor_row=anchor_row, before=before, after=after
@@ -1747,6 +1770,8 @@ def get_analysis_finding_row_context(
         raise _finding_not_found(analysis_id, finding_id) from exc
     except RowNotInFindingError as exc:
         raise _row_not_in_finding(analysis_id, finding_id, anchor_row) from exc
+    finally:
+        _INSPECTOR_READ_GATE.release()
     return _row_context_response(window)
 
 

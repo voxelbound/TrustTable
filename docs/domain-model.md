@@ -872,7 +872,9 @@ The Dataset lifecycle can outlive or contain multiple analyses only when explici
   then built-in default. The source of each effective value (override, stored, default)
   is reported. It is not a general key and value configuration surface.
 - **Inspector windows** are read-only views over stored content, bound to a finding or
-  an observation's example rows, and are not `Evidence`. Section 13's rules stand.
+  an observation's example rows, and are not `Evidence`. Section 13's rules stand. A
+  window is bounded in rows and in characters; one clipped by the character bound
+  reports `size_limited` (`UX-06`, D-073).
 
 New invariants:
 

@@ -13,7 +13,6 @@ import { navigateFindings } from '../../domain/findingNavigation'
 import { FindingAiPanel } from './FindingAiPanel'
 import { FindingNavigator } from './FindingNavigator'
 import { FindingReviewControls } from './FindingReviewControls'
-import { RowContext } from './RowContext'
 import {
   useAnalysisFindings,
   useFindingDetail,
@@ -313,12 +312,27 @@ export function FindingDetailRoute() {
         </section>
       )}
 
-      {analysisId && (
-        <RowContext
-          analysisId={analysisId}
-          findingId={finding.finding_id}
-          affectedRowNumbers={finding.affected_row_numbers}
-        />
+      {analysisId && finding.affected_row_numbers.length > 0 && (
+        <section aria-labelledby="inspect-rows-heading">
+          <h2
+            id="inspect-rows-heading"
+            className="text-xl font-semibold text-slate-900 dark:text-slate-100"
+          >
+            Rows in the data
+          </h2>
+          <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+            See the {finding.affected_row_count} affected row
+            {finding.affected_row_count === 1 ? '' : 's'} with the rows around
+            them, as they are in your file. This is only a view: it changes
+            nothing and is not sent to an AI model or added to a report.
+          </p>
+          <Link
+            to={`/analyses/${analysisId}/findings/${finding.finding_id}/inspector${carried}`}
+            className="mt-2 inline-block rounded border border-slate-300 px-2 py-1 text-sm font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+          >
+            Inspect the affected rows
+          </Link>
+        </section>
       )}
 
       {explanation && (

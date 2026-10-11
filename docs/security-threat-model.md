@@ -291,6 +291,16 @@ Logs may contain:
   exports unless an existing, explicitly requested, bounded contract says otherwise.
   Retaining the complete affected-row set would be new retention of raw data and needs a
   retention and deletion rule.
+  **Built for findings with affected rows (`UX-06` part a, D-073):** the screen renders
+  every value as a text node (tests with markup and formula text); only rows the
+  finding names can be requested (404 `ROW_NOT_IN_FINDING` otherwise); the response is
+  `Cache-Control: no-store`; at most two window reads run at once and a further one is
+  refused (`429 INSPECTOR_BUSY`) because each parses the whole file again, at about
+  twelve times its size in memory; a window carries at most about one million characters
+  (500 columns of 10,000 characters would otherwise allow a response near 250 MB);
+  reading a window changes no stored state, AI payload, evidence or report (tested). No
+  parsed-rows cache was added, so nothing new is retained. Shortening a long value on
+  screen is display behavior, not redaction.
 - **Persisted AI output.** Derived from user data: it follows its analysis's deletion,
   is rendered as inert text, stays out of reports, exports and canonical evidence unless
   explicitly allowed, falls back to deterministic content when stale or failed, and its

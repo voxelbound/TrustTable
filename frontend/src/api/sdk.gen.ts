@@ -399,6 +399,12 @@ export const putAnalysisFindingReviewApiV1AnalysesAnalysisIdFindingsFindingIdRev
  * beyond the server's bounded maximum, or beyond the file's own start/
  * end, are clamped rather than rejected — see the response's own
  * `requested_*`/`actual_*`/`truncated_at_*` fields.
+ *
+ * `UX-06` (D-073): the response carries row values and is marked
+ * `Cache-Control: no-store` so no shared or browser cache keeps it; every call
+ * parses the stored file again, so at most `_MAX_CONCURRENT_INSPECTOR_READS`
+ * run at once and a further one is refused with `INSPECTOR_BUSY` (429); and a
+ * window is limited in size as well as in rows (`size_limited`).
  */
 export const getAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGet = <ThrowOnError extends boolean = false>(options: Options<GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetData, ThrowOnError>): RequestResult<GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetResponses, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetErrors, ThrowOnError> => (options.client ?? client).get<GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetResponses, GetAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGetErrors, ThrowOnError>({ url: '/api/v1/analyses/{analysis_id}/findings/{finding_id}/row-context', ...options });
 

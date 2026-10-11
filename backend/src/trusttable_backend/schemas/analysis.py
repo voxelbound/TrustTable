@@ -489,6 +489,10 @@ class RowContextResponse(BaseModel):
     truncated_at_end: bool
     max_window: int
     rows: list[RowContextEntryResponse]
+    #: `True` when the window was shortened by the response-size bound (`UX-06`,
+    #: D-073) rather than by the file's start or end or the row limit, so asking
+    #: for more rows would not return more.
+    size_limited: bool = False
 
 
 class BusinessImpactStatementResponse(BaseModel):

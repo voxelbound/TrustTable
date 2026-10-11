@@ -717,7 +717,10 @@ Returns:
 
 - resolved window: `requested_before`, `requested_after`,
   `actual_before`, `actual_after`, `truncated_at_start`,
-  `truncated_at_end`, current `max_window`
+  `truncated_at_end`, current `max_window`, and `size_limited`
+  (`UX-06`, D-073: `true` when the window was shortened by the response-size
+  bound below rather than by the file's own start or end, so asking for more
+  rows would not return more)
 - column list (original names, in source order)
 - one entry per row in the window: its RowReference, `is_anchor`,
   `is_affected_by_finding` (true for the anchor and any other of this
@@ -728,6 +731,22 @@ Returns:
 Capability boundary: `anchor_row` must resolve to a RowReference
 already belonging to the finding's own affected row references — this
 endpoint reads context around a finding, not arbitrary rows in the file.
+
+**Bounds added by `UX-06` (D-073), from a measurement on the real parse path.**
+Every call parses the stored file again (about 30 ms per MiB of CSV, about 0.8 s
+per MiB of workbook, peak memory about twelve times the CSV size), so:
+
+- at most two reads run at once in a process; a further one is refused with
+  `429 INSPECTOR_BUSY` (not queued). The condition is momentary; retry shortly.
+- a window carries at most about one million characters of cell text. The anchor
+  row is always returned, neighbours are added outward and a side stops at the
+  first row that does not fit, so the window stays contiguous; a shortened window
+  reports `size_limited` (above) and the truncation flags still report the
+  shortfall. The row limit (25 per side) is unchanged.
+- the response is sent with `Cache-Control: no-store`: it carries row values and
+  must not be kept by a shared or browser cache.
+- the response is not evidence and is not part of any AI payload, report or
+  export (`docs/domain-model.md` invariant 15).
 
 ### GET `/analyses/{analysis_id}/findings/{finding_id}/explanation`
 
@@ -1191,7 +1210,7 @@ Existing routes, including direct upload `POST /analyses`, keep their contracts.
 | History (`UX-03`) — **built by `UX-03`, section 6 (D-069)** | `GET /analyses`; `POST /analyses/{id}/rerun`; `previously_analysed` on the staged-upload resource | The lookup is not a dataset identity; it reflects only analyses that still exist; none of the new responses carries an integrity hash. The pre-existing `dataset.content_hash` field of the analysis resource predates this slice and is unchanged by it (see D-069) |
 | Dashboard (`UX-04`) — **built by `UX-04`, section 6 (D-070)** | `GET /analyses/{id}/summary` | Distinct affected rows, shape and completeness with its sampled-or-full scope; counts only, no cell value, row list or hash; severity and category distribution, columns with most findings and review progress are derived by the client from the findings list |
 | Persisted AI enrichment (`UX-05`) — **built by `UX-05b`, section 10 (D-072)** | `POST` and `GET .../findings/{id}/ai-enrichment`; `GET .../explanation` no longer calls a model | Deterministic content never waits for a model call; the result is bound to the finding, confirmed-context version, model identity and prompt or contract version and is reported stale when the binding changes; start and status must not depend on one long request; bounded concurrency; saved output is deleted with its analysis |
-| Inspector (`UX-06`) | Bounded, finding-scoped row windows, including observation example rows | Server-side bounds; no shared-cache storage; unchanged privacy boundary (D-025); window and paging limits are set only after the performance spike |
+| Inspector (`UX-06`) — **part a built by `UX-06a`, section 10 (D-073)**; observation example rows and column-wide windows remain `UX-06` part b | Bounded, finding-scoped row windows, including observation example rows | Server-side bounds; no shared-cache storage; unchanged privacy boundary (D-025); part a measured the parse path first and added a concurrency bound, a response-size bound and `Cache-Control: no-store` to the existing `row-context` route, with no new route and the 25-row limit unchanged |
 | Settings (`UX-08`) | Read effective settings with their source (deployment override, stored, default); write allowlisted, typed, versioned stored settings; reset to default | Computed server-side; a stored value never exceeds a deployment override or a security or resource limit; unknown keys and values rejected; write-path protection and fail-closed behavior; a narrow Advanced response may expose effective runtime and model configuration and raw paths and URLs never appear in analysis, finding, report or other shareable responses |
 
 Behavior preserved: `GET .../findings/{finding_id}/rule-proposal` still performs a

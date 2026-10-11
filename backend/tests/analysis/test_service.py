@@ -34,6 +34,7 @@ from pathlib import Path
 
 import pytest
 
+from trusttable_backend.ai_boundary.prompt import build_safe_prompt
 from trusttable_backend.analysis.service import (
     Analysis,
     AnalysisFailure,
@@ -93,6 +94,7 @@ from trusttable_backend.domain.parsing import (
     SamplingScope,
 )
 from trusttable_backend.domain.review import FindingReviewState
+from trusttable_backend.domain.row_context import RowContextWindow
 from trusttable_backend.domain.rules import ComparisonOperator, NullHandling, RuleProvenance
 from trusttable_backend.domain.value_objects import (
     ColumnReference,
@@ -100,6 +102,9 @@ from trusttable_backend.domain.value_objects import (
     RowReference,
     Severity,
 )
+from trusttable_backend.explanation.ai_explanation import build_finding_explanation_envelope
+from trusttable_backend.exports.report_build import build_report_snapshot
+from trusttable_backend.exports.report_snapshot import ReportVersions
 from trusttable_backend.parsers.csv_parser import parse_csv
 from trusttable_backend.profiling.metrics import compute_dataset_profile
 from trusttable_backend.profiling.schemas import DatasetProfile
@@ -1158,6 +1163,7 @@ def test_get_finding_row_context_truncates_at_file_boundaries() -> None:
     assert window.actual_after == 2
     assert window.truncated_at_start is True
     assert window.truncated_at_end is True
+    assert window.size_limited is False
     assert len(window.rows) == 5
     assert [entry.row_reference.row_number for entry in window.rows] == [0, 1, 2, 3, 4]
     assert window.rows[0].values == ("r0a", "r0b")
@@ -1232,6 +1238,108 @@ def test_get_finding_row_context_raises_analysis_not_found_for_unknown_id() -> N
     store = AnalysisStore()
     with pytest.raises(AnalysisNotFoundError):
         get_finding_row_context(store, "unknown-id", "0", anchor_row=0)
+
+
+# --- UX-06 (D-073): a window is bounded in size as well as in rows ---------------
+
+
+def _wide_csv(rows: int, columns: int, width: int) -> bytes:
+    header = ",".join(f"c{index}" for index in range(columns))
+    line = ",".join("x" * width for _ in range(columns))
+    return (header + "\n" + "\n".join(line for _ in range(rows)) + "\n").encode()
+
+
+def _window_over(content: bytes, anchor_row: int, rows: int) -> RowContextWindow:
+    finding = _make_finding(affected_row_references=(RowReference(row_number=anchor_row),))
+    analysis = _make_completed_analysis(
+        content=content, findings=(finding,), priority_scores=(50.0,)
+    )
+    store = AnalysisStore()
+    store.add(analysis)
+    assert rows > anchor_row
+    return get_finding_row_context(
+        store, analysis.analysis_id, "0", anchor_row=anchor_row, before=25, after=25
+    )
+
+
+def test_row_context_window_is_clipped_by_size_and_stays_contiguous_around_the_anchor() -> None:
+    # 10 columns of 5,000 characters: about 50 KB a row against a 1,000,000 budget.
+    window = _window_over(_wide_csv(rows=40, columns=10, width=5000), anchor_row=20, rows=40)
+
+    numbers = [entry.row_reference.row_number for entry in window.rows]
+    assert numbers == list(range(numbers[0], numbers[-1] + 1))
+    assert 20 in numbers
+    assert [entry.is_anchor for entry in window.rows].count(True) == 1
+    assert window.size_limited is True
+    # Fewer rows than the 20 before and 19 after the file offered, and the
+    # shortfall is reported on both sides rather than hidden.
+    assert window.actual_before < 20
+    assert window.actual_after < 19
+    assert window.truncated_at_start is True
+    assert window.truncated_at_end is True
+    total = sum(sum(len(v) for v in e.values if v) + len(e.values) for e in window.rows)
+    assert total <= 1_000_000
+
+
+def test_row_context_window_keeps_the_anchor_even_when_one_row_exceeds_the_bound() -> None:
+    # 120 columns of 10,000 characters: over a million characters in one row.
+    window = _window_over(_wide_csv(rows=3, columns=120, width=10_000), anchor_row=1, rows=3)
+
+    assert [entry.row_reference.row_number for entry in window.rows] == [1]
+    assert window.rows[0].is_anchor is True
+    assert window.actual_before == 0
+    assert window.actual_after == 0
+    assert window.size_limited is True
+
+
+def test_row_context_window_is_not_size_limited_when_the_file_edge_clips_it() -> None:
+    window = _window_over(_wide_csv(rows=5, columns=3, width=4), anchor_row=2, rows=5)
+
+    assert window.truncated_at_start is True
+    assert window.truncated_at_end is True
+    assert window.size_limited is False
+
+
+def test_reading_a_row_window_changes_no_state_ai_payload_evidence_or_report() -> None:
+    """Invariant 15 (`docs/domain-model.md`): making row data visible adds it to
+    nothing else. The window is read-only and independent of everything that
+    feeds a model, evidence or a report."""
+    evidence = (_make_evidence(),)
+    finding = _make_finding(
+        affected_row_references=(RowReference(row_number=1), RowReference(row_number=3))
+    )
+    analysis = _make_completed_analysis(
+        content=_ROW_CONTEXT_CSV, findings=(finding,), priority_scores=(50.0,), evidence=evidence
+    )
+    store = AnalysisStore()
+    store.add(analysis)
+    versions = ReportVersions(application_version="0")
+
+    def snapshot() -> tuple[object, ...]:
+        prompt = build_safe_prompt(build_finding_explanation_envelope(finding, evidence))
+        report = build_report_snapshot(
+            analysis, report_id="r1", generated_at=FIXED_NOW, versions=versions
+        )
+        return (
+            prompt,
+            report.markdown,
+            report.content_sha256,
+            get_finding_evidence(store, analysis.analysis_id, "0"),
+            get_finding(store, analysis.analysis_id, "0"),
+            store.get(analysis.analysis_id),
+        )
+
+    before = snapshot()
+    for anchor in (1, 3):
+        window = get_finding_row_context(store, analysis.analysis_id, "0", anchor_row=anchor)
+        assert window.rows
+    after = snapshot()
+
+    assert after == before
+    # None of the visible row text reaches the prompt or the report.
+    for text in ("r1a", "r3b", "r0a"):
+        assert text not in str(after[0])
+        assert text not in str(after[1])
 
 
 def test_row_not_in_finding_error_carries_requested_ids() -> None:

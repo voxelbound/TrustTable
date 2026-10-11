@@ -52,6 +52,11 @@ class RowContextWindow:
     truncated_at_end: bool
     max_window: int
     rows: tuple[RowContextEntry, ...]
+    #: True when the window was clipped by the response-size bound (`UX-06`,
+    #: D-073) rather than by the file's own start or end or the row limit; the
+    #: truncation flags still report the shortfall, this says why it is not
+    #: recoverable by asking for more rows.
+    size_limited: bool = False
 
     def __post_init__(self) -> None:
         if self.requested_before < 0:

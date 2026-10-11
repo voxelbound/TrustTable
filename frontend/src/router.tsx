@@ -2,6 +2,7 @@ import { createBrowserRouter, redirect } from 'react-router'
 import { AnalysisLayoutRoute } from './features/analysis/AnalysisLayoutRoute'
 import { ContextRoute } from './features/analysis/ContextRoute'
 import { FindingDetailRoute } from './features/analysis/FindingDetailRoute'
+import { FindingInspectorRoute } from './features/analysis/FindingInspectorRoute'
 import { FindingsRoute } from './features/analysis/FindingsRoute'
 import { OverviewRoute } from './features/analysis/OverviewRoute'
 import { ReportRoute } from './features/analysis/ReportRoute'
@@ -14,7 +15,8 @@ import { WorkspaceRoute } from './features/workspace/WorkspaceRoute'
  * React Router Data Mode router (`UI-01`, `WP-025`; `findings/:findingId`
  * added by `WP-028`; `context` added by `WP-064`, `UI-02` slice 2;
  * `report` added by `UI-03` slice 2; `rules` by `UI-03` slice 3;
- * `technical` by `UI-03` slice 5) —
+ * `technical` by `UI-03` slice 5; `findings/:findingId/inspector` by `UX-06`
+ * part a, D-073) —
  * replaces `FND-01`'s placeholder route with the real investigation
  * shell.
  *
@@ -44,6 +46,10 @@ export const router = createBrowserRouter([
       { path: 'overview', element: <OverviewRoute /> },
       { path: 'findings', element: <FindingsRoute /> },
       { path: 'findings/:findingId', element: <FindingDetailRoute /> },
+      {
+        path: 'findings/:findingId/inspector',
+        element: <FindingInspectorRoute />,
+      },
       { path: 'context', element: <ContextRoute /> },
       { path: 'report', element: <ReportRoute /> },
       { path: 'rules', element: <RulesRoute /> },
