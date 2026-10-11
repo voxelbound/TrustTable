@@ -11,6 +11,7 @@ import { ReportRoute } from './features/analysis/ReportRoute'
 import { RulesRoute } from './features/analysis/RulesRoute'
 import { TechnicalRoute } from './features/analysis/TechnicalRoute'
 import { HelpRoute } from './features/help/HelpRoute'
+import { SettingsRoute } from './features/settings/SettingsRoute'
 import { ConfigureRoute } from './features/workspace/ConfigureRoute'
 import { WorkspaceRoute } from './features/workspace/WorkspaceRoute'
 
@@ -20,7 +21,8 @@ import { WorkspaceRoute } from './features/workspace/WorkspaceRoute'
  * `report` added by `UI-03` slice 2; `rules` by `UI-03` slice 3;
  * `technical` by `UI-03` slice 5; `findings/:findingId/inspector` by `UX-06`
  * part a, D-073; `observations/:observationId/inspector` by `UX-06` part b,
- * D-074; `observations` and `/help` by `UX-07`, D-075) —
+ * D-074; `observations` and `/help` by `UX-07`, D-075; `/settings` by
+ * `UX-08b`, D-077) —
  * replaces `FND-01`'s placeholder route with the real investigation
  * shell.
  *
@@ -42,6 +44,10 @@ export const router = createBrowserRouter([
   {
     path: '/help',
     element: <HelpRoute />,
+  },
+  {
+    path: '/settings',
+    element: <SettingsRoute />,
   },
   {
     path: '/analyses/new',

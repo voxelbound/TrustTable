@@ -11,10 +11,10 @@ export interface AppShellProps {
 /** Top-level chrome (`docs/ui-specification.md` §3): the product name, the
  * workspace navigation, and the dataset name/status on an analysis route.
  *
- * Navigation shows only what exists (`UX-02`, D-068; `UX-07`, D-075): Home,
- * Help, and *Compare datasets* as a disabled, labelled entry because
- * comparison is planned and not implemented. Analyses and Settings appear when
- * their slices ship; until then they would be dead controls
+ * Navigation shows only what exists (`UX-02`, D-068; `UX-07`, D-075;
+ * `UX-08b`, D-077): Home, Help, Settings, and *Compare datasets* as a
+ * disabled, labelled entry because comparison is planned and not implemented.
+ * Analyses appears when its slice ships; until then it would be a dead control
  * (`docs/ui-specification.md` §12.1). */
 export function AppShell({ datasetName, statusText, children }: AppShellProps) {
   return (
@@ -41,6 +41,14 @@ export function AppShell({ datasetName, statusText, children }: AppShellProps) {
                     className="text-slate-700 underline-offset-2 hover:underline dark:text-slate-300"
                   >
                     Help
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/settings"
+                    className="text-slate-700 underline-offset-2 hover:underline dark:text-slate-300"
+                  >
+                    Settings
                   </Link>
                 </li>
                 <li

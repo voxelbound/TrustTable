@@ -47,7 +47,7 @@ const TOPICS: Topic[] = [
     id: 'sampled-and-full',
     title: 'Sampled and full',
     body: [
-      'Technical details say whether the column profile covered every row (full data) or only some of them (sampled). A sampled profile describes only the rows it covered, and the number covered is shown.',
+      'Technical details say whether the column profile covered every row (full data) or only some of them (sampled). A sampled profile describes only the rows it covered, and the number covered is shown. Technical details are shown when Advanced mode is on.',
     ],
   },
   {
@@ -56,6 +56,15 @@ const TOPICS: Topic[] = [
     body: [
       'AI is optional and separate. The checks, findings, the trust assessment and the built-in guidance are ready without it and never wait for it.',
       'An AI explanation is requested for one finding at a time, and only when a model is set up. When it is not available, the built-in guidance is shown and says so.',
+      'AI assistance can be turned on or off in Settings, unless your installation manages it, in which case Settings shows its value and cannot change it.',
+    ],
+  },
+  {
+    id: 'settings-and-advanced',
+    title: 'Settings and Advanced mode',
+    body: [
+      'Settings explains each setting you can change, and shows one that your installation manages as read-only with the reason.',
+      'Advanced mode shows technical detail: the Technical details area of an analysis, and the AI runtime and model this installation uses. It is kept in this browser only. It changes what is shown, not what TrustTable does, and it is not a security control.',
     ],
   },
   {

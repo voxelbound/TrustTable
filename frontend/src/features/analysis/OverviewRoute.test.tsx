@@ -8,12 +8,14 @@ import {
   makeFindingsListResponse,
   makeSummaryResponse,
 } from '../../test/msw/handlers'
+import { setAdvancedMode } from '../../lib/advancedMode'
 import { server } from '../../test/msw/server'
 import { OverviewRoute } from './OverviewRoute'
 
 const ANALYSIS_ID = 'overview-under-test'
 
-function renderOverview() {
+function renderOverview({ advanced = false }: { advanced?: boolean } = {}) {
+  setAdvancedMode(advanced)
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -99,8 +101,8 @@ describe('OverviewRoute', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('UX-04: renders the dashboard sections in order', async () => {
-    renderOverview()
+  it('UX-04: renders the dashboard sections in order (Advanced mode adds Technical details)', async () => {
+    renderOverview({ advanced: true })
 
     await screen.findByText('Dataset summary')
     const headings = screen.getAllByRole('heading', { level: 2 })
@@ -114,6 +116,28 @@ describe('OverviewRoute', () => {
       'Dataset summary',
       'Technical details',
     ])
+  })
+
+  it('UX-08b: in Normal mode offers no Technical details and keeps the context link', async () => {
+    renderOverview()
+
+    await screen.findByText('Dataset summary')
+    const headings = screen.getAllByRole('heading', { level: 2 })
+    expect(headings.map((heading) => heading.textContent)).toEqual([
+      'Trust assessment',
+      'At a glance',
+      'What was found',
+      'Columns with the most findings',
+      'Top findings',
+      'Worth knowing',
+      'Dataset summary',
+      'About this data',
+    ])
+    expect(screen.queryByText(/technical details/i)).not.toBeInTheDocument()
+    expect(screen.getByText('Review dataset context')).toHaveAttribute(
+      'href',
+      `/analyses/${ANALYSIS_ID}/context`,
+    )
   })
 
   it('AC-05: shows only the top three findings by priority_score', async () => {
@@ -188,7 +212,7 @@ describe('OverviewRoute', () => {
   })
 
   it('UX-04: no longer shows "coming soon" for capabilities that exist', async () => {
-    renderOverview()
+    renderOverview({ advanced: true })
 
     await screen.findByText('Dataset summary')
     expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument()

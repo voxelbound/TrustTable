@@ -87,7 +87,8 @@ Local AI and privacy status from `GET /ai/status`, and shows a visible but disab
 *Compare datasets* area stating that comparison is planned and not implemented. The
 page header carries Home and a disabled Compare entry; Analyses, Settings and Help are not
 shown until their slices ship, because nothing unbuilt is presented as available
-(section 12.1).
+(section 12.1). Help (`UX-07`) and Settings (`UX-08b`) have since shipped and are in the
+header; Analyses has not.
 
 **Implemented (`UX-03`, `docs/decision-log.md` D-069): recent analyses.** The Workspace
 lists the most recent analyses (20, newest first) from `GET /analyses`: file name (marked
@@ -712,7 +713,8 @@ or other datasets and cannot be created or edited there. A **Help** link in the 
 navigation opens `/help`: findings and observations, the trust assessment, where a statement
 comes from, sampled and full, AI assistance and Rules, in plain words and with no claim that
 a result proves the data correct. Loading and empty states use one plain pattern. Technical
-details stay visible to everyone because Advanced mode is part of `UX-08`.
+details were visible to everyone here because Advanced mode was part of `UX-08`; `UX-08b`
+(section 12.6) now shows them only in Advanced mode.
 
 ### 12.5 AI enrichment
 
@@ -743,6 +745,27 @@ model identity, timeouts) is only in Advanced. A setting managed by the installa
 is shown read-only with its effective value and a plain explanation; the product never
 edits deployment configuration. Display preferences are browser-local. No auto-delete
 setting is offered.
+
+**Built (`UX-08b`, D-077).** The workspace navigation has **Settings** (`/settings`). The
+screen has three parts. *AI assistance* (the one product setting, D-076) states what it
+controls, why a person might change it and what changes, shows the effective value and
+where it comes from (the built-in default, saved in TrustTable, or set by the
+installation), and offers a checkbox and, when a value is saved, *Reset to default (off)*.
+The screen shows only what the server returned: a value is not shown as changed until the
+server confirms it. A refused change (a version that is stale, an installation-managed
+setting, or any other failure) says that nothing was changed, and the screen then shows
+what the server now holds. A setting managed by the installation has no control and says
+why in the server's words. *Advanced mode* is a checkbox with the same three statements; it
+is kept in this browser only (`localStorage`, Normal by default; if the browser refuses
+storage the choice lasts for the page). While it is on, the screen also shows *Runtime and
+model (Advanced)*: provider, where AI assistance comes from, runtime address, model,
+timeout, context window and the sample-values policy, as text, read-only. The request for
+that response is made only while Advanced mode is on. Technical details are listed in the
+analysis navigation and on the Overview only in Advanced mode; the Technical details
+address stays reachable and, in Normal mode, says they are an Advanced area and links to
+Settings. Advanced mode is a display choice and is not a security control: the server
+answers the same requests either way. The Overview's last section is *About this data*
+in Normal mode. Help explains Settings and Advanced mode.
 
 ### 12.7 Rules (secondary hand-off area)
 

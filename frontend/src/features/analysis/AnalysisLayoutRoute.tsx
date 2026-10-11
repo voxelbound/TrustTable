@@ -3,6 +3,7 @@ import { AppShell } from '../../components/layout/AppShell'
 import { AnalysisStageProgress } from '../../components/provenance/AnalysisStageProgress'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
+import { useAdvancedMode } from '../../lib/advancedMode'
 import { AnalysisActions } from './AnalysisActions'
 import { useAnalysisResource, useAnalysisStatus } from './api'
 
@@ -13,7 +14,7 @@ const RESOURCE_STATES = new Set(['completed', 'failed', 'cancelled'])
  * that exists; nothing is listed for a capability that is not built. */
 const SECTION_GROUPS: {
   label: string
-  items: { path: string; label: string }[]
+  items: { path: string; label: string; advancedOnly?: boolean }[]
 }[] = [
   {
     label: 'Review',
@@ -29,18 +30,21 @@ const SECTION_GROUPS: {
     items: [
       { path: 'report', label: 'Reports' },
       { path: 'rules', label: 'Rules' },
-      { path: 'technical', label: 'Technical details' },
+      { path: 'technical', label: 'Technical details', advancedOnly: true },
     ],
   },
 ]
 
-/** The analysis layout route (`docs/ui-specification.md` §3). Polls
+/** The analysis layout route (`docs/ui-specification.md` §3). An entry marked
+ * `advancedOnly` is listed only in Advanced mode (`UX-08b`, D-077); its route
+ * stays reachable by address. Polls
  * status while in progress (`AnalysisStageProgress`), then branches on
  * the terminal outcome. Renders `Outlet` (Overview/Findings) only once
  * `completed`. */
 export function AnalysisLayoutRoute() {
   const { analysisId } = useParams<{ analysisId: string }>()
   const navigate = useNavigate()
+  const [advanced] = useAdvancedMode()
   const statusQuery = useAnalysisStatus(analysisId)
   const state = statusQuery.data?.state
   const isCompleted = state === 'completed'
@@ -142,16 +146,18 @@ export function AnalysisLayoutRoute() {
               {group.label}
             </p>
             <ul className="mt-1 flex flex-wrap gap-4">
-              {group.items.map((item) => (
-                <li key={item.path}>
-                  <NavLink
-                    to={`/analyses/${analysisId ?? ''}/${item.path}`}
-                    className="font-medium text-slate-900 underline dark:text-slate-100"
-                  >
-                    {item.label}
-                  </NavLink>
-                </li>
-              ))}
+              {group.items
+                .filter((item) => advanced || !item.advancedOnly)
+                .map((item) => (
+                  <li key={item.path}>
+                    <NavLink
+                      to={`/analyses/${analysisId ?? ''}/${item.path}`}
+                      className="font-medium text-slate-900 underline dark:text-slate-100"
+                    >
+                      {item.label}
+                    </NavLink>
+                  </li>
+                ))}
             </ul>
           </div>
         ))}

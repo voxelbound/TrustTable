@@ -107,11 +107,16 @@ observed as `"ok"` once the application is serving requests — it exists
 as a real, extensible check for future in-process reconfiguration paths,
 not a constant.
 
-## Product-managed settings and deployment overrides (`UX-08a`, built; the screen is `UX-08b`, planned)
+## Product-managed settings and deployment overrides (`UX-08a` and `UX-08b`, built)
 
 The product can store one setting of its own, **AI assistance** (on or off), through the
-Settings API (`docs/api-specification.md` §4). There is no Settings screen yet (`UX-08b`).
-Every variable above is still read from the environment and cached for the life of the
+Settings API (`docs/api-specification.md` §4) and the **Settings** screen (`/settings`,
+`UX-08b`, D-077). The screen explains the setting, changes and resets it, and shows a
+setting that your installation manages as read-only with the reason. **Advanced mode**, a
+switch on that screen, is a display preference kept in the browser only: it shows the
+runtime and model this installation uses (from the Advanced settings response) and the
+Technical details area of an analysis. It changes what is shown and nothing else, and it is
+not a security control. Every variable above is still read from the environment and cached for the life of the
 process; only the stored setting is read fresh on each request, so changing it needs no
 restart. The design is `docs/decision-log.md` D-066 item 5 and D-076.
 

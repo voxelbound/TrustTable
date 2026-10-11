@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import type {
+  AdvancedSettingsResponse,
   AiStatusResponse,
   AnalysisHistoryItem,
   AnalysisHistoryResponse,
@@ -18,6 +19,7 @@ import type {
   ObservationsListResponse,
   RowContextResponse,
   ScopedRowWindowResponse,
+  SettingItemResponse,
   StagedUploadResponse,
   UploadAnalysisResponse,
 } from '../../api'
@@ -552,6 +554,39 @@ export function makeAiStatusResponse(
     sample_values_sent: false,
     summary:
       'AI assistance is off. TrustTable finds and scores issues with its built-in checks only, and no dataset content is sent to any model.',
+    ...overrides,
+  }
+}
+
+/** One product setting (`UX-08b`, D-077). Defaults: AI assistance off, the
+ * built-in default, never written (version 0). */
+export function makeSettingItem(
+  overrides: Partial<SettingItemResponse> = {},
+): SettingItemResponse {
+  return {
+    key: 'ai_assistance',
+    value: false,
+    source: 'default',
+    managed_by_installation: false,
+    version: 0,
+    note: null,
+    ...overrides,
+  }
+}
+
+/** The Advanced-only runtime and model response (`UX-08b`, D-077). */
+export function makeAdvancedSettings(
+  overrides: Partial<AdvancedSettingsResponse> = {},
+): AdvancedSettingsResponse {
+  return {
+    ai_provider: 'llama_cpp',
+    ai_assistance_source: 'stored',
+    runtime_address: 'http://localhost:8081',
+    model_identifier: 'qwen-test.gguf',
+    timeout_seconds: 30,
+    context_window: 4096,
+    sample_values_sent: false,
+    max_sample_values: 5,
     ...overrides,
   }
 }

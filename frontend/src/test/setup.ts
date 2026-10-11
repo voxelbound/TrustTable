@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 import { client } from '../api/client.gen'
+import { setAdvancedMode } from '../lib/advancedMode'
 import { server } from './msw/server'
 
 // `globals: false` (vite.config.ts) means Vitest lifecycle hooks must be
@@ -30,5 +31,8 @@ afterEach(() => {
   // false "multiple elements" failures and stale-button clicks in
   // later tests.
   cleanup()
+  // Advanced mode is a browser-local preference (`UX-08b`); every test starts
+  // in Normal mode, the default. Reset after the DOM is gone.
+  setAdvancedMode(false)
 })
 afterAll(() => server.close())
