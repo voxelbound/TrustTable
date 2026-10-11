@@ -10,10 +10,13 @@ a window on a row the server offers, and change nothing else the API returns.
 from __future__ import annotations
 
 import json
+import re
+from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
 
+import trusttable_backend
 import trusttable_backend.api.v1.analyses as analyses_module
 from tests.api.test_analyses import _create_demo_analysis, _wait_for_terminal
 from tests.detectors.test_det03_package2 import sample_csv
@@ -320,21 +323,103 @@ def _read_everything(client: TestClient, analysis_id: str) -> dict[str, Any]:
     return snapshot
 
 
+_ISO_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T[\d:.]+(?:[+-]\d{2}:\d{2}|Z)?")
+
+
+def _exports_and_reports(client: TestClient, analysis_id: str) -> dict[str, Any]:
+    """Every export and report the API can produce for an analysis, with only
+    the report's own generation time and id masked (they differ by design)."""
+    base = f"/api/v1/analyses/{analysis_id}"
+    snapshot: dict[str, Any] = {
+        "rules_json": client.get(f"{base}/exports/rules.json").text,
+        "rules_yaml": client.get(f"{base}/exports/rules.yaml").text,
+    }
+    for name, options in (
+        ("default", {}),
+        ("with_examples", {"include_bounded_examples": True}),
+        ("with_technical_appendix", {"include_technical_appendix": True}),
+    ):
+        created = client.post(f"{base}/reports", json={"options": options})
+        assert created.status_code == 201, created.text
+        report_id = created.json()["report_id"]
+        text = client.get(f"{base}/reports/{report_id}/download").text
+        snapshot[f"report:{name}"] = _ISO_TIMESTAMP.sub("<time>", text.replace(report_id, "<id>"))
+    return snapshot
+
+
+def _first_zero_row_finding(client: TestClient, analysis_id: str) -> str:
+    items = client.get(f"/api/v1/analyses/{analysis_id}/findings").json()["items"]
+    return str(next(item for item in items if item["affected_row_count"] == 0)["finding_id"])
+
+
 def test_opening_the_new_windows_changes_nothing_else_the_api_returns(
     client: TestClient,
 ) -> None:
-    analysis_id = _upload_sample(client)
-    finding_id = _column_wide_note_finding(client, analysis_id)
+    """Every entry point, including the start-of-file window that must never be
+    mistaken for evidence: opening it leaves every response, export and report
+    exactly as it was."""
+    sample_id = _upload_sample(client)
+    note_finding = _column_wide_note_finding(client, sample_id)
+    demo_id = _create_demo_analysis(client)["analysis"]["analysis_id"]
+    start_finding = _first_zero_row_finding(client, demo_id)
 
-    before = json.dumps(_read_everything(client, analysis_id), sort_keys=True)
-    assert client.get(_observation_url(analysis_id), params={"anchor_row": 9}).status_code == 200
-    assert (
+    def everything() -> str:
+        return json.dumps(
+            {
+                "sample": _read_everything(client, sample_id),
+                "sample_out": _exports_and_reports(client, sample_id),
+                "demo": _read_everything(client, demo_id),
+                "demo_out": _exports_and_reports(client, demo_id),
+            },
+            sort_keys=True,
+        )
+
+    before = everything()
+    opened = [
+        client.get(_observation_url(sample_id), params={"anchor_row": 9}),
         client.get(
-            f"/api/v1/analyses/{analysis_id}/findings/{finding_id}/column-context",
+            f"/api/v1/analyses/{sample_id}/findings/{note_finding}/column-context",
             params={"anchor_row": 9},
-        ).status_code
-        == 200
-    )
-    after = json.dumps(_read_everything(client, analysis_id), sort_keys=True)
+        ),
+        # The start of the file: no anchor, and an observation-free finding.
+        client.get(f"/api/v1/analyses/{demo_id}/findings/{start_finding}/column-context"),
+    ]
+    assert [response.status_code for response in opened] == [200, 200, 200]
+    assert opened[2].json()["anchor_source"] == "start_of_file"
+    after = everything()
 
     assert after == before
+
+
+# --- no module that feeds a model, evidence, a report or an export reaches a window --
+
+_SRC_ROOT = Path(trusttable_backend.__file__).resolve().parent
+_WINDOW_NAMES = re.compile(
+    r"row_context|RowContext|ScopedRowWindow|get_observation_row_context|"
+    r"get_column_wide_finding_window|column-context"
+)
+_SEPARATED_PACKAGES = (
+    "ai_boundary",
+    "ai_provider",
+    "context_inference",
+    "detectors",
+    "enrichment",
+    "explanation",
+    "exports",
+    "risk",
+    "rules",
+)
+
+
+def test_nothing_that_feeds_a_model_evidence_report_or_export_can_reach_a_window() -> None:
+    """Invariant 15 (`docs/domain-model.md`), made durable: row windows are read
+    only by the API layer, so no AI payload, evidence, report or export module
+    can pull row values from one."""
+    offenders = [
+        str(path.relative_to(_SRC_ROOT))
+        for package in _SEPARATED_PACKAGES
+        for path in (_SRC_ROOT / package).rglob("*.py")
+        if _WINDOW_NAMES.search(path.read_text(encoding="utf-8"))
+    ]
+
+    assert offenders == []

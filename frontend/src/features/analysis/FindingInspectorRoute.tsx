@@ -240,7 +240,7 @@ function ColumnWideWindow({
         {scoped === undefined
           ? ''
           : startOfFile
-            ? ' Below is the start of the file, so you can see what the columns hold. It is not evidence of the finding, and no row is marked as affected.'
+            ? ' Below is the start of the file, so you can see what the columns hold. It is not evidence of the finding, and no row is marked as affected; only a column heading marked "affected" shows what the finding is about.'
             : ' Below are example rows from observations about the same columns. They show what was counted; they are not rows this finding names, and other rows may be involved.'}
       </p>
 
