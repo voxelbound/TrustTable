@@ -150,8 +150,8 @@ function RuleCard({
             ))}
           </dl>
           <p className="text-xs text-slate-600 dark:text-slate-400">
-            Parameters are shown read-only. To change a rule, delete it and
-            create it again.
+            Parameters are shown read-only. A rule cannot be changed here;
+            delete it if you no longer want it.
           </p>
           {result !== null && result.example_failures.length > 0 && (
             <div>
@@ -218,7 +218,7 @@ export function RulesRoute() {
         group="Act and Export"
         purpose="Executable validation rules for this analysis, which you can validate and export for the team responsible for the data source or pipeline."
         availability="Once the analysis has completed. The rules listed belong to this analysis only."
-        why="A rule turns something you noticed into a check that the owner of the data can run where the data is produced."
+        why="An exported rule gives the owner of the data a check they can run where the data is produced."
         next="Run a rule to see its result, delete one you do not want, and export the validated rules for the data owner."
       />
       <p className="-mt-4 text-sm text-slate-600 dark:text-slate-400">
