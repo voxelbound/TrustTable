@@ -137,6 +137,43 @@ def test_a_stored_on_without_a_model_is_on_but_nothing_can_run(model: str) -> No
     assert resolution.settings.llm_provider == "disabled"
 
 
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://10.9.8.7:8081",
+        "http://models.example.invalid",
+        "https://203.0.113.4:443",
+        "not a url",
+    ],
+)
+def test_a_stored_on_with_a_model_but_a_non_local_address_cannot_run(base_url: str) -> None:
+    resolution = resolve_ai_assistance(_settings(llm_model="model-a", llm_base_url=base_url), True)
+
+    assert (resolution.enabled, resolution.runtime_configured) == (True, False)
+    assert resolution.unavailable_reason == "not_local"
+    assert resolution.settings.llm_provider == "disabled"
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://localhost:8081",
+        "http://127.0.0.1:9",
+        "http://[::1]:8081",
+        "http://host.docker.internal",
+    ],
+)
+def test_a_stored_on_with_a_model_and_a_local_address_runs(base_url: str) -> None:
+    resolution = resolve_ai_assistance(_settings(llm_model="model-a", llm_base_url=base_url), True)
+
+    assert (resolution.runtime_configured, resolution.unavailable_reason) == (True, None)
+    assert resolution.settings.llm_provider == "llama_cpp"
+
+
+def test_a_stored_on_without_a_model_says_why() -> None:
+    assert resolve_ai_assistance(_settings(), True).unavailable_reason == "no_runtime"
+
+
 @pytest.mark.parametrize("stored", [None, True, False])
 @pytest.mark.parametrize("provider", ["disabled", "mock", "llama_cpp"])
 def test_a_stored_value_never_exceeds_an_explicit_override(

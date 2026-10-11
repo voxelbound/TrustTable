@@ -19,9 +19,15 @@ that rule lives; it is pure (no I/O) so it can be tested on its own.
   is ignored and the setting is read-only; the product never edits `.env`.
 - **What "on" means without an override.** The only real provider is the local
   `llama_cpp` runtime, so a stored "on" selects it, but only when the installation
-  has configured a model (`LLM_MODEL`). A stored "on" with no configured runtime
-  is reported honestly as on-but-unavailable and no AI call is made; guided setup
-  is `UX-09`.
+  has configured a model (`LLM_MODEL`) **and** the configured address names this
+  machine (the same conservative test that classifies a model location as
+  `local`: loopback, `localhost` or `host.docker.internal`). The product contract
+  is local-first inference (`docs/product-requirements.md`: "AI is optional and
+  local by default"; D-007 and D-066 item 10: network egress needs explicit
+  consent), so an in-product switch never activates an address that is not this
+  machine. Such a stored "on" is reported honestly as on-but-unavailable, with the
+  reason, and no AI call is made. Using a non-local runtime remains an explicit
+  operator decision: set `LLM_PROVIDER` (an override). Guided setup is `UX-09`.
 """
 
 from __future__ import annotations
@@ -29,7 +35,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final, Literal
 
+from .ai_provider.location import model_location_for
 from .config import Settings
+from .domain.ai_enrichment import EnrichmentModelLocation
 
 AI_ASSISTANCE_KEY: Final[str] = "ai_assistance"
 
@@ -81,10 +89,13 @@ class AiAssistanceResolution:
     source: SettingSource
     #: True when an explicit deployment override makes the setting read-only.
     managed: bool
-    #: False only for a stored "on" with no configured model: on, but no runtime.
+    #: False only for a stored "on" that cannot run: on, but no usable runtime.
     runtime_configured: bool
     #: What every AI consumer must use instead of the raw deployment settings.
     settings: Settings
+    #: Why a stored "on" cannot run: `no_runtime` (no model configured) or
+    #: `not_local` (the configured address is not this machine). None otherwise.
+    unavailable_reason: Literal["no_runtime", "not_local"] | None = None
 
 
 def resolve_ai_assistance(settings: Settings, stored: bool | None) -> AiAssistanceResolution:
@@ -113,19 +124,33 @@ def resolve_ai_assistance(settings: Settings, stored: bool | None) -> AiAssistan
             runtime_configured=True,
             settings=settings,
         )
-    if settings.llm_model.strip():
+    if not settings.llm_model.strip():
+        # On, but nothing to run: consumers see AI as disabled and make no call.
         return AiAssistanceResolution(
             enabled=True,
             source="stored",
             managed=False,
-            runtime_configured=True,
-            settings=settings.model_copy(update={"llm_provider": STORED_ON_PROVIDER}),
+            runtime_configured=False,
+            settings=settings,
+            unavailable_reason="no_runtime",
         )
-    # On, but nothing to run: consumers see AI as disabled and make no call.
+    if model_location_for(STORED_ON_PROVIDER, settings.llm_base_url) is not (
+        EnrichmentModelLocation.LOCAL
+    ):
+        # The in-product switch never activates an address that is not this machine
+        # (local-first inference; egress needs an explicit operator decision).
+        return AiAssistanceResolution(
+            enabled=True,
+            source="stored",
+            managed=False,
+            runtime_configured=False,
+            settings=settings,
+            unavailable_reason="not_local",
+        )
     return AiAssistanceResolution(
         enabled=True,
         source="stored",
         managed=False,
-        runtime_configured=False,
-        settings=settings,
+        runtime_configured=True,
+        settings=settings.model_copy(update={"llm_provider": STORED_ON_PROVIDER}),
     )

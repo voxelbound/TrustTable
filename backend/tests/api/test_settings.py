@@ -34,7 +34,8 @@ from trusttable_backend.config import Settings, get_settings
 from ..enrichment_support import enrichment_url, explanation_url, request_enrichment
 
 _SETTINGS = "/api/v1/settings"
-_SECRET_URL = "http://svc-user:hunter2-secret@10.9.8.7:8081/v1/private-path?token=abc123"
+_SECRET_URL = "http://svc-user:hunter2-secret@localhost:8081/v1/private-path?token=abc123"
+_REMOTE_URL = "http://svc-user:hunter2-secret@10.9.8.7:8081/v1/private-path?token=abc123"
 _MODEL_PATH = "/home/secret-user/models/Qwen3.5-4B-Q4_K_M.gguf"
 _LEAKS = ("hunter2", "svc-user", "abc123", "private-path", "10.9.8.7", "secret-user", "/home")
 
@@ -352,6 +353,72 @@ def test_a_stored_on_with_no_runtime_is_on_but_unavailable_and_never_an_error(
     assert client.app.state.enrichment_store.get(analysis_id, "0") is None  # type: ignore[attr-defined]
 
 
+@pytest.mark.parametrize(
+    "base_url", [_REMOTE_URL, "http://models.example.invalid:8081", "https://10.0.0.5"]
+)
+def test_a_stored_on_never_activates_an_address_that_is_not_this_machine(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, base_url: str
+) -> None:
+    provider = _CountingProvider()
+    monkeypatch.setenv("LLM_BASE_URL", base_url)
+    _configure_runtime(monkeypatch, provider)
+    analysis_id = _completed_demo(client)
+
+    written = _put(client, True, 0).json()
+    status = client.get("/api/v1/ai/status")
+    started = client.post(enrichment_url(analysis_id, "0"))
+    explanation = client.get(explanation_url(analysis_id, "0"))
+    context = client.get(f"/api/v1/analyses/{analysis_id}/context")
+    proposal = client.get(f"/api/v1/analyses/{analysis_id}/findings/0/rule-proposal")
+    advanced = client.get(f"{_SETTINGS}/advanced").json()
+
+    assert written["value"] is True and written["source"] == "stored"
+    assert "not on this machine" in written["note"] and "LLM_PROVIDER" in written["note"]
+    body = status.json()
+    assert (body["assistance"], body["state"], body["location"]) == ("on", "unavailable", "none")
+    assert "not on this machine" in body["summary"]
+    assert started.json()["state"] == "unavailable"
+    assert explanation.json()["ai_call_status"] == "not_configured"
+    assert proposal.json()["ai_call_status"] == "not_configured"
+    assert context.status_code == 200
+    assert provider.calls == 0
+    assert client.app.state.enrichment_store.get(analysis_id, "0") is None  # type: ignore[attr-defined]
+    assert (advanced["ai_provider"], advanced["runtime_address"]) == ("disabled", None)
+    for response in (status, client.get(_SETTINGS)):
+        for leak in _LEAKS:
+            assert leak not in response.text
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    ["http://localhost:8081", "http://127.0.0.1:8081", "http://host.docker.internal:8081"],
+)
+def test_a_stored_on_activates_an_address_that_is_this_machine(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, base_url: str
+) -> None:
+    monkeypatch.setenv("LLM_BASE_URL", base_url)
+    _configure_runtime(monkeypatch, _CountingProvider())
+
+    written = _put(client, True, 0).json()
+
+    assert written["note"] is None
+    assert client.get(f"{_SETTINGS}/advanced").json()["ai_provider"] == "llama_cpp"
+
+
+def test_an_explicit_override_may_still_use_a_non_local_address(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Sending to another address stays an explicit operator decision (LLM_PROVIDER).
+    provider = _CountingProvider()
+    monkeypatch.setenv("LLM_BASE_URL", "http://models.example.invalid:8081")
+    monkeypatch.setenv("LLM_PROVIDER", "llama_cpp")
+    _configure_runtime(monkeypatch, provider)
+    analysis_id = _completed_demo(client)
+
+    assert request_enrichment(client, analysis_id, "0")["state"] == "ready"
+    assert provider.calls == 1
+
+
 def test_a_stored_on_with_a_configured_model_enables_ai_without_a_restart(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -482,7 +549,7 @@ def test_the_advanced_response_reduces_the_address_to_scheme_host_and_port(
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     body = response.json()
-    assert body["runtime_address"] == "http://10.9.8.7:8081"
+    assert body["runtime_address"] == "http://localhost:8081"
     assert body["model_identifier"] == "model-a"
     assert (body["ai_provider"], body["ai_assistance_source"]) == ("llama_cpp", "stored")
     for leak in ("hunter2", "svc-user", "abc123", "private-path"):

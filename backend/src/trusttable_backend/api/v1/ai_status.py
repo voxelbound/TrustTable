@@ -27,6 +27,7 @@ async def get_ai_status(request: Request, response: Response) -> AiStatusRespons
         compute_ai_status,
         resolution.settings,
         assistance_requested=resolution.enabled and not resolution.runtime_configured,
+        unavailable_reason=resolution.unavailable_reason,
     )
     return AiStatusResponse(
         assistance=status.assistance,

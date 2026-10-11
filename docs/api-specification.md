@@ -153,8 +153,11 @@ API never grants; the API sets no cross-origin headers.
 
 AI consumers (`GET /ai/status`, the explanation overlay, `POST` and `GET .../ai-enrichment`,
 context inference and rule proposal) read the effective value on every request, so a change
-takes effect without a restart. A stored `true` with no model configured by the
-installation is reported as on but unavailable and nothing is sent. If the store cannot be
+takes effect without a restart. A stored `true` selects the local `llama.cpp` runtime only
+when the installation configured a model and the configured address names this machine
+(loopback, `localhost` or `host.docker.internal`); otherwise it is reported as on but
+unavailable, with a `note` saying whether no runtime is set up or the address is not this
+machine, and nothing is sent. Sending to another address needs an explicit `LLM_PROVIDER`. If the store cannot be
 read, AI assistance stays off unless an override turns it on. What is sent to a model is
 unchanged. No address or model path appears in any other response.
 

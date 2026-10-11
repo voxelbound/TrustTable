@@ -125,10 +125,16 @@ restart. The design is `docs/decision-log.md` D-066 item 5 and D-076.
   never edits `.env` or deployment configuration. *Reset to default* removes the stored
   value; it is refused while an override applies.
 - **What stored "on" means.** The only real provider is the local `llama.cpp` runtime. A
-  stored "on" selects it when the installation has set `LLM_MODEL` (and, if it differs from
-  the default, `LLM_BASE_URL`). With no model set, AI assistance is reported as on but
-  unavailable and nothing is sent to any model; guided setup is `UX-09`. A stored "off", or
-  nothing stored, leaves AI off.
+  stored "on" selects it only when the installation has set `LLM_MODEL` **and** the
+  configured `LLM_BASE_URL` names this machine (loopback, `localhost` or
+  `host.docker.internal`, the same test that classifies a model location as `local`). The
+  product is local-first (`docs/product-requirements.md`: AI is optional and local by
+  default), so an in-product switch never starts sending to an address that is not this
+  machine. With no model set, or with an address that is not this machine, AI assistance
+  is reported as on but unavailable, with the reason, and nothing is sent to any model.
+  Using a non-local runtime stays an explicit operator decision: set `LLM_PROVIDER`
+  yourself (an override, which makes the setting managed by your installation). Guided
+  setup is `UX-09`. A stored "off", or nothing stored, leaves AI off.
 - **Fail closed.** If the stored value cannot be read, AI assistance stays off unless an
   override turns it on.
 - **What stays here.** Deployment configuration (database, data directory, log level,

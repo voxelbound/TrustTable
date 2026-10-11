@@ -59,6 +59,14 @@ _NO_RUNTIME_NOTE = (
 )
 
 
+_NOT_LOCAL_NOTE = (
+    "AI assistance is on, but the AI runtime this installation points to is not on this "
+    "machine. This switch only uses a runtime on this machine, so nothing is sent to a model. "
+    "Sending to another address is an installation decision: set LLM_PROVIDER in your "
+    "installation's configuration."
+)
+
+
 def _store(request: Request) -> SqlSettingsStore:
     store: SqlSettingsStore = request.app.state.settings_store
     return store
@@ -69,7 +77,7 @@ def _item(resolution: AiAssistanceResolution, version: int) -> SettingItemRespon
     if resolution.managed:
         note = _MANAGED_NOTE
     elif resolution.enabled and not resolution.runtime_configured:
-        note = _NO_RUNTIME_NOTE
+        note = _NOT_LOCAL_NOTE if resolution.unavailable_reason == "not_local" else _NO_RUNTIME_NOTE
     return SettingItemResponse(
         key="ai_assistance",
         value=resolution.enabled,

@@ -39,6 +39,11 @@ _NOT_SET_UP_SUMMARY: Final[str] = (
     "so nothing can be sent to a model. Everything else works with the built-in checks alone. "
     + _ASSISTANCE_NOTE
 )
+_NOT_LOCAL_SUMMARY: Final[str] = (
+    "AI assistance is turned on, but the AI runtime this installation points to is not on "
+    "this machine. The in-product switch only uses a runtime on this machine, so nothing is "
+    "sent to a model. Everything else works with the built-in checks alone. " + _ASSISTANCE_NOTE
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +94,7 @@ def compute_ai_status(
     *,
     provider_factory: ProviderFactory = create_provider,
     assistance_requested: bool = False,
+    unavailable_reason: str | None = None,
 ) -> AiStatus:
     """Build the status for `settings`, probing the runtime at most once.
 
@@ -107,7 +113,9 @@ def compute_ai_status(
             runtime_label=None,
             model_label=None,
             sample_values_sent=False,
-            summary=_NOT_SET_UP_SUMMARY,
+            summary=_NOT_LOCAL_SUMMARY
+            if unavailable_reason == "not_local"
+            else _NOT_SET_UP_SUMMARY,
         )
     if name == "disabled":
         return AiStatus(
