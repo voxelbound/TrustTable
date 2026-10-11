@@ -273,7 +273,8 @@ Sections:
 - possible business impact
 - evidence
 - representative examples
-- row context (row-anchored findings only)
+- rows in the data: a link to the data inspector (section 12.4; row-anchored findings
+  only; `UX-06` part a, D-073 — it replaced the inline row-context table)
 - remediation
 - validation rule
 - review controls
@@ -669,6 +670,22 @@ caching performance measurement on the real product path. Making row data visibl
 not by itself expand what is sent to AI, promote row context into canonical finding
 evidence, or add row data to reports or exports; existing, explicitly requested,
 bounded report and evidence examples keep their existing contracts.
+
+**Built for findings with affected rows (`UX-06` part a, D-073).** A finding with
+affected rows offers *Inspect the affected rows* from a short *Rows in the data*
+section, which opens `/analyses/{id}/findings/{finding}/inspector?row=N`. The grid
+scrolls both ways and keeps the column headings and the row numbers in view. The
+affected rows, and for a finding that names columns the affected columns, are marked
+in words as well as colour. *Previous* and *Next affected row* state the position
+(*Affected row 2 of 5*), never wrap, and say when only some of the affected rows can
+be visited. A return control goes back to the finding with the findings filters
+intact. Only rows the finding names can be centred; any other row falls back to the
+first one. A value longer than 120 characters stays shortened until the reader asks
+for all of it. The window starts at five rows either side and widens by ten up to the
+server's limit of 25, and the screen says when it has reached the start or end of the
+file, or when wide rows have shortened it. A refusal because the inspector is busy is
+stated, with *Try again*. A column-wide finding has no inspector yet, and the screen
+says so; reaching the inspector from an observation's example rows is `UX-06` part b.
 
 ### 12.5 AI enrichment
 

@@ -78,7 +78,7 @@ from __future__ import annotations
 import hashlib
 import threading
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from enum import StrEnum
@@ -142,6 +142,13 @@ RULE_SCHEMA_VERSION = "validation_rule_v1"
 #: fields already model that distinction. Recorded in
 #: `docs/api-specification.md` §10 once selected.
 _MAX_ROW_CONTEXT_WINDOW_PER_SIDE = 25
+
+#: Upper bound on the characters of cell text one window may carry
+#: (`UX-06`, D-073). The row limit alone does not bound a response: the parser
+#: allows 500 columns of up to 10,000 characters, so 51 rows could reach about
+#: 250 MB. The anchor row is always returned; neighbours are added outward
+#: while they fit, and a window clipped by this bound reports `size_limited`.
+_MAX_ROW_CONTEXT_WINDOW_CHARS = 1_000_000
 
 _NO_EXPOSURE = SecurityExposureState(
     model_provider_enabled=False, sample_transmission_enabled=False
@@ -1219,8 +1226,12 @@ def get_finding_row_context(
     bounded_before = max(0, before)
     bounded_after = max(0, after)
 
-    actual_before = min(bounded_before, max_window, anchor_row)
-    actual_after = min(bounded_after, max_window, row_count - 1 - anchor_row)
+    wanted_before = min(bounded_before, max_window, anchor_row)
+    wanted_after = min(bounded_after, max_window, row_count - 1 - anchor_row)
+    actual_before, actual_after = _fit_window_to_size_bound(
+        rows, anchor_row, wanted_before, wanted_after
+    )
+    size_limited = (actual_before, actual_after) != (wanted_before, wanted_after)
 
     start = anchor_row - actual_before
     end = anchor_row + actual_after
@@ -1245,7 +1256,52 @@ def get_finding_row_context(
         truncated_at_end=actual_after < bounded_after,
         max_window=max_window,
         rows=entries,
+        size_limited=size_limited,
     )
+
+
+def _row_characters(values: tuple[str | None, ...]) -> int:
+    """Characters one row contributes to a window (one extra per cell for its
+    separator, so a row of empty cells is not free)."""
+    return sum(len(value) for value in values if value is not None) + len(values)
+
+
+def _fit_window_to_size_bound(
+    rows: Sequence[tuple[str | None, ...]],
+    anchor_row: int,
+    wanted_before: int,
+    wanted_after: int,
+) -> tuple[int, int]:
+    """How many rows before and after the anchor fit `_MAX_ROW_CONTEXT_WINDOW_CHARS`.
+
+    The anchor row is always kept, even when it alone exceeds the bound (one row
+    is itself bounded by the parser's column and field limits). Neighbours are
+    added outward, alternating sides, and a side stops for good at the first
+    row that does not fit, so the window stays contiguous.
+    """
+    budget = _MAX_ROW_CONTEXT_WINDOW_CHARS - _row_characters(rows[anchor_row])
+    before = 0
+    after = 0
+    before_open = wanted_before > 0
+    after_open = wanted_after > 0
+    while before_open or after_open:
+        if before_open:
+            cost = _row_characters(rows[anchor_row - before - 1])
+            if cost <= budget:
+                budget -= cost
+                before += 1
+                before_open = before < wanted_before
+            else:
+                before_open = False
+        if after_open:
+            cost = _row_characters(rows[anchor_row + after + 1])
+            if cost <= budget:
+                budget -= cost
+                after += 1
+                after_open = after < wanted_after
+            else:
+                after_open = False
+    return before, after
 
 
 def cancel_analysis(store: AnalysisStoreProtocol, analysis_id: str) -> Analysis:

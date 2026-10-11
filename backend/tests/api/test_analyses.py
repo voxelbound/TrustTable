@@ -684,7 +684,9 @@ def test_get_analysis_finding_row_context_shape(client: TestClient) -> None:
         "truncated_at_end",
         "max_window",
         "rows",
+        "size_limited",
     }
+    assert body["size_limited"] is False
     assert body["requested_before"] == 3
     assert body["requested_after"] == 3
     anchor_rows = [row for row in body["rows"] if row["is_anchor"]]
@@ -721,6 +723,75 @@ def test_get_analysis_finding_row_context_custom_window(client: TestClient) -> N
     assert body["max_window"] == 25
     assert body["actual_before"] <= 25
     assert body["actual_after"] <= 25
+
+
+def test_get_analysis_finding_row_context_is_marked_not_storable_by_caches(
+    client: TestClient,
+) -> None:
+    """`UX-06` (D-073): the response carries row values, so no shared or browser
+    cache may keep it."""
+    created = _create_demo_analysis(client)["analysis"]
+    finding_item = _finding_with_rows(client, created["analysis_id"])
+    detail = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+    ).json()
+
+    response = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+        f"/row-context",
+        params={"anchor_row": detail["affected_row_numbers"][0]},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_get_analysis_finding_row_context_refuses_beyond_the_concurrency_bound(
+    client: TestClient,
+) -> None:
+    """Every window parses the stored file again, so only a few run at once; a
+    further one is refused (429) rather than queued, and the gate is released
+    afterwards so the next request succeeds."""
+    created = _create_demo_analysis(client)["analysis"]
+    finding_item = _finding_with_rows(client, created["analysis_id"])
+    detail = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+    ).json()
+    url = (
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+        f"/row-context"
+    )
+    params = {"anchor_row": detail["affected_row_numbers"][0]}
+    held = 0
+    try:
+        while analyses_module._INSPECTOR_READ_GATE.acquire(blocking=False):
+            held += 1
+        assert held == analyses_module._MAX_CONCURRENT_INSPECTOR_READS
+        busy = client.get(url, params=params)
+    finally:
+        for _ in range(held):
+            analyses_module._INSPECTOR_READ_GATE.release()
+
+    assert busy.status_code == 429
+    assert busy.json()["error"]["code"] == "INSPECTOR_BUSY"
+    assert client.get(url, params=params).status_code == 200
+
+
+def test_get_analysis_finding_row_context_releases_the_gate_after_a_refused_row(
+    client: TestClient,
+) -> None:
+    created = _create_demo_analysis(client)["analysis"]
+    finding_item = _finding_without_rows(client, created["analysis_id"])
+    url = (
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+        f"/row-context"
+    )
+
+    for _ in range(analyses_module._MAX_CONCURRENT_INSPECTOR_READS + 2):
+        assert client.get(url, params={"anchor_row": 0}).status_code == 404
+
+    assert analyses_module._INSPECTOR_READ_GATE.acquire(blocking=False)
+    analyses_module._INSPECTOR_READ_GATE.release()
 
 
 def test_get_analysis_finding_row_context_unrelated_row_returns_structured_404(

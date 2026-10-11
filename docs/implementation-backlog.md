@@ -1169,6 +1169,18 @@ limit.** Specification must settle whether the complete affected-row set is reta
 that opening the inspector changes no AI payload, canonical evidence, report or
 export.
 
+Status: **in progress** (`D-073`). Part a is built: the measurement
+(`backend/scripts/measure_inspector_parse.py`, figures recorded in D-073) and a
+finding-scoped grid inspector for a finding that has affected rows, reached from the
+finding screen: scrolling both ways, sticky headings and row numbers, affected rows and
+columns marked, previous and next affected row with an honest position, a return to the
+finding, inert text with long values shortened until revealed. The row limit stays 25 a
+side; two reads at most run at once (`429 INSPECTOR_BUSY`), a window is bounded in
+characters (`size_limited`), the response is `no-store`, and no parsed-rows cache was
+added. Not built: reaching the inspector from an observation that carries example rows,
+and a window for a column-wide finding (existing safe anchors or a deterministic bounded
+head-of-dataset window) — part b, planned and not authorized.
+
 ## UX-07 — S6: supporting areas and help
 
 Context ("About this data"), Rules as a secondary hand-off area under Act and Export,

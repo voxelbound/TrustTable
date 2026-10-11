@@ -1929,6 +1929,10 @@ export type RowContextResponse = {
      */
     rows: Array<RowContextEntryResponse>;
     /**
+     * Size Limited
+     */
+    size_limited?: boolean;
+    /**
      * Truncated At End
      */
     truncated_at_end: boolean;
