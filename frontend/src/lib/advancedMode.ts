@@ -8,15 +8,21 @@ import { useSyncExternalStore } from 'react'
  * and not an access control: nothing is sent to the server, and the server
  * answers the same requests whatever the preference is.
  *
- * Default is Normal. If the browser refuses storage, the choice is held for
- * this page only and Normal applies again after a reload.
+ * Default is Normal. If the browser refuses to read or to write storage, the
+ * choice is held for this page only and the page still shows the mode that was
+ * chosen; the stored value (Normal by default) applies again after a reload.
  */
 const STORAGE_KEY = 'trusttable.advanced-mode'
 
 let held = false
+// True after a write that storage refused: the page's own choice then outranks
+// whatever storage still holds, so the page never shows a mode that was not the
+// one chosen. It lasts until the choice is persisted or another tab changes it.
+let heldAuthoritative = false
 const listeners = new Set<() => void>()
 
 function read(): boolean {
+  if (heldAuthoritative) return held
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY)
     if (stored === 'true') return true
@@ -31,25 +37,34 @@ function notify() {
   listeners.forEach((listener) => listener())
 }
 
+// Another tab changing the preference arrives as a storage event; storage is
+// then the newer truth.
+function onStorage() {
+  heldAuthoritative = false
+  notify()
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
-  // Another tab changing the preference arrives as a storage event.
-  window.addEventListener('storage', notify)
+  window.addEventListener('storage', onStorage)
   return () => {
     listeners.delete(listener)
     if (listeners.size === 0) {
-      window.removeEventListener('storage', notify)
+      window.removeEventListener('storage', onStorage)
     }
   }
 }
 
-/** Sets the preference for this browser. */
+/** Sets the preference for this browser. The page reflects the choice at once,
+ * whether or not storage accepts it. */
 export function setAdvancedMode(enabled: boolean): void {
   held = enabled
   try {
     window.localStorage.setItem(STORAGE_KEY, enabled ? 'true' : 'false')
+    heldAuthoritative = false
   } catch {
-    // Not persisted; the value is held for this page.
+    // Not persisted: the choice holds for this page and is lost on reload.
+    heldAuthoritative = true
   }
   notify()
 }

@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { setAdvancedMode } from '../../lib/advancedMode'
 import { makeAdvancedSettings, makeSettingItem } from '../../test/msw/handlers'
 import { server } from '../../test/msw/server'
@@ -340,6 +340,34 @@ describe('SettingsRoute', () => {
     expect(window.localStorage.getItem('trusttable.advanced-mode')).toBe(
       'false',
     )
+  })
+
+  it('UX-08b: when storage can be read but not written, the Advanced switch still shows and applies the chosen mode', async () => {
+    const user = userEvent.setup()
+    serveSettings()
+    server.use(
+      http.get(ADVANCED, () => HttpResponse.json(makeAdvancedSettings())),
+    )
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError')
+    })
+    renderSettings()
+
+    const toggle = await screen.findByRole('checkbox', {
+      name: /Show technical detail/,
+    })
+    await user.click(toggle)
+
+    expect(toggle).toBeChecked()
+    expect(
+      await screen.findByRole('heading', { name: /Runtime and model/ }),
+    ).toBeVisible()
+
+    await user.click(toggle)
+
+    expect(toggle).not.toBeChecked()
+    expect(screen.queryByText(/Runtime and model/)).not.toBeInTheDocument()
+    vi.restoreAllMocks()
   })
 
   it('UX-08b: a stored Advanced choice applies on the next visit', async () => {

@@ -757,7 +757,8 @@ setting, or any other failure) says that nothing was changed, and the screen the
 what the server now holds. A setting managed by the installation has no control and says
 why in the server's words. *Advanced mode* is a checkbox with the same three statements; it
 is kept in this browser only (`localStorage`, Normal by default; if the browser refuses
-storage the choice lasts for the page). While it is on, the screen also shows *Runtime and
+to read or write storage the page still shows the mode chosen and the choice lasts for the
+page only). While it is on, the screen also shows *Runtime and
 model (Advanced)*: provider, where AI assistance comes from, runtime address, model,
 timeout, context window and the sample-values policy, as text, read-only. The request for
 that response is made only while Advanced mode is on. Technical details are listed in the
