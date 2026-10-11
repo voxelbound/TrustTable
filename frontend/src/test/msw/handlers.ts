@@ -1,6 +1,8 @@
 import { http, HttpResponse } from 'msw'
 import type {
   AdvancedSettingsResponse,
+  AiConnectionTestResponse,
+  AiReadinessResponse,
   AiStatusResponse,
   AnalysisHistoryItem,
   AnalysisHistoryResponse,
@@ -558,6 +560,66 @@ export function makeAiStatusResponse(
   }
 }
 
+/** The Local AI readiness checklist (`UX-09`). Default: assistance off, so only
+ * the first step is open and the rest are not checked yet. */
+export function makeAiReadinessResponse(
+  overrides: Partial<AiReadinessResponse> = {},
+): AiReadinessResponse {
+  const waiting = 'Not checked yet: an earlier step is not complete.'
+  return {
+    ready: false,
+    model_label: null,
+    runtime_label: null,
+    checks: [
+      {
+        key: 'assistance_on',
+        title: 'AI assistance is on',
+        state: 'todo',
+        detail: 'AI assistance is off. You can turn it on in Settings.',
+      },
+      {
+        key: 'runtime_configured',
+        title: 'This installation names an AI runtime',
+        state: 'not_checked',
+        detail: waiting,
+      },
+      {
+        key: 'runtime_on_this_machine',
+        title: 'The runtime is on this machine',
+        state: 'not_checked',
+        detail: waiting,
+      },
+      {
+        key: 'runtime_answers',
+        title: 'The runtime answers',
+        state: 'not_checked',
+        detail: waiting,
+      },
+      {
+        key: 'model_named',
+        title: 'A model is named',
+        state: 'not_checked',
+        detail: waiting,
+      },
+    ],
+    ...overrides,
+  }
+}
+
+/** One connection-test answer (`UX-09`). Default: a runtime that answered. */
+export function makeConnectionTestResponse(
+  overrides: Partial<AiConnectionTestResponse> = {},
+): AiConnectionTestResponse {
+  return {
+    outcome: 'reachable',
+    tested: true,
+    message:
+      'The AI runtime on this machine answered. This only shows that it is running; it does not check the model, and nothing was sent to it.',
+    retry_after_seconds: null,
+    ...overrides,
+  }
+}
+
 /** One product setting (`UX-08b`, D-077). Defaults: AI assistance off, the
  * built-in default, never written (version 0). */
 export function makeSettingItem(
@@ -623,6 +685,12 @@ export function makeSummaryResponse(
 export const handlers = [
   http.get(`${BASE}/ai/status`, () => {
     return HttpResponse.json(makeAiStatusResponse())
+  }),
+  http.get(`${BASE}/ai/readiness`, () => {
+    return HttpResponse.json(makeAiReadinessResponse())
+  }),
+  http.post(`${BASE}/ai/connection-test`, () => {
+    return HttpResponse.json(makeConnectionTestResponse())
   }),
   http.post(`${BASE}/staged-uploads`, () => {
     return HttpResponse.json(makeStagedUploadResponse(), { status: 201 })

@@ -782,9 +782,19 @@ capability (`RULE-04`).
 
 The normal interface shows whether AI assistance is enabled, whether the local runtime
 is ready, which model is active, that processing stays local, what AI adds and what
-works without it. The first stage (`UX-09`) is honest status, guided setup,
-compatibility and readiness checks and connection testing; it performs no download or
-installation. Product-managed setup of a small curated range of hardware-appropriate
+works without it. The first stage (`UX-09`, D-078, built) is honest status, guided
+setup, readiness checks and connection testing; it performs no download or
+installation. The Local AI screen (`/local-ai`, linked from Settings, the Local AI
+status panel and Help) lists five readiness steps in order (AI assistance on, a runtime
+named, on this machine, answering a short check, a model named), each done, to do,
+needs attention or not checked yet, with the server's wording. *Test connection* checks
+once whether the runtime this installation names answers; the person cannot choose what
+is tested, and the answer says only that the runtime answered, not that the model works.
+A refused test (assistance off, no runtime, not on this machine, already running, too
+soon) says nothing was tested and why. The screen says that setup happens outside
+TrustTable, shows no runtime address (the Advanced settings response remains the only
+place for it) and never offers to install, download or start anything. No compatibility
+claim about a model or hardware is made. Product-managed setup of a small curated range of hardware-appropriate
 profiles is the approved goal, but its mechanism is not approved (`LAI-01`). Profiles
 are capability tiers, not hardware requirements. No hardware, performance, quality or
 memory claim is shown without qualification evidence. There is no unrestricted

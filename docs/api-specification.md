@@ -127,7 +127,40 @@ when a runtime is configured, one short liveness probe:
 The probe is made with `min(LLM_TIMEOUT_SECONDS, 3)` seconds and never raises. No base
 URL, host, port, path, exception text or provider `detail` is returned. The route makes
 no model completion call and sends no dataset content. It does not start, install or
-manage a runtime (`UX-09` and `LAI-01` are separate).
+manage a runtime (`LAI-01` is separate).
+
+### GET `/ai/readiness` and POST `/ai/connection-test` (`UX-09`, D-078)
+
+Both are read-only views of the same effective AI assistance setting and are
+`Cache-Control: no-store`. Neither accepts a body, a query parameter or a header that
+selects anything: a forged request can only make the server check the runtime it is
+already configured to use, and that is bounded. Neither downloads, installs, starts or
+configures anything, makes a completion call or sends dataset content. Neither returns
+a base URL, host, port, path, exception text or provider `detail`; all wording is fixed.
+
+`GET /ai/readiness` returns `{ ready, model_label, runtime_label, checks }`. `checks` is
+always the same five steps in order, each `{ key, title, state, detail }`:
+
+| `key` | Done when |
+|---|---|
+| `assistance_on` | the effective AI assistance setting is on |
+| `runtime_configured` | the installation names a runtime (a model is configured, or the test provider) |
+| `runtime_on_this_machine` | the configured address is this machine; `attention` when it cannot be confirmed; `todo` when a stored "on" names an address that is not this machine |
+| `runtime_answers` | one liveness probe (at most 3 seconds, shared with `GET /ai/status`) succeeded |
+| `model_named` | a readable model label exists; this is a label, not a check that the model is loaded or suitable |
+
+`state` is `done`, `todo`, `attention` or `not_checked` (an earlier step is not
+complete, so nothing further is probed). `ready` is true only when all five are `done`.
+It means a runtime on this machine answered a short check, not that the model works.
+
+`POST /ai/connection-test` takes no body and returns
+`{ outcome, tested, message, retry_after_seconds }`. `outcome` is one of `reachable`,
+`not_reachable`, `assistance_off`, `no_runtime`, `not_local`, `busy`, `too_soon`.
+`tested` is true only when the one liveness probe was made. Only a runtime that is on
+this machine is ever probed. At most one test runs at a time and a second one is refused
+(`busy`, or `too_soon` with `retry_after_seconds`) until 5 seconds after the last one
+finished; a refusal probes nothing and does not start the interval. `reachable` says
+only that the runtime answered; it does not check the model.
 
 ### Product settings (`UX-08a`, `docs/decision-log.md` D-076)
 
@@ -1296,7 +1329,7 @@ Existing routes, including direct upload `POST /analyses`, keep their contracts.
 | Need | Planned capability | Notes (requirements, not mechanisms) |
 |---|---|---|
 | Configure step (`UX-02`) — **built by `UX-02`, section 7 (D-068)** | Stage a file once, inspect it, then Run the analysis over the exact staged bytes | Single-use opaque reference; server-computed integrity hash verified at consume; bounded count, bytes and expiry; startup and lazy cleanup; atomic consume; no durable Dataset; the same validation and parser limits as direct upload through one shared ingestion path; inspection returns worksheets, shape, readability problems and warnings, never cell values; this supersedes the unbuilt `POST /datasets/inspect` description in section 7 |
-| AI status (`UX-02`, `UX-09`) — **status route built by `UX-02`, section 4 (D-068)**; guided setup and connection testing remain `UX-09` | `GET /ai/status` | Honest enabled, ready and model-identity state; path-free and address-free labels; an abstract status that does not assume where a runtime runs |
+| AI status (`UX-02`, `UX-09`) — **status route built by `UX-02`, section 4 (D-068); readiness and the connection test built by `UX-09`, section 4 (D-078)** | `GET /ai/status`; `GET /ai/readiness`; `POST /ai/connection-test` | Honest enabled, ready and model-identity state; path-free and address-free labels; an abstract status that does not assume where a runtime runs |
 | History (`UX-03`) — **built by `UX-03`, section 6 (D-069)** | `GET /analyses`; `POST /analyses/{id}/rerun`; `previously_analysed` on the staged-upload resource | The lookup is not a dataset identity; it reflects only analyses that still exist; none of the new responses carries an integrity hash. The pre-existing `dataset.content_hash` field of the analysis resource predates this slice and is unchanged by it (see D-069) |
 | Dashboard (`UX-04`) — **built by `UX-04`, section 6 (D-070)** | `GET /analyses/{id}/summary` | Distinct affected rows, shape and completeness with its sampled-or-full scope; counts only, no cell value, row list or hash; severity and category distribution, columns with most findings and review progress are derived by the client from the findings list |
 | Persisted AI enrichment (`UX-05`) — **built by `UX-05b`, section 10 (D-072)** | `POST` and `GET .../findings/{id}/ai-enrichment`; `GET .../explanation` no longer calls a model | Deterministic content never waits for a model call; the result is bound to the finding, confirmed-context version, model identity and prompt or contract version and is reported stale when the binding changes; start and status must not depend on one long request; bounded concurrency; saved output is deleted with its analysis |

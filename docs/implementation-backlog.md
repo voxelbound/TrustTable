@@ -1242,6 +1242,19 @@ setup, behind an abstract status contract that does not assume where a runtime r
 No download, installation or model management. The connection test must be bounded
 against forged requests and leak no path or address.
 
+Status: **completed** (`D-078`). Built: `GET /ai/readiness`, five ordered steps (assistance
+on, a runtime named, on this machine, answering a short check, a model named) computed
+from the effective setting and the one capped liveness probe `GET /ai/status` already makes;
+`POST /ai/connection-test`, with no body and no client-supplied target, that checks only a
+configured runtime on this machine, makes no completion call, allows one test in flight and
+a minimum gap between tests, and returns a closed set of outcomes with fixed wording and no
+address, path or exception text; and a **Local AI** screen (`/local-ai`, linked from
+Settings, the Local AI status panel and Help) with the checklist, *Test connection* and
+plain guidance that setup happens outside TrustTable. A reachable answer says only that the
+runtime answered, not that the model works. No compatibility claim about a model or
+hardware, no download, installation, start, stop or model management, no profile, no new
+setting, no schema or dependency change. `LAI-01` remains an unapproved design track.
+
 ## LAI-01 — S8b: product-managed Local AI architecture (design track, not approved)
 
 Design the safest and most maintainable architecture before any implementation:

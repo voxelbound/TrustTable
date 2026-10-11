@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { makeAiStatusResponse } from '../../test/msw/handlers'
 import { server } from '../../test/msw/server'
@@ -14,12 +15,22 @@ function renderPanel() {
   })
   render(
     <QueryClientProvider client={queryClient}>
-      <AiStatusPanel />
+      <MemoryRouter>
+        <AiStatusPanel />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
 
 describe('AiStatusPanel', () => {
+  it('UX-09: links to the Local AI setup screen', async () => {
+    renderPanel()
+
+    expect(
+      await screen.findByRole('link', { name: 'Check Local AI setup' }),
+    ).toHaveAttribute('href', '/local-ai')
+  })
+
   it('shows a polite loading state first', async () => {
     renderPanel()
 

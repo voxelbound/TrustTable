@@ -12,6 +12,18 @@ function renderHelp() {
 }
 
 describe('HelpRoute', () => {
+  it('UX-09: the AI topic links to the Local AI screen and says nothing is installed by TrustTable', () => {
+    renderHelp()
+
+    expect(screen.getByRole('link', { name: 'Open Local AI' })).toHaveAttribute(
+      'href',
+      '/local-ai',
+    )
+    expect(
+      screen.getByText(/does not download, install or start a runtime/),
+    ).toBeInTheDocument()
+  })
+
   it('UX-07: explains findings versus observations', () => {
     renderHelp()
 

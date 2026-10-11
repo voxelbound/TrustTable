@@ -40,6 +40,18 @@ function envelope(code: string, message: string, details = {}) {
 }
 
 describe('SettingsRoute', () => {
+  it('UX-09: points to the Local AI screen from the AI assistance setting', async () => {
+    serveSettings()
+    renderSettings()
+
+    const section = (
+      await screen.findByRole('heading', { name: 'AI assistance' })
+    ).closest('section') as HTMLElement
+    expect(
+      within(section).getByRole('link', { name: 'Local AI' }),
+    ).toHaveAttribute('href', '/local-ai')
+  })
+
   it('UX-08b: explains AI assistance and shows the built-in default with its source', async () => {
     serveSettings()
     renderSettings()
