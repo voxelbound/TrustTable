@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useParams } from 'react-router'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
+import { SectionIntro } from '../../components/ui/SectionIntro'
+import { StateNote } from '../../components/ui/StateNote'
 import type {
   AnalysisProfileResponse,
   AnalysisResource,
@@ -260,10 +262,17 @@ export function TechnicalRoute() {
 
   return (
     <div className="flex flex-col gap-8">
+      <SectionIntro
+        title="Technical details"
+        group="Act and Export"
+        purpose="How the file was read, what was measured about each column, and which checks produced findings. It is the evidence behind the results."
+        availability="Once the analysis has completed. It is read-only and always available, and states when something is not available."
+        why="It shows whether the profile covered every row or only a sample, and whether dataset samples were sent to a model, so that you can judge how far to rely on a result."
+        next="Check the scope of the profile, then open a column to see its measurements. Findings and what to do about them are under Findings."
+      />
+
       {resourceQuery.isLoading ? (
-        <p role="status" aria-live="polite" className={MUTED}>
-          Loading technical details…
-        </p>
+        <StateNote kind="loading">Loading technical details…</StateNote>
       ) : resourceQuery.isError ? (
         <Alert variant="error" title="Could not load analysis details">
           {resourceQuery.error.message}

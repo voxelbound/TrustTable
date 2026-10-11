@@ -1195,6 +1195,15 @@ error states. Rules keep listing, execution, deletion and export, state that the
 associated with the current analysis and are not applied to later files, and gain no
 creation, authoring or editing. Vocabulary uses **Findings**.
 
+Status: **completed** (`D-075`). The analysis screens are grouped as *Review* (Overview,
+Findings, Observations, About this data) and *Act and Export* (Reports, Rules, Technical
+details); Observations has its own screen; each supporting area states its purpose,
+availability, why it matters and the next step; Rules say they apply to this analysis
+only and offer no creation or editing; a **Help** screen explains findings and
+observations, the trust assessment, provenance, sampled and full, AI and Rules; loading
+and empty states share one pattern. Technical details stay visible to everyone because
+Advanced mode belongs to `UX-08`. No backend, API or dependency change.
+
 ## UX-08 — S7: settings
 
 Normal and Advanced settings with an explanation for every normal setting;

@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
+import { SectionIntro } from '../../components/ui/SectionIntro'
+import { StateNote } from '../../components/ui/StateNote'
 import {
   useAnalysisContext,
   useAnswerGuidedQuestion,
@@ -76,15 +78,7 @@ export function ContextRoute() {
   >({})
 
   if (contextQuery.isLoading || questionsQuery.isLoading) {
-    return (
-      <p
-        role="status"
-        aria-live="polite"
-        className="text-sm text-slate-600 dark:text-slate-400"
-      >
-        Loading context…
-      </p>
-    )
+    return <StateNote kind="loading">Loading context…</StateNote>
   }
 
   if (contextQuery.isError) {
@@ -133,12 +127,29 @@ export function ContextRoute() {
 
   return (
     <div className="flex flex-col gap-8">
+      <SectionIntro
+        title="About this data"
+        group="Review"
+        purpose="What TrustTable understood about this dataset: its subject, what one row stands for, the main entity and the columns that play a role. Each value shows where it came from."
+        availability="Once the analysis has completed. You can look at it at any time and it never blocks the findings."
+        why="Any AI explanation is prepared against the context you have confirmed, and it is marked out of date when that context changes. A wrong value here can mislead a reader."
+        next="Correct anything that is wrong, answer the guided questions you can, then finalize the context."
+      />
+      <p className="-mt-4 text-sm">
+        <Link
+          to="/help#provenance"
+          className="font-medium text-slate-900 underline dark:text-slate-100"
+        >
+          What do the sources mean?
+        </Link>
+      </p>
+
       <section aria-labelledby="context-heading">
         <h2
           id="context-heading"
           className="text-xl font-semibold text-slate-900 dark:text-slate-100"
         >
-          Context
+          Dataset context
         </h2>
 
         {confirmFields.isError && (

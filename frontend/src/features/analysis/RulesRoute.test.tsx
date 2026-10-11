@@ -116,6 +116,41 @@ describe('RulesRoute', () => {
     ).toBeInTheDocument()
   })
 
+  it('UX-07: is a hand-off area for this analysis only and offers no creation, authoring or editing', async () => {
+    useRuleList([makeRule()])
+    renderRules()
+
+    await screen.findByText('Quantity must be between 1 and 100')
+    expect(screen.getByText('Act and Export')).toBeInTheDocument()
+    expect(
+      screen.getByText(/not apply these rules to later files or to other/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/rules cannot be created or edited here/),
+    ).toBeInTheDocument()
+
+    // Listing, running, deleting and export stay; nothing creates or edits.
+    const buttons = screen.getAllByRole('button').map((b) => b.textContent)
+    expect(buttons).toEqual(
+      expect.arrayContaining([
+        'Show details',
+        'Run rule',
+        'Delete rule',
+        'Download JSON',
+        'Download YAML',
+      ]),
+    )
+    for (const control of [
+      ...screen.queryAllByRole('button'),
+      ...screen.queryAllByRole('link'),
+    ]) {
+      expect(control.textContent).not.toMatch(
+        /\b(create|add|new|edit|author)\b/i,
+      )
+    }
+    expect(screen.queryAllByRole('textbox')).toHaveLength(0)
+  })
+
   it('lists each rule with description, state, severity, provenance and counts', async () => {
     useRuleList([
       makeRule(),

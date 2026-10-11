@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useParams } from 'react-router'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
+import { SectionIntro } from '../../components/ui/SectionIntro'
+import { StateNote } from '../../components/ui/StateNote'
 import type { ReportOptionsModel, ReportResponse } from '../../api'
 import { useCreateReport, useDownloadReport, useReports } from './api'
 
@@ -87,6 +89,15 @@ export function ReportRoute() {
 
   return (
     <div className="flex flex-col gap-8">
+      <SectionIntro
+        title="Reports"
+        group="Act and Export"
+        purpose="A written report of this analysis as a Markdown file you can keep or share. Each report is a snapshot taken when you generate it."
+        availability="Once the analysis has completed. Generating a report does not change the findings or any review decision."
+        why="A report is what you hand to someone who does not open TrustTable. The options say exactly what it will include."
+        next="Choose what to include, generate the report and download it. Dismissed findings, technical detail and example rows are left out unless you choose them."
+      />
+
       <section aria-labelledby="generate-report-heading">
         <h2
           id="generate-report-heading"
@@ -159,13 +170,7 @@ export function ReportRoute() {
           Generated reports
         </h2>
         {reportsQuery.isLoading ? (
-          <p
-            role="status"
-            aria-live="polite"
-            className="mt-2 text-sm text-slate-600 dark:text-slate-400"
-          >
-            Loading reports…
-          </p>
+          <StateNote kind="loading">Loading reports…</StateNote>
         ) : reportsQuery.isError ? (
           <div className="mt-2">
             <Alert variant="error" title="Could not load reports">
@@ -173,9 +178,9 @@ export function ReportRoute() {
             </Alert>
           </div>
         ) : reports.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          <StateNote kind="empty">
             No reports have been generated for this analysis yet.
-          </p>
+          </StateNote>
         ) : (
           <ol className="mt-2 flex flex-col gap-3">
             {reports.map((report) => (

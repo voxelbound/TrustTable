@@ -193,7 +193,7 @@ describe('AnalysisLayoutRoute', () => {
     const nav = await screen.findByRole('navigation', {
       name: 'Analysis sections',
     })
-    await user.click(within(nav).getByRole('link', { name: 'Report' }))
+    await user.click(within(nav).getByRole('link', { name: 'Reports' }))
 
     expect(router.state.location.pathname).toBe(
       `/analyses/${ANALYSIS_ID}/report`,
@@ -221,7 +221,49 @@ describe('AnalysisLayoutRoute', () => {
     )
   })
 
-  it('offers no Report link while the analysis is not completed', async () => {
+  it('UX-07: groups the areas under Review and Act and Export, each a real route', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/status', () =>
+        HttpResponse.json(
+          makeStatusResponse({ state: 'completed', cancellable: false }),
+        ),
+      ),
+    )
+
+    renderLayout()
+    const nav = await screen.findByRole('navigation', {
+      name: 'Analysis sections',
+    })
+
+    const groups = within(nav)
+      .getAllByRole('list')
+      .map((list) =>
+        within(list)
+          .getAllByRole('link')
+          .map((link) => link.textContent),
+      )
+    expect(groups).toEqual([
+      ['Overview', 'Findings', 'Observations', 'About this data'],
+      ['Reports', 'Rules', 'Technical details'],
+    ])
+    expect(within(nav).getByText('Review')).toBeInTheDocument()
+    expect(within(nav).getByText('Act and Export')).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: 'Overview' })).toHaveAttribute(
+      'href',
+      `/analyses/${ANALYSIS_ID}/overview`,
+    )
+    expect(
+      within(nav).getByRole('link', { name: 'Observations' }),
+    ).toHaveAttribute('href', `/analyses/${ANALYSIS_ID}/observations`)
+    expect(
+      within(nav).getByRole('link', { name: 'About this data' }),
+    ).toHaveAttribute('href', `/analyses/${ANALYSIS_ID}/context`)
+    expect(
+      within(nav).getByRole('link', { name: 'Technical details' }),
+    ).toHaveAttribute('href', `/analyses/${ANALYSIS_ID}/technical`)
+  })
+
+  it('offers no Reports link while the analysis is not completed', async () => {
     server.use(
       http.get('http://localhost/api/v1/analyses/:analysisId/status', () =>
         HttpResponse.json(
@@ -234,7 +276,7 @@ describe('AnalysisLayoutRoute', () => {
     await screen.findByText('Checking that the file can be read.')
 
     expect(
-      screen.queryByRole('link', { name: 'Report' }),
+      screen.queryByRole('link', { name: 'Reports' }),
     ).not.toBeInTheDocument()
   })
 
