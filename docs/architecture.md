@@ -1395,7 +1395,12 @@ Core rules:
 - **Local AI status (`UX-09`).** Defined against an abstract provider and readiness
   contract that does not assume where a runtime runs, so the unapproved S8b choice
   (`LAI-01`) is not made implicitly. The runtime is currently provisioned outside the
-  application on the host and reached over the container bridge.
+  application on the host and reached over the container bridge. Built by `UX-09`
+  (D-078): a readiness checklist and a connection test that use the same capped,
+  completion-free liveness-probe helper as `GET /ai/status` (each request makes its own
+  probe; no result is shared or cached); the test takes no input, probes
+  only a configured runtime that is on this machine, and is limited to one in flight and
+  a minimum interval, enforced in process (one gate per application instance).
 - **Deployment boundary.** The frontend proxy currently sets no read timeout or request
   body size; limits must be consistent across proxy, backend and interface, with the
   backend as the authority, and long AI work must not depend on one long-lived proxy

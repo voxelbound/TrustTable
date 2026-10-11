@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import type { AdvancedSettingsResponse, SettingItemResponse } from '../../api'
 import { AppShell } from '../../components/layout/AppShell'
 import { Alert } from '../../components/ui/Alert'
@@ -139,6 +140,14 @@ function AiAssistanceSetting({ item }: { item: SettingItemResponse }) {
           </Alert>
         </div>
       )}
+
+      <p className={`${MUTED} mt-3`}>
+        To see whether a local model is ready, and to test the connection, open{' '}
+        <Link to="/local-ai" className="underline">
+          Local AI
+        </Link>
+        .
+      </p>
     </section>
   )
 }

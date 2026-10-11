@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useLocation } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { AppShell } from '../../components/layout/AppShell'
 
 const HEADING = 'text-xl font-semibold text-slate-900 dark:text-slate-100'
@@ -9,6 +9,8 @@ interface Topic {
   id: string
   title: string
   body: string[]
+  /** An optional link to the screen the topic describes. */
+  link?: { to: string; label: string }
 }
 
 /** What each term means, in business words (`UX-07`, D-075;
@@ -57,7 +59,9 @@ const TOPICS: Topic[] = [
       'AI is optional and separate. The checks, findings, the trust assessment and the built-in guidance are ready without it and never wait for it.',
       'An AI explanation is requested for one finding at a time, and only when a model is set up. When it is not available, the built-in guidance is shown and says so.',
       'AI assistance can be turned on or off in Settings, unless your installation manages it, in which case Settings shows its value and cannot change it.',
+      'The Local AI screen shows which steps are done before a local model can be used, and can test whether the runtime on this machine answers. TrustTable does not download, install or start a runtime or a model; that is set up outside TrustTable.',
     ],
+    link: { to: '/local-ai', label: 'Open Local AI' },
   },
   {
     id: 'settings-and-advanced',
@@ -132,6 +136,16 @@ export function HelpRoute() {
                 {paragraph}
               </p>
             ))}
+            {topic.link && (
+              <p className={BODY}>
+                <Link
+                  to={topic.link.to}
+                  className="font-medium text-slate-900 underline dark:text-slate-100"
+                >
+                  {topic.link.label}
+                </Link>
+              </p>
+            )}
           </section>
         ))}
       </div>

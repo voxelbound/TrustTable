@@ -89,6 +89,28 @@ def _summary(
     return f"{ready} {sent} {_ASSISTANCE_NOTE}"
 
 
+def probe_runtime(
+    settings: Settings, *, provider_factory: ProviderFactory = create_provider
+) -> bool:
+    """One bounded liveness probe of the configured runtime; never raises.
+
+    The status, readiness and connection-test routes share this helper, so each probe is
+    the same capped, completion-free call that reports only a boolean. They share the
+    helper, not a result: every request makes its own probe.
+    """
+    try:
+        provider = provider_factory(
+            settings.llm_provider,
+            base_url=settings.llm_base_url,
+            model_identifier=settings.llm_model,
+            timeout_seconds=min(float(settings.llm_timeout_seconds), MAX_PROBE_SECONDS),
+            temperature=settings.llm_temperature,
+        )
+        return bool(provider.health_check().available)
+    except Exception:  # noqa: BLE001 - a probe must never raise or leak detail
+        return False
+
+
 def compute_ai_status(
     settings: Settings,
     *,
@@ -135,19 +157,9 @@ def compute_ai_status(
         if model_location_for(name, settings.llm_base_url) is EnrichmentModelLocation.LOCAL
         else "unknown"
     )
-    state: ReadyState = "unavailable"
-    try:
-        provider = provider_factory(
-            name,
-            base_url=settings.llm_base_url,
-            model_identifier=settings.llm_model,
-            timeout_seconds=min(float(settings.llm_timeout_seconds), MAX_PROBE_SECONDS),
-            temperature=settings.llm_temperature,
-        )
-        if provider.health_check().available:
-            state = "ready"
-    except Exception:  # noqa: BLE001 - the status route must never raise or leak detail
-        state = "unavailable"
+    state: ReadyState = (
+        "ready" if probe_runtime(settings, provider_factory=provider_factory) else "unavailable"
+    )
 
     sample_values = settings.llm_send_sample_values
     return AiStatus(

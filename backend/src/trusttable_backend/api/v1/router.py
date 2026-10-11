@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from trusttable_backend.api.v1 import (
+    ai_readiness,
     ai_status,
     analyses,
     confirmed_relationships,
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(health.router)
 router.include_router(version.router)
 router.include_router(ai_status.router)
+router.include_router(ai_readiness.router)
 router.include_router(settings.router)
 router.include_router(analyses.router)
 router.include_router(staged_uploads.router)

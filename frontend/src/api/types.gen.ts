@@ -46,6 +46,28 @@ export type AdvancedSettingsResponse = {
 };
 
 /**
+ * AiConnectionTestResponse
+ */
+export type AiConnectionTestResponse = {
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Outcome
+     */
+    outcome: 'reachable' | 'not_reachable' | 'assistance_off' | 'no_runtime' | 'not_local' | 'busy' | 'too_soon';
+    /**
+     * Retry After Seconds
+     */
+    retry_after_seconds: number | null;
+    /**
+     * Tested
+     */
+    tested: boolean;
+};
+
+/**
  * AiProvenanceResponse
  *
  * Human-readable provenance of an accepted AI interpretation
@@ -77,6 +99,28 @@ export type AiProvenanceResponse = {
      * Runtime Label
      */
     runtime_label: string;
+};
+
+/**
+ * AiReadinessResponse
+ */
+export type AiReadinessResponse = {
+    /**
+     * Checks
+     */
+    checks: Array<ReadinessCheckResponse>;
+    /**
+     * Model Label
+     */
+    model_label: string | null;
+    /**
+     * Ready
+     */
+    ready: boolean;
+    /**
+     * Runtime Label
+     */
+    runtime_label: string | null;
 };
 
 /**
@@ -1688,6 +1732,28 @@ export type ProposedValidationRuleResponse = {
 };
 
 /**
+ * ReadinessCheckResponse
+ */
+export type ReadinessCheckResponse = {
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Key
+     */
+    key: 'assistance_on' | 'runtime_configured' | 'runtime_on_this_machine' | 'runtime_answers' | 'model_named';
+    /**
+     * State
+     */
+    state: 'done' | 'todo' | 'attention' | 'not_checked';
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
  * ReadinessResponse
  *
  * Body for `GET /api/v1/health/ready`.
@@ -2713,6 +2779,38 @@ export type WarningResponse = {
      */
     message: string;
 };
+
+export type PostAiConnectionTestApiV1AiConnectionTestPostData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/ai/connection-test';
+};
+
+export type PostAiConnectionTestApiV1AiConnectionTestPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: AiConnectionTestResponse;
+};
+
+export type PostAiConnectionTestApiV1AiConnectionTestPostResponse = PostAiConnectionTestApiV1AiConnectionTestPostResponses[keyof PostAiConnectionTestApiV1AiConnectionTestPostResponses];
+
+export type GetAiReadinessApiV1AiReadinessGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/ai/readiness';
+};
+
+export type GetAiReadinessApiV1AiReadinessGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: AiReadinessResponse;
+};
+
+export type GetAiReadinessApiV1AiReadinessGetResponse = GetAiReadinessApiV1AiReadinessGetResponses[keyof GetAiReadinessApiV1AiReadinessGetResponses];
 
 export type GetAiStatusApiV1AiStatusGetData = {
     body?: never;

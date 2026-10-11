@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import { Alert } from '../ui/Alert'
 import { Badge, type BadgeTone } from '../ui/Badge'
 import { useAiStatus } from '../../features/workspace/api'
@@ -72,6 +73,15 @@ export function AiStatusPanel() {
           <p>{status.data.summary}</p>
         </div>
       )}
+
+      <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        <Link
+          to="/local-ai"
+          className="font-medium text-slate-900 underline dark:text-slate-100"
+        >
+          Check Local AI setup
+        </Link>
+      </p>
     </section>
   )
 }

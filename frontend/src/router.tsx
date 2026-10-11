@@ -11,6 +11,7 @@ import { ReportRoute } from './features/analysis/ReportRoute'
 import { RulesRoute } from './features/analysis/RulesRoute'
 import { TechnicalRoute } from './features/analysis/TechnicalRoute'
 import { HelpRoute } from './features/help/HelpRoute'
+import { LocalAiRoute } from './features/localai/LocalAiRoute'
 import { SettingsRoute } from './features/settings/SettingsRoute'
 import { ConfigureRoute } from './features/workspace/ConfigureRoute'
 import { WorkspaceRoute } from './features/workspace/WorkspaceRoute'
@@ -22,7 +23,7 @@ import { WorkspaceRoute } from './features/workspace/WorkspaceRoute'
  * `technical` by `UI-03` slice 5; `findings/:findingId/inspector` by `UX-06`
  * part a, D-073; `observations/:observationId/inspector` by `UX-06` part b,
  * D-074; `observations` and `/help` by `UX-07`, D-075; `/settings` by
- * `UX-08b`, D-077) —
+ * `UX-08b`, D-077; `/local-ai` by `UX-09`, D-078) —
  * replaces `FND-01`'s placeholder route with the real investigation
  * shell.
  *
@@ -48,6 +49,10 @@ export const router = createBrowserRouter([
   {
     path: '/settings',
     element: <SettingsRoute />,
+  },
+  {
+    path: '/local-ai',
+    element: <LocalAiRoute />,
   },
   {
     path: '/analyses/new',
