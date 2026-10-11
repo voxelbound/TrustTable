@@ -41,7 +41,7 @@ Optionally add a **local AI model** (`llama.cpp`, no account or API key, no Hugg
 
 **v0.1 — Deterministic vertical slice: complete and recorded release-ready.** Every bullet in `docs/release-plan.md`'s v0.1 checklist is implemented and tested; all three release-qualification areas (performance evidence, security qualification, release-candidate testing) have real, scoped-baseline evidence; the human owner recorded v0.1 milestone-complete/release-ready. This does **not** itself constitute full `docs/testing-strategy.md` §8 release-candidate CI-gate compliance: the full multi-browser/viewport matrix, SBOM/container scan/license check, full deterministic/AI evaluation, and migration tests remain open, mostly scoped to the later v1.0 milestone.
 
-**v0.1.1 — Investigation UX: complete.** `FIND-01` (row context for row-anchored findings) — this milestone's sole planned deliverable — is implemented in full: the row-context API endpoint, and a Finding Detail UI section with expand and Prev/Next navigation across a finding's own affected rows (see "Delivered work" below).
+**v0.1.1 — Investigation UX: complete.** `FIND-01` (row context for row-anchored findings) — this milestone's sole planned deliverable — is implemented in full: the row-context API endpoint, and a Finding Detail UI section with expand and Prev/Next navigation across the affected rows a finding names (see "Delivered work" below).
 
 **v0.2 — Local AI beta: complete, released as `v0.2.0`.** The owner recorded the milestone complete at the agreed scoped qualification level (details below).
 
@@ -102,7 +102,7 @@ The product, domain model, API boundaries, detector framework, frontend architec
 
 **v0.1.1 — Investigation UX (complete)**
 
-- **FIND-01** — row context for row-anchored findings: `GET /api/v1/analyses/{id}/findings/{finding_id}/row-context` returns a bounded (max 25 rows per side) physical-neighborhood window around one of a finding's own affected rows, reconstructed on demand from the analysis's retained upload bytes (never a standing `ParsedDataset`); the Finding Detail screen's new "Row context" section renders it with the anchor row highlighted, an expand control, and, for findings with more than one affected row, Prev/Next navigation between them (since `UX-06` part a, D-073, the screen for these rows is the data inspector grid). Not `Evidence`, not in Report/export output, never automatic AI-prompt input (`docs/decision-log.md` D-025).
+- **FIND-01** — row context for row-anchored findings: `GET /api/v1/analyses/{id}/findings/{finding_id}/row-context` returns a bounded (max 25 rows per side) physical-neighborhood window around one of a finding's own affected rows, reconstructed on demand from the analysis's retained upload bytes (never a standing `ParsedDataset`); the Finding Detail screen's new "Row context" section renders it with the anchor row highlighted, an expand control, and, for findings that name more than one affected row, Prev/Next navigation between the named rows (since `UX-06` part a, D-073, the screen for these rows is the data inspector grid). Not `Evidence`, not in Report/export output, never automatic AI-prompt input (`docs/decision-log.md` D-025).
 
 **Local AI beta (v0.2 — complete)**
 
