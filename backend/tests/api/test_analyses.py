@@ -725,6 +725,29 @@ def test_get_analysis_finding_row_context_custom_window(client: TestClient) -> N
     assert body["actual_after"] <= 25
 
 
+def test_get_analysis_finding_row_context_refuses_a_row_the_finding_does_not_name(
+    client: TestClient,
+) -> None:
+    """The inspector reads around a finding's own rows, never an arbitrary row,
+    even for a finding that does have affected rows."""
+    created = _create_demo_analysis(client)["analysis"]
+    finding_item = _finding_with_rows(client, created["analysis_id"])
+    detail = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+    ).json()
+    affected = set(detail["affected_row_numbers"])
+    not_named = next(row for row in range(len(affected) + 2) if row not in affected)
+
+    response = client.get(
+        f"/api/v1/analyses/{created['analysis_id']}/findings/{finding_item['finding_id']}"
+        f"/row-context",
+        params={"anchor_row": not_named},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "ROW_NOT_IN_FINDING"
+
+
 def test_get_analysis_finding_row_context_is_marked_not_storable_by_caches(
     client: TestClient,
 ) -> None:

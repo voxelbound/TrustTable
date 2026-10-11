@@ -16,6 +16,11 @@ Run from `backend/`:
 It is a measurement aid, not part of the test suite: figures depend on the machine, and
 nothing here asserts a threshold. The synthetic data is generated here; no user data is
 read and nothing is written to disk.
+
+Limits of the figures: "Peak MiB" is the peak of Python allocations in one `tracemalloc`
+run, not process memory; the synthetic workbooks use inline strings, whereas files saved
+by Excel use shared strings, so the XLSX rows probably understate real cost; and the
+cases stay below the 100 MiB upload ceiling, so nothing is measured at that size.
 """
 
 from __future__ import annotations
