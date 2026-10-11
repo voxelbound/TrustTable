@@ -706,7 +706,8 @@ describe('FindingDetailRoute', () => {
     expect(rowContextRequests).toBe(0)
   })
 
-  it('UX-06: does not offer the inspector for a finding with zero affected rows', async () => {
+  it('UX-06b: a finding with zero affected rows offers a look at the data, never worded as affected rows or as evidence, and loads no values itself', async () => {
+    let windowRequests = 0
     server.use(
       http.get(
         'http://localhost/api/v1/analyses/:analysisId/findings/:findingId',
@@ -718,16 +719,36 @@ describe('FindingDetailRoute', () => {
             }),
           ),
       ),
+      http.get(
+        'http://localhost/api/v1/analyses/:analysisId/findings/:findingId/column-context',
+        () => {
+          windowRequests += 1
+          return HttpResponse.json({})
+        },
+      ),
     )
 
     renderDetail()
 
     await screen.findByRole('heading', { name: 'Observation' })
     expect(
-      screen.queryByRole('heading', { name: 'Rows in the data' }),
-    ).toBeNull()
+      await screen.findByRole('heading', { name: 'Rows in the data' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/does not name particular rows/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/is not evidence of this finding/),
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole('link', { name: 'Inspect the affected rows' }),
     ).toBeNull()
+    expect(
+      screen.getByRole('link', { name: 'Look at the data' }),
+    ).toHaveAttribute(
+      'href',
+      `/analyses/${ANALYSIS_ID}/findings/${FINDING_ID}/inspector`,
+    )
+    expect(windowRequests).toBe(0)
   })
 })

@@ -4,6 +4,8 @@ import {
   MAX_CELL_CHARACTERS,
   resolveAnchorRow,
   shownCell,
+  windowFromFinding,
+  windowFromScoped,
 } from './inspector'
 
 describe('shownCell', () => {
@@ -89,5 +91,54 @@ describe('resolveAnchorRow', () => {
 
   it('has no row when the finding has no affected rows', () => {
     expect(resolveAnchorRow([], '3')).toBeNull()
+  })
+})
+
+describe('window adapters (UX-06 part b)', () => {
+  const shared = {
+    columns: [{ internal_key: 'a', original_name: 'A' }],
+    max_window: 25,
+    truncated_at_start: true,
+    truncated_at_end: false,
+  }
+
+  it('reads a finding window: marked means affected by the finding', () => {
+    const view = windowFromFinding({
+      ...shared,
+      size_limited: true,
+      rows: [
+        {
+          row_number: 3,
+          is_anchor: true,
+          is_affected_by_finding: true,
+          values: ['x', null],
+        },
+      ],
+    })
+
+    expect(view).toEqual({
+      columns: [{ internalKey: 'a', originalName: 'A' }],
+      maxWindow: 25,
+      truncatedAtStart: true,
+      truncatedAtEnd: false,
+      sizeLimited: true,
+      rows: [
+        { rowNumber: 3, isAnchor: true, isMarked: true, values: ['x', null] },
+      ],
+    })
+  })
+
+  it('reads a scoped window: marked means the server marked it, and a missing size flag is false', () => {
+    const view = windowFromScoped({
+      ...shared,
+      rows: [
+        { row_number: 0, is_anchor: true, is_marked: false, values: ['x'] },
+      ],
+    })
+
+    expect(view.sizeLimited).toBe(false)
+    expect(view.rows).toEqual([
+      { rowNumber: 0, isAnchor: true, isMarked: false, values: ['x'] },
+    ])
   })
 })

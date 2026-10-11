@@ -748,6 +748,60 @@ per MiB of workbook, peak memory about twelve times the CSV size), so:
 - the response is not evidence and is not part of any AI payload, report or
   export (`docs/domain-model.md` invariant 15).
 
+### GET `/analyses/{analysis_id}/observations/{observation_id}/row-context`
+
+Added by `UX-06` part b (D-074). A bounded window around one of an observation's
+own example rows (the same rows `GET .../observations` returns as
+`affected_row_numbers`, at most 20).
+
+Request (query parameters): `anchor_row` (required), `before`, `after` (optional,
+`>= 0`, default 3), with the same clamping as the finding window above. `anchor_row`
+must be one of the observation's own example rows, or the request is rejected
+(404 `ROW_NOT_IN_OBSERVATION`); an unknown observation is 404
+`OBSERVATION_NOT_FOUND`; an unknown analysis is 404 `ANALYSIS_NOT_FOUND`. This
+reads context around an observation's examples, not arbitrary rows in the file.
+
+Returns a `ScopedRowWindowResponse`:
+
+- `scope_kind` (`observation`), `anchor_source` (`observation_example`) and
+  `anchor_rows`: the complete, ascending set of rows the server will centre a
+  window on in this scope (here, the observation's example rows). The client may
+  only choose among them.
+- the resolved window (`requested_*`, `actual_*`, `truncated_at_*`, `max_window`,
+  `size_limited`) and the column list, exactly as for the finding window
+- one entry per row: `row_number`, `is_anchor`, `is_marked` (true for the
+  observation's own example rows inside the window) and values by column
+
+The bounds are those of the finding window: at most two reads at once with
+`429 INSPECTOR_BUSY` (the gate is shared by every inspector read), the
+character bound with `size_limited`, and `Cache-Control: no-store`. The response is
+not evidence and is not part of any AI payload, report or export.
+
+### GET `/analyses/{analysis_id}/findings/{finding_id}/column-context`
+
+Added by `UX-06` part b (D-074; D-066 item 6). A bounded window for a finding that
+names no rows (a column-wide finding). The server, never the request, decides where
+the window can be centred:
+
+- when observations about the same columns as the finding carry example rows, those
+  rows (their union, ascending, unique) are the offered anchors and `anchor_source`
+  is `observation_example`;
+- otherwise only row 0 is offered and `anchor_source` is `start_of_file`. The start of
+  a file is a deterministic place to look, not evidence of the finding, and no row is
+  marked (`is_marked` is false for every row). A finding that names no column is
+  always in this case.
+
+Request (query parameters): `anchor_row` (optional) must be one of the returned
+`anchor_rows`, or the request is rejected (404 `ROW_NOT_IN_SCOPE`); when omitted the
+first offered row is used. `before` and `after` as above. A finding that names
+affected rows is rejected (409 `FINDING_HAS_AFFECTED_ROWS`): it is read through its
+own `row-context`. A stored file with no data row is 404 `NO_ROWS_TO_SHOW`. Unknown
+analysis and finding are the usual 404s.
+
+Returns the same `ScopedRowWindowResponse` (`scope_kind` `column_wide_finding`) with
+the same bounds, shared concurrency gate and `Cache-Control: no-store`. Nothing in
+this response is evidence, AI input, or part of a report or export.
+
 ### GET `/analyses/{analysis_id}/findings/{finding_id}/explanation`
 
 Added (`AI-05`/`UI-02` slice 1, `WP-063`; documented retroactively by
@@ -1210,7 +1264,7 @@ Existing routes, including direct upload `POST /analyses`, keep their contracts.
 | History (`UX-03`) — **built by `UX-03`, section 6 (D-069)** | `GET /analyses`; `POST /analyses/{id}/rerun`; `previously_analysed` on the staged-upload resource | The lookup is not a dataset identity; it reflects only analyses that still exist; none of the new responses carries an integrity hash. The pre-existing `dataset.content_hash` field of the analysis resource predates this slice and is unchanged by it (see D-069) |
 | Dashboard (`UX-04`) — **built by `UX-04`, section 6 (D-070)** | `GET /analyses/{id}/summary` | Distinct affected rows, shape and completeness with its sampled-or-full scope; counts only, no cell value, row list or hash; severity and category distribution, columns with most findings and review progress are derived by the client from the findings list |
 | Persisted AI enrichment (`UX-05`) — **built by `UX-05b`, section 10 (D-072)** | `POST` and `GET .../findings/{id}/ai-enrichment`; `GET .../explanation` no longer calls a model | Deterministic content never waits for a model call; the result is bound to the finding, confirmed-context version, model identity and prompt or contract version and is reported stale when the binding changes; start and status must not depend on one long request; bounded concurrency; saved output is deleted with its analysis |
-| Inspector (`UX-06`) — **part a built by `UX-06a`, section 10 (D-073)**; observation example rows and column-wide windows remain `UX-06` part b | Bounded, finding-scoped row windows, including observation example rows | Server-side bounds; no shared-cache storage; unchanged privacy boundary (D-025); part a measured the parse path first and added a concurrency bound, a response-size bound and `Cache-Control: no-store` to the existing `row-context` route, with no new route and the 25-row limit unchanged |
+| Inspector (`UX-06`) — **built: part a by `UX-06a` (D-073) and part b by `UX-06b` (D-074), section 10** | Bounded, finding-scoped row windows, including observation example rows and a column-wide finding's window | Server-side bounds; no shared-cache storage; unchanged privacy boundary (D-025); part a measured the parse path first and added a concurrency bound, a response-size bound and `Cache-Control: no-store` to the existing `row-context` route; part b added two reads (`observations/{id}/row-context`, `findings/{id}/column-context`) that share those bounds and only centre a window on a row the server offers; the 25-row limit is unchanged |
 | Settings (`UX-08`) | Read effective settings with their source (deployment override, stored, default); write allowlisted, typed, versioned stored settings; reset to default | Computed server-side; a stored value never exceeds a deployment override or a security or resource limit; unknown keys and values rejected; write-path protection and fail-closed behavior; a narrow Advanced response may expose effective runtime and model configuration and raw paths and URLs never appear in analysis, finding, report or other shareable responses |
 
 Behavior preserved: `GET .../findings/{finding_id}/rule-proposal` still performs a

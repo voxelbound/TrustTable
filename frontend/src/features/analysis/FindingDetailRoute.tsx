@@ -335,6 +335,31 @@ export function FindingDetailRoute() {
         </section>
       )}
 
+      {analysisId && finding.affected_row_numbers.length === 0 && (
+        <section aria-labelledby="inspect-rows-heading">
+          <h2
+            id="inspect-rows-heading"
+            className="text-xl font-semibold text-slate-900 dark:text-slate-100"
+          >
+            Rows in the data
+          </h2>
+          <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+            This finding concerns whole columns and does not name particular
+            rows. You can look at the data: example rows from observations about
+            the same columns when there are any, otherwise the start of the
+            file, and the screen says which it is. This is only a view: it
+            changes nothing, is not evidence of this finding, and is not sent to
+            an AI model or added to a report.
+          </p>
+          <Link
+            to={`/analyses/${analysisId}/findings/${finding.finding_id}/inspector${carried}`}
+            className="mt-2 inline-block rounded border border-slate-300 px-2 py-1 text-sm font-medium text-slate-900 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+          >
+            Look at the data
+          </Link>
+        </section>
+      )}
+
       {explanation && (
         <>
           <RemediationSection

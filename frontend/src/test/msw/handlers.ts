@@ -17,6 +17,7 @@ import type {
   FindingsListResponse,
   ObservationsListResponse,
   RowContextResponse,
+  ScopedRowWindowResponse,
   StagedUploadResponse,
   UploadAnalysisResponse,
 } from '../../api'
@@ -198,6 +199,54 @@ export function makeRowContextResponse(
     truncated_at_start: true,
     truncated_at_end: true,
     max_window: 25,
+    rows,
+    ...overrides,
+  }
+}
+
+/** A window reached from an observation or a column-wide finding (`UX-06`
+ * part b). Defaults to an observation window centred on example row 4 of 4, 7
+ * and 9. */
+export function makeScopedWindowResponse(
+  overrides: Partial<ScopedRowWindowResponse> = {},
+): ScopedRowWindowResponse {
+  const columns = overrides.columns ?? [
+    { original_name: 'order_id', internal_key: 'order_id', ordinal: 0 },
+    { original_name: 'amount', internal_key: 'amount', ordinal: 1 },
+  ]
+  const rows = overrides.rows ?? [
+    {
+      row_number: 3,
+      is_anchor: false,
+      is_marked: false,
+      values: ['1003', '30'],
+    },
+    {
+      row_number: 4,
+      is_anchor: true,
+      is_marked: true,
+      values: ['1004', 'n/a'],
+    },
+    {
+      row_number: 5,
+      is_anchor: false,
+      is_marked: false,
+      values: ['1005', '50'],
+    },
+  ]
+  return {
+    scope_kind: 'observation',
+    anchor_source: 'observation_example',
+    anchor_rows: [4, 7, 9],
+    columns,
+    requested_before: 5,
+    requested_after: 5,
+    actual_before: 1,
+    actual_after: 1,
+    truncated_at_start: true,
+    truncated_at_end: true,
+    max_window: 25,
+    size_limited: false,
     rows,
     ...overrides,
   }
@@ -638,6 +687,42 @@ export const handlers = [
     `${BASE}/analyses/:analysisId/findings/:findingId/row-context`,
     () => {
       return HttpResponse.json(makeRowContextResponse())
+    },
+  ),
+  http.get(
+    `${BASE}/analyses/:analysisId/observations/:observationId/row-context`,
+    () => {
+      return HttpResponse.json(makeScopedWindowResponse())
+    },
+  ),
+  http.get(
+    `${BASE}/analyses/:analysisId/findings/:findingId/column-context`,
+    () => {
+      return HttpResponse.json(
+        makeScopedWindowResponse({
+          scope_kind: 'column_wide_finding',
+          anchor_source: 'start_of_file',
+          anchor_rows: [0],
+          rows: [
+            {
+              row_number: 0,
+              is_anchor: true,
+              is_marked: false,
+              values: ['1000', '10'],
+            },
+            {
+              row_number: 1,
+              is_anchor: false,
+              is_marked: false,
+              values: ['1001', '11'],
+            },
+          ],
+          actual_before: 0,
+          actual_after: 1,
+          truncated_at_start: false,
+          truncated_at_end: true,
+        }),
+      )
     },
   ),
 ]

@@ -1,43 +1,41 @@
-import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
-import type { RowContextResponse } from '../../api'
 import {
-  affectedRowPosition,
   resolveAnchorRow,
-  shownCell,
+  windowFromFinding,
+  windowFromScoped,
 } from '../../domain/inspector'
-import { useFindingDetail, useFindingRowContext } from './api'
+import {
+  useColumnWideWindow,
+  useFindingDetail,
+  useFindingRowContext,
+} from './api'
 import { carriedSearch } from './findingListView'
+import {
+  BUTTON_CLASS,
+  Grid,
+  RowNavigator,
+  WindowNote,
+  WindowStatus,
+} from './InspectorWindow'
+import { ROW_PARAM, useRevealed, useWindowSize } from './inspectorWindowState'
 
-const INITIAL_WINDOW = 5
-const EXPAND_STEP = 10
-/** The server's own per-side maximum is authoritative (`max_window` in the
- * response); this only bounds what the screen asks for before it knows it. */
-const CLIENT_MAX_WINDOW = 25
-const ROW_PARAM = 'row'
+const ROW_NUMBERS_NOTE =
+  'Row numbers are the ones used in findings, observations and rules; row 0 is the first row below the column headings.'
 
-const LINK_CLASS =
-  'rounded border border-slate-300 px-2 py-1 text-sm font-medium text-slate-900 ' +
-  'hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800'
-const DISABLED_CLASS =
-  'rounded border border-slate-200 px-2 py-1 text-sm text-slate-400 ' +
-  'dark:border-slate-800 dark:text-slate-600'
-const BUTTON_CLASS =
-  'text-sm font-medium text-slate-900 underline dark:text-slate-100'
-
-/** The finding-scoped data inspector (`UX-06` part a, slice S5, D-073;
+/** The finding-scoped data inspector (`UX-06`, slice S5, D-073 and D-074;
  * `docs/ui-specification.md` §12.4).
  *
  * A read-only grid of a finding's own affected rows with their neighbours:
  * it scrolls both ways, keeps the column headings and the row numbers in
  * view, marks the affected rows and the affected columns, and steps to the
  * previous and next affected row. It is not a dataset browser: only rows the
- * finding itself names can be the centre of a window, and the server refuses
- * any other. Every value is rendered as text, never as markup, and a long
- * value stays shortened until the reader asks to see all of it. Seeing row
- * values here adds them to nothing else: not to what is sent to a model, not
- * to evidence, and not to a report or export. Observations and column-wide
- * findings are `UX-06` part b. */
+ * server itself offers can be the centre of a window. For a finding that names
+ * no rows (a column-wide finding) the server offers the example rows of
+ * observations about the same columns and otherwise only the start of the
+ * file, and the screen says which it is. Every value is rendered as text,
+ * never as markup, and a long value stays shortened until the reader asks to
+ * see all of it. Seeing row values here adds them to nothing else: not to what
+ * is sent to a model, not to evidence, and not to a report or export. */
 export function FindingInspectorRoute() {
   const { analysisId, findingId } = useParams<{
     analysisId: string
@@ -81,6 +79,9 @@ export function FindingInspectorRoute() {
     finding.affected_row_numbers,
     searchParams.get(ROW_PARAM),
   )
+  const affectedColumnKeys = finding.affected_columns.map(
+    (column) => column.internal_key,
+  )
 
   return (
     <div className="flex flex-col gap-4">
@@ -97,11 +98,13 @@ export function FindingInspectorRoute() {
       </div>
 
       {anchorRow === null ? (
-        <p className="rounded border border-slate-200 p-3 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-300">
-          This finding does not point to particular rows, so there is nothing to
-          inspect here. It concerns whole columns; the rows behind it are not
-          listed.
-        </p>
+        <ColumnWideWindow
+          analysisId={analysisId as string}
+          findingId={finding.finding_id}
+          affectedColumnKeys={affectedColumnKeys}
+          requestedRow={searchParams.get(ROW_PARAM)}
+          carriedFilters={carried}
+        />
       ) : (
         <InspectorGrid
           key={`${findingId}:${anchorRow}`}
@@ -109,9 +112,7 @@ export function FindingInspectorRoute() {
           findingId={finding.finding_id}
           affectedRows={finding.affected_row_numbers}
           affectedRowCount={finding.affected_row_count}
-          affectedColumnKeys={finding.affected_columns.map(
-            (column) => column.internal_key,
-          )}
+          affectedColumnKeys={affectedColumnKeys}
           anchorRow={anchorRow}
           carriedFilters={carried}
         />
@@ -131,12 +132,6 @@ interface InspectorGridProps {
   carriedFilters: URLSearchParams
 }
 
-function rowHref(row: number, carriedFilters: URLSearchParams): string {
-  const params = new URLSearchParams(carriedFilters)
-  params.set(ROW_PARAM, String(row))
-  return `?${params.toString()}`
-}
-
 function InspectorGrid({
   analysisId,
   findingId,
@@ -146,11 +141,8 @@ function InspectorGrid({
   anchorRow,
   carriedFilters,
 }: InspectorGridProps) {
-  const [windowSize, setWindowSize] = useState({
-    before: INITIAL_WINDOW,
-    after: INITIAL_WINDOW,
-  })
-  const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set())
+  const { windowSize, widen } = useWindowSize()
+  const { revealed, reveal } = useRevealed()
   const query = useFindingRowContext(
     analysisId,
     findingId,
@@ -158,88 +150,31 @@ function InspectorGrid({
     windowSize,
   )
 
-  const position = affectedRowPosition(affectedRows, anchorRow)
   // Navigation must not imply that every affected row can be visited unless
   // the finding actually lists them all.
   const everyRowListed = affectedRowCount <= affectedRows.length
-  const data = query.data
+  const data = query.data ? windowFromFinding(query.data) : undefined
 
   return (
     <div className="flex flex-col gap-3">
-      {position && (
-        <nav
-          aria-label="Move between affected rows"
-          className="flex flex-col gap-2 rounded border border-slate-200 p-3 dark:border-slate-800"
-        >
-          <p className="text-sm text-slate-700 dark:text-slate-300">
-            Affected row {position.position} of {position.total}
-            {everyRowListed
-              ? '.'
-              : `. Only ${position.total} of the ${affectedRowCount} affected rows can be visited here.`}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            {position.previousRow !== null ? (
-              <Link
-                to={rowHref(position.previousRow, carriedFilters)}
-                className={LINK_CLASS}
-              >
-                Previous affected row
-              </Link>
-            ) : (
-              <span aria-disabled="true" className={DISABLED_CLASS}>
-                Previous affected row
-              </span>
-            )}
-            {position.nextRow !== null ? (
-              <Link
-                to={rowHref(position.nextRow, carriedFilters)}
-                className={LINK_CLASS}
-              >
-                Next affected row
-              </Link>
-            ) : (
-              <span aria-disabled="true" className={DISABLED_CLASS}>
-                Next affected row
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            {position.previousRow === null
-              ? 'This is the first affected row. '
-              : ''}
-            {position.nextRow === null
-              ? 'This is the last affected row; there is no wrap-around. '
-              : ''}
-            Row numbers are the ones used in findings, observations and rules;
-            row 0 is the first row below the column headings.
-          </p>
-        </nav>
-      )}
+      <RowNavigator
+        rows={affectedRows}
+        current={anchorRow}
+        noun="affected row"
+        partialNote={
+          everyRowListed
+            ? null
+            : `Only ${affectedRows.length} of the ${affectedRowCount} affected rows can be visited here.`
+        }
+        carriedFilters={carriedFilters}
+        footnote={ROW_NUMBERS_NOTE}
+      />
 
-      {query.isLoading && (
-        <p
-          role="status"
-          aria-live="polite"
-          className="text-sm text-slate-600 dark:text-slate-400"
-        >
-          Loading rows…
-        </p>
-      )}
-
-      {query.isError && (
-        <div className="flex flex-col items-start gap-2">
-          <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-            {query.error.message}
-          </p>
-          <button
-            type="button"
-            className={BUTTON_CLASS}
-            onClick={() => void query.refetch()}
-          >
-            Try again
-          </button>
-        </div>
-      )}
+      <WindowStatus
+        loading={query.isLoading}
+        error={query.isError ? query.error.message : null}
+        onRetry={() => void query.refetch()}
+      />
 
       {data && (
         <>
@@ -247,25 +182,15 @@ function InspectorGrid({
             data={data}
             affectedColumnKeys={affectedColumnKeys}
             revealed={revealed}
-            onReveal={(key) =>
-              setRevealed((current) => new Set(current).add(key))
-            }
+            onReveal={reveal}
+            rowNoun="affected"
+            regionLabel="Rows around the affected row"
           />
           <WindowNote
             data={data}
-            onShowMore={() =>
-              setWindowSize((current) => ({
-                before: Math.min(
-                  current.before + EXPAND_STEP,
-                  data.max_window || CLIENT_MAX_WINDOW,
-                ),
-                after: Math.min(
-                  current.after + EXPAND_STEP,
-                  data.max_window || CLIENT_MAX_WINDOW,
-                ),
-              }))
-            }
+            onShowMore={() => widen(data.maxWindow)}
             asked={windowSize}
+            centre="the affected row"
           />
         </>
       )}
@@ -273,209 +198,98 @@ function InspectorGrid({
   )
 }
 
-function WindowNote({
-  data,
-  onShowMore,
-  asked,
+/** A finding that names no rows (`UX-06` part b, D-074). The server decides
+ * where the window can be centred and says why: the example rows of
+ * observations about the same columns, or only the start of the file. The
+ * screen never presents the start of the file as an example of the finding. */
+function ColumnWideWindow({
+  analysisId,
+  findingId,
+  affectedColumnKeys,
+  requestedRow,
+  carriedFilters,
 }: {
-  data: RowContextResponse
-  onShowMore: () => void
-  asked: { before: number; after: number }
-}) {
-  // A side that came back short of what was asked, and was not shortened for
-  // size, has reached the start or end of the file: nothing more exists there.
-  const atStart = data.truncated_at_start && !data.size_limited
-  const atEnd = data.truncated_at_end && !data.size_limited
-  const canAskForMore =
-    !data.size_limited &&
-    ((!data.truncated_at_start && asked.before < data.max_window) ||
-      (!data.truncated_at_end && asked.after < data.max_window))
-
-  return (
-    <div className="flex flex-col items-start gap-1 text-sm text-slate-600 dark:text-slate-400">
-      <p>
-        Showing {data.rows.length} row{data.rows.length === 1 ? '' : 's'}, at
-        most {data.max_window} either side of the affected row. This is a view
-        of part of the file, not all of it.
-      </p>
-      {(atStart || atEnd) && (
-        <p>
-          {atStart && atEnd
-            ? 'Both the start and the end of the file are shown.'
-            : atStart
-              ? 'The start of the file is shown.'
-              : 'The end of the file is shown.'}
-        </p>
-      )}
-      {data.size_limited && (
-        <p>
-          The rows are wide, so fewer rows are shown than the window allows, to
-          keep the page manageable.
-        </p>
-      )}
-      {canAskForMore && (
-        <button type="button" className={BUTTON_CLASS} onClick={onShowMore}>
-          Show more rows
-        </button>
-      )}
-    </div>
-  )
-}
-
-interface GridProps {
-  data: RowContextResponse
+  analysisId: string
+  findingId: string
   affectedColumnKeys: string[]
-  revealed: ReadonlySet<string>
-  onReveal: (key: string) => void
-}
-
-const HEAD_CELL =
-  'sticky top-0 z-10 border-b border-slate-300 bg-white px-2 py-1 text-left ' +
-  'font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
-
-function Grid({ data, affectedColumnKeys, revealed, onReveal }: GridProps) {
-  const affectedKeys = new Set(affectedColumnKeys)
-  // A finding that names no column concerns the row as a whole.
-  const columnIsAffected = (key: string) =>
-    affectedKeys.size === 0 || affectedKeys.has(key)
-
-  return (
-    <div
-      role="region"
-      aria-label="Rows around the affected row"
-      tabIndex={0}
-      className="max-h-[60vh] overflow-auto rounded border border-slate-200 dark:border-slate-800"
-    >
-      <table className="min-w-full border-collapse text-sm">
-        <thead>
-          <tr>
-            <th
-              scope="col"
-              className={`${HEAD_CELL} left-0 z-20 whitespace-nowrap`}
-            >
-              Row
-            </th>
-            {data.columns.map((column) => (
-              <th
-                key={column.internal_key}
-                scope="col"
-                className={`${HEAD_CELL} whitespace-nowrap`}
-              >
-                {column.original_name}
-                {affectedKeys.has(column.internal_key) && (
-                  <span className="ml-1 rounded bg-amber-100 px-1 text-xs font-normal text-amber-900 dark:bg-amber-900 dark:text-amber-100">
-                    affected
-                  </span>
-                )}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.rows.map((row) => (
-            <tr
-              key={row.row_number}
-              aria-current={row.is_anchor ? 'true' : undefined}
-              className={
-                row.is_anchor
-                  ? 'bg-amber-100 dark:bg-amber-950'
-                  : row.is_affected_by_finding
-                    ? 'bg-amber-50 dark:bg-amber-950/50'
-                    : undefined
-              }
-            >
-              <th
-                scope="row"
-                // Sticky, so it needs a solid background of its own.
-                className={`sticky left-0 z-10 whitespace-nowrap border-b border-slate-100 px-2 py-1 text-left font-medium text-slate-700 dark:border-slate-800 dark:text-slate-300 ${
-                  row.is_anchor
-                    ? 'bg-amber-100 dark:bg-amber-950'
-                    : row.is_affected_by_finding
-                      ? 'bg-amber-50 dark:bg-amber-950'
-                      : 'bg-white dark:bg-slate-900'
-                }`}
-              >
-                {row.row_number}
-                {row.is_anchor && (
-                  <span className="ml-1 text-xs font-normal">
-                    (this affected row)
-                  </span>
-                )}
-                {!row.is_anchor && row.is_affected_by_finding && (
-                  <span className="ml-1 text-xs font-normal">(affected)</span>
-                )}
-              </th>
-              {row.values.map((value, columnIndex) => {
-                const column = data.columns[columnIndex]
-                const marked =
-                  row.is_affected_by_finding &&
-                  column !== undefined &&
-                  columnIsAffected(column.internal_key)
-                const cellKey = `${row.row_number}:${columnIndex}`
-                return (
-                  <td
-                    key={columnIndex}
-                    className={`border-b border-slate-100 px-2 py-1 align-top text-slate-800 dark:border-slate-800 dark:text-slate-200 ${
-                      marked
-                        ? 'bg-amber-200 font-medium ring-1 ring-inset ring-amber-500 dark:bg-amber-800'
-                        : ''
-                    }`}
-                  >
-                    <Cell
-                      value={value}
-                      cellKey={cellKey}
-                      revealed={revealed.has(cellKey)}
-                      onReveal={onReveal}
-                      columnName={column?.original_name ?? ''}
-                      rowNumber={row.row_number}
-                    />
-                    {marked && (
-                      <span className="sr-only"> (affected value)</span>
-                    )}
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function Cell({
-  value,
-  cellKey,
-  revealed,
-  onReveal,
-  columnName,
-  rowNumber,
-}: {
-  value: string | null
-  cellKey: string
-  revealed: boolean
-  onReveal: (key: string) => void
-  columnName: string
-  rowNumber: number
+  requestedRow: string | null
+  carriedFilters: URLSearchParams
 }) {
-  if (value === null) {
-    return null
-  }
-  const shown = shownCell(value)
-  if (!shown.shortened || revealed) {
-    return <span className="whitespace-pre-wrap break-words">{value}</span>
-  }
+  const { windowSize, widen } = useWindowSize()
+  const { revealed, reveal } = useRevealed()
+  const requested =
+    requestedRow !== null && /^\d+$/.test(requestedRow)
+      ? Number(requestedRow)
+      : undefined
+  const query = useColumnWideWindow(
+    analysisId,
+    findingId,
+    requested,
+    windowSize,
+  )
+  const scoped = query.data
+  const data = scoped ? windowFromScoped(scoped) : undefined
+  const current = scoped?.rows.find((row) => row.is_anchor)?.row_number
+  const startOfFile = scoped?.anchor_source === 'start_of_file'
+  const firstWindow = `?${carriedFilters.toString()}`
+
   return (
-    <span className="whitespace-pre-wrap break-words">
-      {shown.text}…{' '}
-      <button
-        type="button"
-        className="text-xs font-medium underline"
-        aria-label={`Show all ${shown.length} characters of ${columnName} in row ${rowNumber}`}
-        onClick={() => onReveal(cellKey)}
-      >
-        Show all {shown.length} characters
-      </button>
-    </span>
+    <div className="flex flex-col gap-3">
+      <p className="rounded border border-slate-200 p-3 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-300">
+        This finding concerns whole columns and does not name particular rows.
+        {scoped === undefined
+          ? ''
+          : startOfFile
+            ? ' Below is the start of the file, so you can see what the columns hold. It is not evidence of the finding, and no row is marked as affected.'
+            : ' Below are example rows from observations about the same columns. They show what was counted; they are not rows this finding names, and other rows may be involved.'}
+      </p>
+
+      {scoped && !startOfFile && current !== undefined && (
+        <RowNavigator
+          rows={scoped.anchor_rows}
+          current={current}
+          noun="example row"
+          partialNote="These are examples; the observations may count more rows."
+          carriedFilters={carriedFilters}
+          footnote={ROW_NUMBERS_NOTE}
+        />
+      )}
+
+      <WindowStatus
+        loading={query.isLoading}
+        error={query.isError ? query.error.message : null}
+        onRetry={() => void query.refetch()}
+        extra={
+          requested !== undefined ? (
+            <Link to={firstWindow} className={BUTTON_CLASS}>
+              Back to the first window
+            </Link>
+          ) : undefined
+        }
+      />
+
+      {data && scoped && (
+        <>
+          <Grid
+            data={data}
+            affectedColumnKeys={affectedColumnKeys}
+            revealed={revealed}
+            onReveal={reveal}
+            rowNoun="example"
+            regionLabel={
+              startOfFile
+                ? 'Rows at the start of the file'
+                : 'Rows around the example row'
+            }
+          />
+          <WindowNote
+            data={data}
+            onShowMore={() => widen(data.maxWindow)}
+            asked={windowSize}
+            centre={startOfFile ? 'the first row' : 'the example row'}
+          />
+        </>
+      )}
+    </div>
   )
 }

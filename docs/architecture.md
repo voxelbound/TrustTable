@@ -1360,7 +1360,7 @@ Core rules:
   reconciliation that fails every row left `preparing` as `interrupted`; and short
   `POST`/`GET .../ai-enrichment` routes. `GET .../explanation` no longer calls a model.
   A future user-initiated batch is an interface only.
-- **Inspector (part a built by `UX-06a`, D-073).** A data path separate from canonical
+- **Inspector (built by `UX-06a`, D-073, and `UX-06b`, D-074).** A data path separate from canonical
   evidence, AI payload assembly and report assembly, with bounded server-side windows.
   The measurement on the real parse path (`backend/scripts/measure_inspector_parse.py`)
   found the stored file is re-parsed on every row-context call at a cost proportional
@@ -1368,8 +1368,14 @@ Core rules:
   twelve times the CSV size), so no window limit depends on it; the 25-row limit stays,
   at most two reads run at once per process (`429 INSPECTOR_BUSY`), a window carries at
   most about one million characters of cell text (`size_limited`), the response is
-  `Cache-Control: no-store`, and no parsed-rows cache was added. Reaching the inspector
-  from observations and a window for column-wide findings remain `UX-06` part b.
+  `Cache-Control: no-store`, and no parsed-rows cache was added. Part b adds two reads
+  over the same window builder and the same bounds: an observation's own example rows
+  (`observations/{id}/row-context`) and a column-wide finding's window
+  (`findings/{id}/column-context`). Every read decides in the service, from data the
+  analysis already records, which rows a window may be centred on, and a request can
+  only choose among those; nothing new is stored. A column-wide finding is anchored on
+  the example rows of observations about the same columns when there are any, and
+  otherwise on the start of the file, which is reported as such and never marked.
 - **Local AI status (`UX-09`).** Defined against an abstract provider and readiness
   contract that does not assume where a runtime runs, so the unapproved S8b choice
   (`LAI-01`) is not made implicitly. The runtime is currently provisioned outside the

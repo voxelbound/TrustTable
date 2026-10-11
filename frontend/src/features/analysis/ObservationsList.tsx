@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import { useAnalysisObservations } from './api'
 
 /** The read-only list of data observations (`DET-03` closure package 2).
@@ -56,6 +57,17 @@ export function ObservationsList({
               {observation.affected_row_numbers.length > 0 && (
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   Example rows: {observation.affected_row_numbers.join(', ')}
+                </p>
+              )}
+              {observation.affected_row_numbers.length > 0 && (
+                <p className="mt-1 text-sm">
+                  <Link
+                    to={`/analyses/${analysisId ?? ''}/observations/${encodeURIComponent(observation.observation_id)}/inspector`}
+                    className="font-medium text-slate-900 underline dark:text-slate-100"
+                    aria-label={`Inspect the example rows: ${observation.summary}`}
+                  >
+                    Inspect the example rows
+                  </Link>
                 </p>
               )}
             </li>

@@ -108,7 +108,15 @@ from ..domain.ingest_facts import project_ingest_facts
 from ..domain.observation import Observation
 from ..domain.parsing import Dataset, DatasetFormat, DatasetSourceType
 from ..domain.review import FindingReview, FindingReviewState
-from ..domain.row_context import RowContextEntry, RowContextWindow
+from ..domain.row_context import (
+    ANCHOR_OBSERVATION_EXAMPLE,
+    ANCHOR_START_OF_FILE,
+    SCOPE_COLUMN_WIDE_FINDING,
+    SCOPE_OBSERVATION,
+    RowContextEntry,
+    RowContextWindow,
+    ScopedRowWindow,
+)
 from ..domain.rules import (
     ComparisonOperator,
     NullHandling,
@@ -427,6 +435,65 @@ class RowNotInFindingError(Exception):
         self.analysis_id = analysis_id
         self.finding_id = finding_id
         self.anchor_row = anchor_row
+
+
+class ObservationNotFoundError(Exception):
+    """Raised by `get_observation_row_context` (`UX-06` part b) for an
+    observation id the analysis does not hold."""
+
+    def __init__(self, analysis_id: str, observation_id: str) -> None:
+        super().__init__(f"Observation not found: {observation_id} (analysis {analysis_id})")
+        self.analysis_id = analysis_id
+        self.observation_id = observation_id
+
+
+class RowNotInObservationError(Exception):
+    """Raised by `get_observation_row_context` when `anchor_row` is not one of
+    the observation's own example rows: the inspector reads context around an
+    observation's examples, not arbitrary rows of the file."""
+
+    def __init__(self, analysis_id: str, observation_id: str, anchor_row: int) -> None:
+        super().__init__(
+            f"Row {anchor_row} is not one of observation {observation_id}'s example rows "
+            f"(analysis {analysis_id})"
+        )
+        self.analysis_id = analysis_id
+        self.observation_id = observation_id
+        self.anchor_row = anchor_row
+
+
+class FindingHasAffectedRowsError(Exception):
+    """Raised by `get_column_wide_finding_window` for a finding that names
+    rows: such a finding is read through `get_finding_row_context`."""
+
+    def __init__(self, analysis_id: str, finding_id: str) -> None:
+        super().__init__(
+            f"Finding {finding_id} names affected rows; use its row context "
+            f"(analysis {analysis_id})"
+        )
+        self.analysis_id = analysis_id
+        self.finding_id = finding_id
+
+
+class RowNotInScopeError(Exception):
+    """Raised by `get_column_wide_finding_window` when `anchor_row` is not one
+    of the rows the server offers for that finding."""
+
+    def __init__(self, analysis_id: str, finding_id: str, anchor_row: int) -> None:
+        super().__init__(
+            f"Row {anchor_row} is not offered for finding {finding_id} (analysis {analysis_id})"
+        )
+        self.analysis_id = analysis_id
+        self.finding_id = finding_id
+        self.anchor_row = anchor_row
+
+
+class NoRowsToShowError(Exception):
+    """Raised when an inspector window has no data row to centre on."""
+
+    def __init__(self, analysis_id: str) -> None:
+        super().__init__(f"There is no data row to show (analysis {analysis_id})")
+        self.analysis_id = analysis_id
 
 
 class AnalysisNotReadyError(Exception):
@@ -1217,10 +1284,35 @@ def get_finding_row_context(
     if anchor_row not in affected_row_numbers:
         raise RowNotInFindingError(analysis_id, finding_id, anchor_row)
 
+    return _build_row_window(
+        analysis, anchor_row, frozenset(affected_row_numbers), before=before, after=after
+    )
+
+
+def _build_row_window(
+    analysis: Analysis,
+    anchor_row: int,
+    marked_rows: frozenset[int],
+    *,
+    before: int,
+    after: int,
+) -> RowContextWindow:
+    """The one bounded window builder behind every inspector read (`UX-06`,
+    D-073 and D-074): it parses the stored content, clamps both sides to the
+    per-side limit and the file's own ends, applies the size bound, and marks
+    `marked_rows`. Callers have already established that `anchor_row` is a row
+    their scope permits; this never decides that.
+
+    Raises `NoRowsToShowError` when the stored file has no data row to centre
+    on or the anchor lies outside it, so a stale reference can never index
+    outside the parsed rows.
+    """
     parsed = _parse_analysis_content(analysis)
     columns = parsed.parsed_dataset.columns
     rows = parsed.rows
     row_count = parsed.parsed_dataset.row_count
+    if row_count == 0 or not 0 <= anchor_row < row_count:
+        raise NoRowsToShowError(analysis.analysis_id)
 
     max_window = _MAX_ROW_CONTEXT_WINDOW_PER_SIDE
     bounded_before = max(0, before)
@@ -1240,7 +1332,7 @@ def get_finding_row_context(
         RowContextEntry(
             row_reference=RowReference(row_number=row_number),
             is_anchor=(row_number == anchor_row),
-            is_affected_by_finding=(row_number in affected_row_numbers),
+            is_affected_by_finding=(row_number in marked_rows),
             values=rows[row_number],
         )
         for row_number in range(start, end + 1)
@@ -1257,6 +1349,118 @@ def get_finding_row_context(
         max_window=max_window,
         rows=entries,
         size_limited=size_limited,
+    )
+
+
+def get_observation_row_context(
+    store: AnalysisStoreProtocol,
+    analysis_id: str,
+    observation_id: str,
+    *,
+    anchor_row: int,
+    before: int = 3,
+    after: int = 3,
+) -> ScopedRowWindow:
+    """A bounded window around one of an observation's own example rows
+    (`UX-06` part b, D-074).
+
+    Only the observation's `affected_row_references` (at most 20, already
+    bounded by the observation itself) can be the anchor; any other row, and an
+    unknown observation, are refused. The window is the same bounded window as
+    a finding's (`_build_row_window`) and is not evidence, AI input or export
+    content.
+
+    Raises `AnalysisNotFoundError`, `ObservationNotFoundError` and
+    `RowNotInObservationError`.
+    """
+    analysis = get_status(store, analysis_id)
+    observation = next(
+        (item for item in analysis.observations if item.observation_id == observation_id),
+        None,
+    )
+    if observation is None:
+        raise ObservationNotFoundError(analysis_id, observation_id)
+
+    example_rows = tuple(
+        sorted({reference.row_number for reference in observation.affected_row_references})
+    )
+    if anchor_row not in example_rows:
+        raise RowNotInObservationError(analysis_id, observation_id, anchor_row)
+
+    window = _build_row_window(
+        analysis, anchor_row, frozenset(example_rows), before=before, after=after
+    )
+    return ScopedRowWindow(
+        window=window,
+        scope_kind=SCOPE_OBSERVATION,
+        anchor_source=ANCHOR_OBSERVATION_EXAMPLE,
+        anchor_rows=example_rows,
+    )
+
+
+def get_column_wide_finding_window(
+    store: AnalysisStoreProtocol,
+    analysis_id: str,
+    finding_id: str,
+    *,
+    anchor_row: int | None = None,
+    before: int = 3,
+    after: int = 3,
+) -> ScopedRowWindow:
+    """A bounded window for a finding that names no rows (`UX-06` part b,
+    D-074; D-066 item 6).
+
+    The server decides where the window may be centred, from data the analysis
+    already records and never from the request: the example rows of the
+    observations that are about the same columns as the finding (an existing,
+    safe anchor), and otherwise only row 0, the start of the file. The start of
+    the file is a deterministic place to look, not evidence of the finding, and
+    is reported as `start_of_file` so no client presents it as an example.
+    `anchor_row` may only choose among the rows the server offers; it defaults
+    to the first.
+
+    Raises `AnalysisNotFoundError`, `FindingNotFoundError`,
+    `FindingHasAffectedRowsError` (a finding that names rows is read through
+    `get_finding_row_context`), `RowNotInScopeError` for any other row, and
+    `NoRowsToShowError` for a file with no data row.
+    """
+    analysis = get_status(store, analysis_id)
+    finding = get_finding(store, analysis_id, finding_id)
+    if finding.affected_row_references:
+        raise FindingHasAffectedRowsError(analysis_id, finding_id)
+
+    finding_columns = {column.internal_key for column in finding.affected_columns}
+    example_rows: set[int] = set()
+    if finding_columns:
+        for observation in analysis.observations:
+            if finding_columns & {column.internal_key for column in observation.affected_columns}:
+                example_rows.update(
+                    reference.row_number for reference in observation.affected_row_references
+                )
+    if example_rows:
+        offered = tuple(sorted(example_rows))
+        source = ANCHOR_OBSERVATION_EXAMPLE
+    else:
+        offered = (0,)
+        source = ANCHOR_START_OF_FILE
+
+    chosen = offered[0] if anchor_row is None else anchor_row
+    if chosen not in offered:
+        raise RowNotInScopeError(analysis_id, finding_id, chosen)
+
+    window = _build_row_window(
+        analysis,
+        chosen,
+        # The start of a file is never marked as if the finding pointed at it.
+        frozenset(offered) if source == ANCHOR_OBSERVATION_EXAMPLE else frozenset(),
+        before=before,
+        after=after,
+    )
+    return ScopedRowWindow(
+        window=window,
+        scope_kind=SCOPE_COLUMN_WIDE_FINDING,
+        anchor_source=source,
+        anchor_rows=offered,
     )
 
 

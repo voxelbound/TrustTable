@@ -301,6 +301,17 @@ Logs may contain:
   reading a window changes no stored state, AI payload, evidence or report (tested). No
   parsed-rows cache was added, so nothing new is retained. Shortening a long value on
   screen is display behavior, not redaction.
+  **Built for observations and column-wide findings (`UX-06` part b, D-074):** two more
+  reads (`observations/{id}/row-context`, `findings/{id}/column-context`) reuse the same
+  window builder, concurrency gate, size bound and `Cache-Control: no-store`. A row
+  that is not one of the observation's own example rows is refused (404
+  `ROW_NOT_IN_OBSERVATION`), as is a row the server did not offer for a column-wide
+  finding (404 `ROW_NOT_IN_SCOPE`); the request never chooses where a start-of-file
+  window sits and a start-of-file window marks no row, so it cannot be read as evidence
+  of the finding. The observation id in the address is encoded by the screen and only
+  ever compared with stored ids. Tests cover every refusal, the shared gate, the
+  `no-store` header, markup and formula text rendered inert, and that opening any
+  window changes no stored state, AI payload, evidence, finding, report or API response.
 - **Persisted AI output.** Derived from user data: it follows its analysis's deletion,
   is rendered as inert text, stays out of reports, exports and canonical evidence unless
   explicitly allowed, falls back to deterministic content when stale or failed, and its

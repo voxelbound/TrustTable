@@ -1169,7 +1169,13 @@ limit.** Specification must settle whether the complete affected-row set is reta
 that opening the inspector changes no AI payload, canonical evidence, report or
 export.
 
-Status: **in progress** (`D-073`). Part a is built: the measurement
+Status: **completed** (`D-073`, `D-074`). Part b (`UX-06b`) is built: the inspector is
+reached from an observation's example rows (`observations/{id}/row-context`) and a
+finding that names no rows opens a bounded window the server chooses
+(`findings/{id}/column-context`): the example rows of observations about the same
+columns, otherwise the start of the file, labelled as such and never marked as evidence
+of the finding. Every read shares the part a bounds and no-store header. Part a, built
+earlier, is: the measurement
 (`backend/scripts/measure_inspector_parse.py`, figures recorded in D-073) and a
 finding-scoped grid inspector for a finding that has affected rows, reached from the
 finding screen: scrolling both ways, sticky headings and row numbers, affected rows and
@@ -1177,9 +1183,8 @@ columns marked, previous and next affected row with an honest position, a return
 finding, inert text with long values shortened until revealed. The row limit stays 25 a
 side; two reads at most run at once (`429 INSPECTOR_BUSY`), a window is bounded in
 characters (`size_limited`), the response is `no-store`, and no parsed-rows cache was
-added. Not built: reaching the inspector from an observation that carries example rows,
-and a window for a column-wide finding (existing safe anchors or a deterministic bounded
-head-of-dataset window) — part b, planned and not authorized.
+added. Not built, and not part of this item: a general dataset browser, search, sampling,
+a durable Dataset, and any row data in AI input, canonical evidence, reports or exports.
 
 ## UX-07 — S6: supporting areas and help
 
