@@ -204,6 +204,24 @@ class FindingEnrichmentRecord(Base):
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
+class AppSettingRecord(Base):
+    """One stored product setting (`UX-08a`, `docs/decision-log.md` D-066 item 5).
+
+    Stores data only; the allowlist, typing and precedence rules live in
+    `product_settings` and `persistence.settings_store`. One row per allowlisted
+    key. `value_json` is NULL when the key has no stored value (the row is kept
+    after a reset so `version` only ever increases and a stale writer can never
+    match an earlier state). `version` is the optimistic-concurrency token.
+    """
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    value_json: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class StagedUploadRecord(Base):
     """One temporarily staged upload (`UX-02`, `docs/decision-log.md` D-068).
 

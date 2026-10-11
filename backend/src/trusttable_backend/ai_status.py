@@ -34,6 +34,13 @@ _ASSISTANCE_NOTE: Final[str] = (
 )
 
 
+_NOT_SET_UP_SUMMARY: Final[str] = (
+    "AI assistance is turned on, but no local AI runtime is set up on this installation yet, "
+    "so nothing can be sent to a model. Everything else works with the built-in checks alone. "
+    + _ASSISTANCE_NOTE
+)
+
+
 @dataclass(frozen=True, slots=True)
 class AiStatus:
     assistance: AssistanceState
@@ -78,10 +85,30 @@ def _summary(
 
 
 def compute_ai_status(
-    settings: Settings, *, provider_factory: ProviderFactory = create_provider
+    settings: Settings,
+    *,
+    provider_factory: ProviderFactory = create_provider,
+    assistance_requested: bool = False,
 ) -> AiStatus:
-    """Build the status for `settings`, probing the runtime at most once."""
+    """Build the status for `settings`, probing the runtime at most once.
+
+    `assistance_requested` is true when AI assistance is turned on in the
+    product (`UX-08a`) but the installation has no model configured, so the
+    effective provider is still `disabled`: that is reported as on but
+    unavailable, never as off, and nothing is probed.
+    """
     name = settings.llm_provider
+    if name == "disabled" and assistance_requested:
+        return AiStatus(
+            assistance="on",
+            state="unavailable",
+            location="none",
+            provider_label="AI assistance",
+            runtime_label=None,
+            model_label=None,
+            sample_values_sent=False,
+            summary=_NOT_SET_UP_SUMMARY,
+        )
     if name == "disabled":
         return AiStatus(
             assistance="off",

@@ -51,7 +51,7 @@ are present, correctly typed, and bounded from day one.
 | `MAX_WORKSHEETS` | positive integer | `20` | Maximum worksheets in an uploaded workbook. A workbook with more is refused at upload with `413 WORKBOOK_EXPANSION_LIMIT`. |
 | `MAX_UNCOMPRESSED_WORKBOOK_MB` | positive integer | `500` | Maximum uncompressed workbook size (expansion-bomb defense). A workbook that declares or unpacks to more is refused at upload with `413 WORKBOOK_EXPANSION_LIMIT`. |
 | `MAX_CELL_COUNT` | positive integer | `50000000` | Maximum cells in the chosen worksheet. A worksheet over the limit ends as a `failed` analysis (`CELL_LIMIT_EXCEEDED`); the CSV parser has no cell-count limit beyond its row and column limits. |
-| `ANALYSIS_RETENTION_HOURS` | non-negative integer (`0` = unlimited) | `0` | Will control automatic analysis retention once persistence exists (`DB-01`). |
+| `ANALYSIS_RETENTION_HOURS` | non-negative integer (`0` = unlimited) | `0` | **Not consumed: it has no effect.** Nothing deletes analyses automatically, whatever the value. Retention is destructive behavior that needs its own design, so it is not offered as a setting anywhere in the product. |
 | `BACKGROUND_WORKER_COUNT` | positive integer | `2` | Will size the bounded in-process worker pool once background jobs exist (`JOB-01`). |
 | `STAGING_MAX_COUNT` | positive integer | `5` | Maximum files held in temporary staging at once (`UX-02`, `docs/api-specification.md` §7). A further file is refused with `409 STAGING_FULL`. |
 | `STAGING_MAX_TOTAL_MB` | positive integer | `250` | Maximum total size of all staged files. A file that would exceed it is refused with `409 STAGING_FULL`. A single file is still bounded by `MAX_FILE_SIZE_MB`. |
@@ -81,7 +81,7 @@ analysis. Leaving a variable unset keeps the default shown above.
 
 | Variable | Type | Default | Effect |
 |---|---|---|---|
-| `LLM_PROVIDER` | enum: `disabled` \| `mock` \| `llama_cpp` | `disabled` | Selects the active AI provider (`AI-01`/`AI-02`/`AI-03`). `llama_cpp` requires `LLM_BASE_URL`/`LLM_MODEL` to point at a running `llama-server` instance. |
+| `LLM_PROVIDER` | enum: `disabled` \| `mock` \| `llama_cpp` | `disabled` | Selects the active AI provider (`AI-01`/`AI-02`/`AI-03`). `llama_cpp` requires `LLM_BASE_URL`/`LLM_MODEL` to point at a running `llama-server` instance. **Setting it, to any value, is an explicit deployment override** (`UX-08a`, below): the product then shows AI assistance as managed by your installation and cannot change it. `.env.example` leaves it commented out for that reason. |
 | `LLM_BASE_URL` | non-empty string (potentially sensitive) | `http://host.docker.internal:8081` | The `llama-server` (`llama.cpp`) endpoint `AI-03`'s provider connects to when `LLM_PROVIDER=llama_cpp`. `8081` is a dedicated port distinct from TrustTable's own frontend port (`8080`); `llama-server` is run with `--no-webui` in the documented/supported runtime profile (`docs/decision-log.md` D-036, `docs/local-development.md`). |
 | `LLM_MODEL` | string (unconstrained, default empty) | `""` (empty) | The model identifier `AI-03`'s provider sends as the request's `model` field — set it to a model **name** such as the baseline-profile model `Qwen3.5-4B-Q4_K_M` (`D-034`). It may also be a file path or repository id; that works, but the backend never returns it to a client: API responses and the UI show only a sanitized last path segment plus a derived label such as "Local AI · llama.cpp · Qwen3.5 4B" (`AI-08`, `docs/decision-log.md` D-040). A `llama-server` serves the single model it was started with and does not require this to match. |
 | `LLM_TEMPERATURE` | float, `0`–`2` | `0` | Validated at startup. **Not yet applied:** the API routes construct the provider with its own default temperature (`0.0`); wiring this setting through is not part of `AI-08`. |
@@ -94,7 +94,7 @@ analysis. Leaving a variable unset keeps the default shown above.
 
 | Variable | Type | Default | Effect |
 |---|---|---|---|
-| `PROMPT_INJECTION_DETECTION_ENABLED` | boolean | `true` | Will gate the prompt-injection detector once it exists (`DET-SEC-01`). |
+| `PROMPT_INJECTION_DETECTION_ENABLED` | boolean | `true` | **Not consumed: it has no effect.** The prompt-injection detector always runs; this value neither enables nor disables it. It is validated at startup and is not offered as a setting anywhere in the product. |
 | `MAX_TEXT_VALUE_LENGTH_FOR_ANALYSIS` | positive integer | `10000` | Longest cell value kept when a file is parsed; a longer value is truncated and the dataset records a parsing warning. |
 | `MAX_COLUMN_NAME_LENGTH` | positive integer | `256` | Longest column name kept when a file is parsed; a longer name is truncated and the dataset records a parsing warning. |
 
@@ -107,36 +107,47 @@ observed as `"ok"` once the application is serving requests — it exists
 as a real, extensible check for future in-process reconfiguration paths,
 not a constant.
 
-## Planned: product-managed settings and deployment overrides (planned, not built)
+## Product-managed settings and deployment overrides (`UX-08a`, built; the screen is `UX-08b`, planned)
 
-> Nothing in this section exists today. Every setting above is read from the
-> environment and cached for the life of the process. This section records the
-> owner-confirmed target (`docs/decision-log.md` D-066) and two facts a reader needs.
+The product can store one setting of its own, **AI assistance** (on or off), through the
+Settings API (`docs/api-specification.md` §4). There is no Settings screen yet (`UX-08b`).
+Every variable above is still read from the environment and cached for the life of the
+process; only the stored setting is read fresh on each request, so changing it needs no
+restart. The design is `docs/decision-log.md` D-066 item 5 and D-076.
 
-- **Precedence.** For the small allowlist of user-manageable product settings (for
-  example whether AI assistance is enabled and the active supported AI profile), the
-  effective value will be: an explicit deployment override, then a stored user setting,
-  then the built-in default. An *explicit deployment override* is a value an operator
-  configured. It is not a default that packaging or a container supplies, and it is never
-  detected by comparing a value with the default.
-- **Managed by the installation.** A setting that has an explicit override is shown
-  read-only with its effective value and a plain explanation. The product never edits
-  `.env` or deployment configuration. *Reset to default* removes the stored value.
+- **Precedence.** The effective value is an explicit deployment override, then the stored
+  setting, then the built-in default (off). An *explicit deployment override* is
+  `LLM_PROVIDER` set by the operator, to any value including `disabled`, in the process
+  environment or in `.env`. It is not a default that packaging or a container supplies and
+  it is never detected by comparing a value with the default.
+- **Managed by the installation.** With an override the setting is read-only, shows its
+  effective value and says why. A stored value never exceeds an override. The product
+  never edits `.env` or deployment configuration. *Reset to default* removes the stored
+  value; it is refused while an override applies.
+- **What stored "on" means.** The only real provider is the local `llama.cpp` runtime. A
+  stored "on" selects it when the installation has set `LLM_MODEL` (and, if it differs from
+  the default, `LLM_BASE_URL`). With no model set, AI assistance is reported as on but
+  unavailable and nothing is sent to any model; guided setup is `UX-09`. A stored "off", or
+  nothing stored, leaves AI off.
+- **Fail closed.** If the stored value cannot be read, AI assistance stays off unless an
+  override turns it on.
 - **What stays here.** Deployment configuration (database, data directory, log level,
-  worker count) and the security and resource limits stay installation-controlled and are
-  never overridable by a stored value. Display preferences stay in the browser.
-- **`.env.example`.** The settings slice will comment out UI-managed settings in
-  `.env.example` instead of setting them to their defaults (copying a file that sets every
-  value would otherwise look like an explicit override), will test that packaging sets none
-  of them, and will explain in plain language which explicit settings prevent in-product
-  management for installations that copied the old file. This documentation change does
-  not alter `.env.example`, which the existing documentation tests pin to the real defaults.
-- **Known defects, tracked and not decisions.** `PROMPT_INJECTION_DETECTION_ENABLED` is
-  documented above as the gate of the prompt-injection detector but no code consumes it,
-  and `ANALYSIS_RETENTION_HOURS` is likewise consumed by nothing; neither may be offered to
-  users as a control until it controls what it claims to. No auto-delete setting is part of
-  the redesign: retention is destructive behavior that needs its own design.
-- **Advanced exception.** A settings-only response may expose the effective runtime and
-  model configuration needed to administer an installation. Raw paths, URLs and other
-  technical configuration stay out of analysis, finding, report and other shareable
-  responses.
+  worker count), the security and resource limits, addresses, paths and secrets stay
+  installation-controlled and are never stored by the product. The sample-values setting
+  (`LLM_SEND_SAMPLE_VALUES`) is not product-managed. Display preferences stay in the browser.
+- **`.env.example`.** `LLM_PROVIDER` is commented out there (`# LLM_PROVIDER=disabled`)
+  because a copied file that set it would be an explicit override and make the setting
+  permanently read-only. Packaging and Compose set no managed key, and a test proves that
+  loading a copy of `.env.example` creates no override. **If you copied an older
+  `.env.example`** that sets `LLM_PROVIDER`, the product shows AI assistance as managed by
+  your installation and cannot change it: delete that line and restart to manage it in the
+  product, or keep it to leave AI under your installation's control.
+- **Settings that do nothing.** `PROMPT_INJECTION_DETECTION_ENABLED` and
+  `ANALYSIS_RETENTION_HOURS` are consumed by nothing (see their rows above), so neither is
+  offered as a control. No auto-delete setting exists: retention is destructive behavior
+  that needs its own design.
+- **Advanced exception.** One settings-only response (`GET /api/v1/settings/advanced`)
+  exposes the effective runtime and model configuration needed to administer an
+  installation, with the address reduced to scheme, host and port. Raw paths, URLs and
+  other technical configuration stay out of analysis, finding, report, status and ordinary
+  settings responses.

@@ -115,8 +115,8 @@ when a runtime is configured, one short liveness probe:
 
 | Field | Meaning |
 |---|---|
-| `assistance` | `off` when `LLM_PROVIDER=disabled`, otherwise `on` |
-| `state` | `disabled` (assistance off), `ready` (probe succeeded) or `unavailable` (probe failed or timed out) |
+| `assistance` | `off` when the effective AI assistance setting is off (below), otherwise `on` |
+| `state` | `disabled` (assistance off), `ready` (probe succeeded) or `unavailable` (probe failed or timed out, or assistance is on but the installation has no model configured, so nothing is probed) |
 | `location` | `none` (disabled), `local` (the `mock` provider, or `llama_cpp` whose configured host is this machine) or `unknown` (anything else) |
 | `provider_label` | A closed display label such as `Local AI`, `Test AI` or `AI`; never operator free text |
 | `runtime_label` | A closed or sanitized runtime label such as `llama.cpp`; `null` when disabled |
@@ -128,6 +128,35 @@ The probe is made with `min(LLM_TIMEOUT_SECONDS, 3)` seconds and never raises. N
 URL, host, port, path, exception text or provider `detail` is returned. The route makes
 no model completion call and sends no dataset content. It does not start, install or
 manage a runtime (`UX-09` and `LAI-01` are separate).
+
+### Product settings (`UX-08a`, `docs/decision-log.md` D-076)
+
+One setting is product-managed: `ai_assistance` (boolean). The allowlist is closed; there is
+no generic key and value surface. Every response is `Cache-Control: no-store`. The effective
+value is an explicit deployment override (`LLM_PROVIDER` set in the environment or `.env`),
+then the stored value, then `false`; see `docs/configuration.md`.
+
+| Route | Behavior |
+|---|---|
+| `GET /settings` | `{ "settings": [ { key, value, source, managed_by_installation, version, note } ] }`. `source` is `deployment`, `stored` or `default`. `version` is the number a write or reset must quote (`0` until the first write). `note` is plain language when the setting is read-only or on with nothing to run, else `null`. |
+| `PUT /settings/{key}` | Body `{ "value": <boolean>, "expected_version": <integer >= 0> }`, JSON only, no other field. Stores the value and returns the item. |
+| `DELETE /settings/{key}?expected_version=<n>` | Reset: removes the stored value, so the default applies again. The version still increases. |
+| `GET /settings/advanced` | The one response that carries runtime and model configuration: `ai_provider`, `ai_assistance_source`, `runtime_address` (scheme, host and port only: never a user name, password, path, query or fragment; `null` when AI is off), `model_identifier` (`null` when AI is off), `timeout_seconds`, `context_window`, `sample_values_sent`, `max_sample_values`. |
+
+Errors: `404 SETTING_NOT_FOUND` (a key not on the allowlist; the key is not echoed),
+`422 INVALID_REQUEST` (a value that is not exactly a boolean, a missing, extra or mistyped
+field, or a body that is not JSON), `409 SETTING_MANAGED_BY_INSTALLATION` (an explicit
+override applies: the setting is read-only and nothing is changed), `409
+SETTING_VERSION_CONFLICT` (`details.current_version`; nothing is changed). Writes use `PUT`
+and `DELETE`, which a page on another origin cannot send without a CORS preflight that this
+API never grants; the API sets no cross-origin headers.
+
+AI consumers (`GET /ai/status`, the explanation overlay, `POST` and `GET .../ai-enrichment`,
+context inference and rule proposal) read the effective value on every request, so a change
+takes effect without a restart. A stored `true` with no model configured by the
+installation is reported as on but unavailable and nothing is sent. If the store cannot be
+read, AI assistance stays off unless an override turns it on. What is sent to a model is
+unchanged. No address or model path appears in any other response.
 
 ## 5. Demo dataset
 
@@ -1213,6 +1242,9 @@ call's own status via its own `ai_call_status` field.
 - FINDING_NOT_FOUND
 - ROW_NOT_IN_FINDING
 - QUESTION_NOT_FOUND
+- SETTING_NOT_FOUND
+- SETTING_MANAGED_BY_INSTALLATION
+- SETTING_VERSION_CONFLICT
 - RULE_NOT_FOUND
 - REPORT_NOT_FOUND
 - RELATIONSHIP_NOT_FOUND
@@ -1266,7 +1298,7 @@ Existing routes, including direct upload `POST /analyses`, keep their contracts.
 | Dashboard (`UX-04`) — **built by `UX-04`, section 6 (D-070)** | `GET /analyses/{id}/summary` | Distinct affected rows, shape and completeness with its sampled-or-full scope; counts only, no cell value, row list or hash; severity and category distribution, columns with most findings and review progress are derived by the client from the findings list |
 | Persisted AI enrichment (`UX-05`) — **built by `UX-05b`, section 10 (D-072)** | `POST` and `GET .../findings/{id}/ai-enrichment`; `GET .../explanation` no longer calls a model | Deterministic content never waits for a model call; the result is bound to the finding, confirmed-context version, model identity and prompt or contract version and is reported stale when the binding changes; start and status must not depend on one long request; bounded concurrency; saved output is deleted with its analysis |
 | Inspector (`UX-06`) — **built: part a by `UX-06a` (D-073) and part b by `UX-06b` (D-074), section 10** | Bounded, finding-scoped row windows, including observation example rows and a column-wide finding's window | Server-side bounds; no shared-cache storage; unchanged privacy boundary (D-025); part a measured the parse path first and added a concurrency bound, a response-size bound and `Cache-Control: no-store` to the existing `row-context` route; part b added two reads (`observations/{id}/row-context`, `findings/{id}/column-context`) that share those bounds and only centre a window on a row the server offers; the 25-row limit is unchanged |
-| Settings (`UX-08`) | Read effective settings with their source (deployment override, stored, default); write allowlisted, typed, versioned stored settings; reset to default | Computed server-side; a stored value never exceeds a deployment override or a security or resource limit; unknown keys and values rejected; write-path protection and fail-closed behavior; a narrow Advanced response may expose effective runtime and model configuration and raw paths and URLs never appear in analysis, finding, report or other shareable responses |
+| Settings (`UX-08`) — **API built by `UX-08a`, section 4 (D-076)**; the screen and Advanced mode are `UX-08b` | Read effective settings with their source (deployment override, stored, default); write allowlisted, typed, versioned stored settings; reset to default | Computed server-side; a stored value never exceeds a deployment override or a security or resource limit; unknown keys and values rejected; write-path protection and fail-closed behavior; a narrow Advanced response may expose effective runtime and model configuration and raw paths and URLs never appear in analysis, finding, report or other shareable responses |
 
 Behavior preserved: `GET .../findings/{finding_id}/rule-proposal` still performs a
 model call per request where configured; the redesign must not make a screen depend
