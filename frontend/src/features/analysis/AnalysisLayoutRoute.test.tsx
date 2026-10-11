@@ -8,6 +8,7 @@ import {
   makeAnalysisResource,
   makeStatusResponse,
 } from '../../test/msw/handlers'
+import { setAdvancedMode } from '../../lib/advancedMode'
 import { server } from '../../test/msw/server'
 import { AnalysisLayoutRoute } from './AnalysisLayoutRoute'
 
@@ -221,7 +222,35 @@ describe('AnalysisLayoutRoute', () => {
     )
   })
 
-  it('UX-07: groups the areas under Review and Act and Export, each a real route', async () => {
+  it('UX-08b: in Normal mode lists no Technical details; every other area is still listed', async () => {
+    server.use(
+      http.get('http://localhost/api/v1/analyses/:analysisId/status', () =>
+        HttpResponse.json(
+          makeStatusResponse({ state: 'completed', cancellable: false }),
+        ),
+      ),
+    )
+
+    renderLayout()
+    const nav = await screen.findByRole('navigation', {
+      name: 'Analysis sections',
+    })
+
+    const groups = within(nav)
+      .getAllByRole('list')
+      .map((list) =>
+        within(list)
+          .getAllByRole('link')
+          .map((link) => link.textContent),
+      )
+    expect(groups).toEqual([
+      ['Overview', 'Findings', 'Observations', 'About this data'],
+      ['Reports', 'Rules'],
+    ])
+  })
+
+  it('UX-07: groups the areas under Review and Act and Export, each a real route (Advanced mode lists Technical details)', async () => {
+    setAdvancedMode(true)
     server.use(
       http.get('http://localhost/api/v1/analyses/:analysisId/status', () =>
         HttpResponse.json(

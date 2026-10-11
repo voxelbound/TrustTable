@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
+import { setAdvancedMode } from '../../lib/advancedMode'
 import { server } from '../../test/msw/server'
 import { TechnicalRoute } from './TechnicalRoute'
 
@@ -111,12 +112,18 @@ function useApi({
   )
 }
 
-function renderTechnical() {
+/** Technical details are an Advanced area (`UX-08b`, D-077); tests of the
+ * content turn Advanced mode on, as a person would in Settings. */
+function renderTechnical({ advanced = true }: { advanced?: boolean } = {}) {
+  setAdvancedMode(advanced)
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   const router = createMemoryRouter(
-    [{ path: '/analyses/:analysisId/technical', element: <TechnicalRoute /> }],
+    [
+      { path: '/analyses/:analysisId/technical', element: <TechnicalRoute /> },
+      { path: '/settings', element: <p>Settings screen</p> },
+    ],
     { initialEntries: [`/analyses/${ANALYSIS_ID}/technical`] },
   )
   render(
@@ -125,6 +132,37 @@ function renderTechnical() {
     </QueryClientProvider>,
   )
 }
+
+describe('TechnicalRoute in Normal mode', () => {
+  it('UX-08b: says Technical details are in Advanced mode, links to Settings and loads nothing', async () => {
+    // No handlers: an unhandled request would fail the test.
+    renderTechnical({ advanced: false })
+
+    expect(
+      screen.getByRole('heading', {
+        name: 'Technical details are in Advanced mode',
+      }),
+    ).toBeVisible()
+    expect(screen.getByText(/not a security control/)).toBeVisible()
+    expect(
+      screen.getByRole('link', {
+        name: 'Open Settings to turn on Advanced mode',
+      }),
+    ).toHaveAttribute('href', '/settings')
+    expect(screen.queryByText('Dataset and analysis')).not.toBeInTheDocument()
+    expect(screen.queryByText('sales.csv')).not.toBeInTheDocument()
+  })
+
+  it('UX-08b: the area stays reachable by address and shows its content once Advanced mode is on', async () => {
+    useApi()
+    renderTechnical({ advanced: true })
+
+    expect(await screen.findByText('Dataset and analysis')).toBeVisible()
+    expect(
+      screen.queryByText('Technical details are in Advanced mode'),
+    ).not.toBeInTheDocument()
+  })
+})
 
 describe('TechnicalRoute', () => {
   it('labels a full-data profile and shows dataset, timing and metrics', async () => {

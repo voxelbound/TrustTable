@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { SectionIntro } from '../../components/ui/SectionIntro'
 import { StateNote } from '../../components/ui/StateNote'
+import { useAdvancedMode } from '../../lib/advancedMode'
 import type {
   AnalysisProfileResponse,
   AnalysisResource,
@@ -251,6 +252,39 @@ function ProfileSection({ profile }: { profile: AnalysisProfileResponse }) {
  * exposes (detector thresholds, analysis-level prompt/model metadata) is
  * stated as not available rather than inferred. */
 export function TechnicalRoute() {
+  const [advanced] = useAdvancedMode()
+  return advanced ? <TechnicalDetails /> : <TechnicalNotice />
+}
+
+/** Technical details are an Advanced area (`UX-08b`, D-077). In Normal mode
+ * the area is not listed and the address says so, with a way to Settings. This
+ * is a display choice, not access control, and it loads nothing. */
+function TechnicalNotice() {
+  return (
+    <section aria-labelledby="technical-notice-heading">
+      <h2 id="technical-notice-heading" className={HEADING}>
+        Technical details are in Advanced mode
+      </h2>
+      <p className={`${TEXT} mt-2`}>
+        This area shows how the file was read, what was measured about each
+        column and which checks produced findings. It is shown when Advanced
+        mode is on.
+      </p>
+      <p className={`${MUTED} mt-2`}>
+        Advanced mode only changes what is shown. It is kept in this browser and
+        is not a security control.
+      </p>
+      <Link
+        to="/settings"
+        className="mt-3 inline-block text-sm font-medium text-slate-900 underline dark:text-slate-100"
+      >
+        Open Settings to turn on Advanced mode
+      </Link>
+    </section>
+  )
+}
+
+function TechnicalDetails() {
   const { analysisId } = useParams<{ analysisId: string }>()
   const resourceQuery = useAnalysisResource(analysisId)
   const profileQuery = useAnalysisProfile(analysisId)

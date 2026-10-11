@@ -38,9 +38,19 @@ describe('AppShell navigation', () => {
     renderShell()
 
     const nav = screen.getByRole('navigation', { name: 'Workspace' })
-    for (const unbuilt of ['Analyses', 'Settings']) {
+    for (const unbuilt of ['Analyses']) {
       expect(within(nav).queryByText(unbuilt)).not.toBeInTheDocument()
     }
+  })
+
+  it('UX-08b: offers Settings, which exists', () => {
+    renderShell()
+
+    const nav = screen.getByRole('navigation', { name: 'Workspace' })
+    expect(within(nav).getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/settings',
+    )
   })
 
   it('UX-07: offers Help, which exists', () => {

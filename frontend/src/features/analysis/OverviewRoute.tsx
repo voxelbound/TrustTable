@@ -3,6 +3,7 @@ import { FindingSeverityBadge } from '../../components/provenance/FindingSeverit
 import { TrustAssessment } from '../../components/provenance/TrustAssessment'
 import { categoryLabel } from '../../domain/dashboard'
 import { sortFindingsByPriority } from '../../domain/finding'
+import { useAdvancedMode } from '../../lib/advancedMode'
 import {
   useAnalysisFindings,
   useAnalysisResource,
@@ -31,6 +32,7 @@ export function OverviewRoute() {
   const resourceQuery = useAnalysisResource(analysisId)
   const findingsQuery = useAnalysisFindings(analysisId)
   const summaryQuery = useAnalysisSummary(analysisId)
+  const [advanced] = useAdvancedMode()
 
   if (resourceQuery.isLoading || findingsQuery.isLoading) {
     return (
@@ -170,19 +172,22 @@ export function OverviewRoute() {
 
       <section aria-labelledby="technical-heading">
         <h2 id="technical-heading" className={HEADING_CLASS}>
-          Technical details
+          {advanced ? 'Technical details' : 'About this data'}
         </h2>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          How the file was read, column profiles and the evidence behind the
-          findings.
+          {advanced
+            ? 'How the file was read, column profiles and the evidence behind the findings.'
+            : 'What TrustTable understood about this dataset, and where each value came from.'}
         </p>
         <div className="mt-3 flex gap-4">
-          <Link
-            to={`/analyses/${analysisId ?? ''}/technical`}
-            className="inline-block text-sm font-medium text-slate-900 underline dark:text-slate-100"
-          >
-            Open technical details
-          </Link>
+          {advanced && (
+            <Link
+              to={`/analyses/${analysisId ?? ''}/technical`}
+              className="inline-block text-sm font-medium text-slate-900 underline dark:text-slate-100"
+            >
+              Open technical details
+            </Link>
+          )}
           <Link
             to={`/analyses/${analysisId ?? ''}/context`}
             className="inline-block text-sm font-medium text-slate-900 underline dark:text-slate-100"

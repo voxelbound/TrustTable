@@ -1358,6 +1358,13 @@ Core rules:
   off); and the `/settings` routes. Every AI consumer reads the effective settings
   object instead of the raw deployment settings, and an enrichment worker reads it again
   when it starts, so turning AI off supersedes queued work.
+  **Frontend (built by `UX-08b`, D-077).** The Settings screen (`/settings`) uses the
+  generated client only and shows what the server returned; a write or reset quotes the
+  version shown and a refusal is followed by a refetch. Advanced mode is a browser-local
+  display preference (`lib/advancedMode`, `localStorage`, Normal by default, not sent to
+  the server and not an access control). The Advanced settings response is requested only
+  while it is on, and Technical details are listed only while it is on (the route stays
+  reachable by address).
 - **AI enrichment (built by `UX-05b`, D-072).** Persisted per finding, bound to finding
   identity, confirmed-context version, model identity and prompt or contract version,
   with a status that survives restart (a result must not stay "preparing" after a

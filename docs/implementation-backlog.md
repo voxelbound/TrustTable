@@ -1202,7 +1202,8 @@ availability, why it matters and the next step; Rules say they apply to this ana
 only and offer no creation or editing; a **Help** screen explains findings and
 observations, the trust assessment, provenance, sampled and full, AI and Rules; loading
 and empty states share one pattern. Technical details stay visible to everyone because
-Advanced mode belongs to `UX-08`. No backend, API or dependency change.
+Advanced mode belongs to `UX-08` (`UX-08b`, D-077, now shows them only in Advanced mode).
+No backend, API or dependency change.
 
 ## UX-08 — S7: settings
 
@@ -1215,7 +1216,15 @@ behavior, the narrow Advanced exception, commenting out UI-managed settings in
 `.env.example` with the tests that pin it, a test that packaging creates no explicit
 override, and the plain explanation for installations that copied the old file.
 
-Status: **in progress** (`D-076`). Part a (`UX-08a`) is built: an additive `app_settings`
+Status: **completed** (`D-076`, `D-077`). Part b (`UX-08b`) is built: a **Settings** screen
+(`/settings`, in the workspace navigation) that explains AI assistance and changes or resets it through
+the versioned API, shows only what the server confirmed, states a setting managed by the
+installation as read-only with its reason, and states a refused change in plain words; and
+a browser-local **Advanced mode** that shows the runtime and model configuration (requested
+only while Advanced mode is on) and the Technical details area (listed only in Advanced
+mode; the address stays reachable and says so). Advanced mode is a display choice, not a
+security control. No backend, API or dependency change. No AI profile and no retention
+setting. Part a (`UX-08a`) is built: an additive `app_settings`
 table (migration 0012), one allowlisted boolean setting (`ai_assistance`), the effective
 value computed on the server as explicit deployment override, then stored value, then
 off (an override is `LLM_PROVIDER` set in the environment or `.env`, never inferred), the
@@ -1223,9 +1232,8 @@ off (an override is `LLM_PROVIDER` set in the environment or `.env`, never infer
 rule proposal following the effective value, an Advanced-only response for the runtime
 and model configuration, `LLM_PROVIDER` commented out in `.env.example` with tests that
 packaging sets no managed key, and the two settings that nothing consumes documented
-honestly. Remaining (`UX-08b`): the Settings screen with an explanation for every normal
-setting, and Advanced mode with its effect on Technical details; `UX-08` is completed
-there. No AI profile setting, no retention setting.
+honestly. `UX-08` is completed by part b. Remaining after it: `UX-09`, still planned and
+unauthorized.
 
 ## UX-09 — S8a: Local AI status and guided setup
 

@@ -116,6 +116,7 @@ describe('HelpRoute', () => {
       '#provenance',
       '#sampled-and-full',
       '#ai',
+      '#settings-and-advanced',
       '#rules',
     ])
   })
