@@ -134,7 +134,8 @@ manage a runtime (`LAI-01` is separate).
 Both are read-only views of the same effective AI assistance setting and are
 `Cache-Control: no-store`. Neither accepts a body, a query parameter or a header that
 selects anything: a forged request can only make the server check the runtime it is
-already configured to use, and that is bounded. Neither downloads, installs, starts or
+already configured to use, each probe is capped at 3 seconds, and the connection test is
+also rate-limited. Neither downloads, installs, starts or
 configures anything, makes a completion call or sends dataset content. Neither returns
 a base URL, host, port, path, exception text or provider `detail`; all wording is fixed.
 
@@ -155,7 +156,11 @@ It means a runtime on this machine answered a short check, not that the model wo
 Each request makes its own probe: `GET /ai/status`, `GET /ai/readiness` and
 `POST /ai/connection-test` share the probe helper but not a result, so two of them
 asked a moment apart can differ if the runtime changes in between. Only the connection
-test is limited in frequency; the two reads are not, as `GET /ai/status` never was.
+test is limited in frequency (in process memory, so per application process); the two
+reads are not, as `GET /ai/status` never was. Only the connection test refuses a runtime
+that is not on this machine; the two reads, like `GET /ai/status`, probe a runtime an
+operator configured explicitly even then, and report that the location cannot be
+confirmed.
 
 `POST /ai/connection-test` takes no body and returns
 `{ outcome, tested, message, retry_after_seconds }`. `outcome` is one of `reachable`,

@@ -3,9 +3,12 @@
 Both are read-only views of the *effective* AI-assistance setting. They never
 download, install, start or configure anything, never make a completion call, never
 send dataset content, and never accept a target from the caller: the only thing that
-can ever be contacted is the runtime this installation is already configured to use,
-and only when it is on this machine. Neither returns a base URL, host, port, path,
-exception text or the provider's own `detail`; every sentence here is fixed text.
+can ever be contacted is the runtime this installation is already configured to use.
+The connection test contacts it only when it is on this machine and is rate-limited.
+The readiness read is not limited and, exactly like `GET /ai/status`, probes a runtime
+an operator configured explicitly even when it is not on this machine (and then reports
+that it cannot confirm it is). Neither returns a base URL, host, port, path, exception
+text or the provider's own `detail`; every sentence here is fixed text.
 
 The contract is deliberately abstract: it says what is configured and whether the
 configured runtime answers, not where or how a runtime is run, so the unapproved
