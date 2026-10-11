@@ -60,14 +60,29 @@ function Summary({ readiness }: { readiness: AiReadinessResponse }) {
       </p>
     )
   }
-  const next = readiness.checks.find(
-    (check) => check.state === 'todo' || check.state === 'attention',
+  // A step to do means AI assistance is unavailable right now: it is off, no
+  // runtime is named or usable, or the runtime did not answer. A step that only
+  // needs attention (for example a location that cannot be confirmed) proves
+  // nothing failed, so it is never described as AI being unavailable. The
+  // server's own sentence says what to do, so it is shown as written.
+  const todo = readiness.checks.find((check) => check.state === 'todo')
+  if (todo) {
+    return (
+      <p className={BODY}>
+        AI assistance is not available yet. {todo.detail} Everything else in
+        TrustTable works with the built-in checks alone.
+      </p>
+    )
+  }
+  const attention = readiness.checks.find(
+    (check) => check.state === 'attention',
   )
   return (
     <p className={BODY}>
-      AI assistance cannot work yet.
-      {next ? ` The next step: ${next.title.toLowerCase()}.` : ''} Everything
-      else in TrustTable works with the built-in checks alone.
+      Local AI readiness is not fully confirmed.
+      {attention ? ` ${attention.detail}` : ''} This is not a failure: AI
+      assistance may still work, and everything else in TrustTable works with
+      the built-in checks alone.
     </p>
   )
 }

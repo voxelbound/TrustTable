@@ -787,7 +787,11 @@ setup, readiness checks and connection testing; it performs no download or
 installation. The Local AI screen (`/local-ai`, linked from Settings, the Local AI
 status panel and Help) lists five readiness steps in order (AI assistance on, a runtime
 named, on this machine, answering a short check, a model named), each done, to do,
-needs attention or not checked yet, with the server's wording. *Test connection* checks
+needs attention or not checked yet, with the server's wording. The summary above it
+distinguishes three cases: a step to do (AI assistance is not available yet, with the
+step's own sentence), only steps that need attention (Local AI readiness is not fully
+confirmed, which is not a failure and does not mean assistance will not work), and every
+step done (a runtime answered a short check; the model is not tested). *Test connection* checks
 once whether the runtime this installation names answers; the person cannot choose what
 is tested, and the answer says only that the runtime answered, not that the model works.
 A refused test (assistance off, no runtime, not on this machine, already running, too

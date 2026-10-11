@@ -56,8 +56,15 @@ describe('LocalAiRoute', () => {
     for (const item of items.slice(1)) {
       expect(item).toHaveTextContent('Not checked yet')
     }
-    expect(screen.getByText(/AI assistance cannot work yet/)).toBeVisible()
-    expect(screen.getByText(/The next step: ai assistance is on/)).toBeVisible()
+    // A step to do: AI assistance is unavailable, said with the server's own
+    // sentence (so "AI" keeps its capitals) and nothing is called a failure.
+    const summary = screen.getByText(/AI assistance is not available yet\./)
+    expect(summary).toHaveTextContent(
+      'AI assistance is not available yet. AI assistance is off. You can turn it on in Settings.',
+    )
+    expect(summary).toHaveTextContent('built-in checks alone')
+    expect(screen.queryByText(/cannot work yet/)).toBeNull()
+    expect(screen.queryByText(/not fully confirmed/)).toBeNull()
   })
 
   it('UX-09: a ready runtime is stated without claiming the model was tested', async () => {
@@ -72,7 +79,46 @@ describe('LocalAiRoute', () => {
     expect(screen.getAllByText('Done')).toHaveLength(5)
   })
 
-  it('UX-09: a step that needs attention is named, not passed', async () => {
+  it.each([
+    [
+      'runtime_on_this_machine',
+      'TrustTable cannot confirm that the runtime is on this machine.',
+    ],
+    ['model_named', 'No model name is available to show.'],
+  ] as const)(
+    'UX-09: an attention-only step (%s) is named, not passed, and is not called a failure',
+    async (key, detail) => {
+      const base = readyResponse()
+      server.use(
+        http.get(READINESS, () =>
+          HttpResponse.json({
+            ...base,
+            ready: false,
+            checks: base.checks.map((check) =>
+              check.key === key
+                ? { ...check, state: 'attention', detail }
+                : check,
+            ),
+          }),
+        ),
+      )
+      renderScreen()
+
+      expect(await screen.findByText('Needs attention')).toBeVisible()
+      expect(screen.queryByText(/Every step below is done/)).toBeNull()
+      // The runtime may answer and AI assistance may work: nothing says it cannot.
+      const summary = screen.getByText(
+        /Local AI readiness is not fully confirmed/,
+      )
+      expect(summary).toHaveTextContent(detail)
+      expect(summary).toHaveTextContent('This is not a failure')
+      expect(summary).toHaveTextContent('AI assistance may still work')
+      expect(screen.queryByText(/not available yet/)).toBeNull()
+      expect(screen.queryByText(/cannot work/)).toBeNull()
+    },
+  )
+
+  it('UX-09: a step to do outranks one that needs attention and is called unavailable', async () => {
     const base = readyResponse()
     server.use(
       http.get(READINESS, () =>
@@ -81,24 +127,27 @@ describe('LocalAiRoute', () => {
           ready: false,
           checks: base.checks.map((check) =>
             check.key === 'runtime_on_this_machine'
-              ? {
-                  ...check,
-                  state: 'attention',
-                  detail:
-                    'TrustTable cannot confirm that the runtime is on this machine.',
-                }
-              : check,
+              ? { ...check, state: 'attention', detail: 'Cannot confirm.' }
+              : check.key === 'runtime_answers'
+                ? {
+                    ...check,
+                    state: 'todo',
+                    detail: 'The runtime did not answer a short check.',
+                  }
+                : check,
           ),
         }),
       ),
     )
     renderScreen()
 
-    expect(await screen.findByText('Needs attention')).toBeVisible()
-    expect(screen.queryByText(/Every step below is done/)).toBeNull()
-    expect(
-      screen.getByText(/The next step: the runtime is on this machine/),
-    ).toBeVisible()
+    const summary = await screen.findByText(
+      /AI assistance is not available yet/,
+    )
+    expect(summary).toHaveTextContent(
+      'The runtime did not answer a short check.',
+    )
+    expect(screen.queryByText(/not fully confirmed/)).toBeNull()
   })
 
   it('UX-09: a readiness failure says AI is unaffected and still offers the test', async () => {
@@ -174,7 +223,7 @@ describe('LocalAiRoute', () => {
       }),
     )
     renderScreen()
-    await screen.findByText(/AI assistance cannot work yet/)
+    await screen.findByText(/AI assistance is not available yet/)
 
     await user.click(screen.getByRole('button', { name: 'Test connection' }))
 
@@ -234,7 +283,7 @@ describe('LocalAiRoute', () => {
       ),
     )
     renderScreen()
-    await screen.findByText(/AI assistance cannot work yet/)
+    await screen.findByText(/AI assistance is not available yet/)
 
     await user.click(screen.getByRole('button', { name: 'Test connection' }))
 
