@@ -273,8 +273,9 @@ Sections:
 - possible business impact
 - evidence
 - representative examples
-- rows in the data: a link to the data inspector (section 12.4; row-anchored findings
-  only; `UX-06` part a, D-073 — it replaced the inline row-context table)
+- rows in the data: a link to the data inspector (section 12.4; `UX-06` part a, D-073 —
+  it replaced the inline row-context table; a finding that names no rows says so and
+  offers *Look at the data*, `UX-06` part b, D-074)
 - remediation
 - validation rule
 - review controls
@@ -684,8 +685,22 @@ first one. A value longer than 120 characters stays shortened until the reader a
 for all of it. The window starts at five rows either side and widens by ten up to the
 server's limit of 25, and the screen says when it has reached the start or end of the
 file, or when wide rows have shortened it. A refusal because the inspector is busy is
-stated, with *Try again*. A column-wide finding has no inspector yet, and the screen
-says so; reaching the inspector from an observation's example rows is `UX-06` part b.
+stated, with *Try again*.
+
+**Built for observations and column-wide findings (`UX-06` part b, D-074).** The
+Overview's *Worth knowing* list offers *Inspect the example rows* for an observation that
+lists example rows, which opens `/analyses/{id}/observations/{observation}/inspector?row=N`
+in the same grid. The rows are the observation's own examples, marked in words as well as
+colour as *example* rows; *Previous* and *Next example row* state the position (*Example
+row 2 of 5*), never wrap, and say that the observation may count more rows than it lists.
+A return goes back to the Overview. A finding that names no rows says so on its screen and
+offers *Look at the data*, which opens the same inspector (*Inspect the rows*) with a
+bounded window the server chooses, and the screen says which it is: either example rows from observations about a column the finding is about (stepped through as
+example rows, with the same wording), or the start of the file. The start of the file is
+labelled as such, says it is not evidence of the finding, marks no row as affected and
+offers no previous or next. Only rows the server offers can be asked for; a refusal is
+stated with a way back to the first window. Values are text, never markup, and long
+values stay shortened until revealed.
 
 ### 12.5 AI enrichment
 

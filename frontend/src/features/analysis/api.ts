@@ -21,8 +21,10 @@ import {
   getAnalysisFindingApiV1AnalysesAnalysisIdFindingsFindingIdGet,
   getAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGet,
   getAnalysisFindingExplanationApiV1AnalysesAnalysisIdFindingsFindingIdExplanationGet,
+  getAnalysisFindingColumnContextApiV1AnalysesAnalysisIdFindingsFindingIdColumnContextGet,
   getAnalysisFindingRowContextApiV1AnalysesAnalysisIdFindingsFindingIdRowContextGet,
   getAnalysisFindingsApiV1AnalysesAnalysisIdFindingsGet,
+  getAnalysisObservationRowContextApiV1AnalysesAnalysisIdObservationsObservationIdRowContextGet,
   getAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGet,
   getAnalysisProfileApiV1AnalysesAnalysisIdProfileGet,
   getAnalysisQuestionsApiV1AnalysesAnalysisIdQuestionsGet,
@@ -62,6 +64,7 @@ import {
   type FindingsListResponse,
   type ObservationsListResponse,
   type RowContextResponse,
+  type ScopedRowWindowResponse,
   type UploadAnalysisResponse,
 } from '../../api'
 import { client } from '../../api/client.gen'
@@ -405,6 +408,92 @@ export function useFindingRowContext(
     },
     enabled:
       Boolean(analysisId) && Boolean(findingId) && anchorRow !== undefined,
+  })
+}
+
+/** `GET .../observations/{observation_id}/row-context` (`UX-06` part b,
+ * D-074): a window around one of the observation's own example rows. Only
+ * those rows can be asked for; the server refuses any other. */
+export function useObservationRowContext(
+  analysisId: string | undefined,
+  observationId: string | undefined,
+  anchorRow: number | undefined,
+  windowSize: { before: number; after: number },
+) {
+  return useQuery<ScopedRowWindowResponse, ApiCallError>({
+    queryKey: [
+      'analysis-observation-row-context',
+      analysisId,
+      observationId,
+      anchorRow,
+      windowSize.before,
+      windowSize.after,
+    ],
+    queryFn: async () => {
+      const result =
+        await getAnalysisObservationRowContextApiV1AnalysesAnalysisIdObservationsObservationIdRowContextGet(
+          {
+            path: {
+              analysis_id: analysisId as string,
+              observation_id: observationId as string,
+            },
+            query: {
+              anchor_row: anchorRow as number,
+              before: windowSize.before,
+              after: windowSize.after,
+            },
+          },
+        )
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled:
+      Boolean(analysisId) && Boolean(observationId) && anchorRow !== undefined,
+  })
+}
+
+/** `GET .../findings/{finding_id}/column-context` (`UX-06` part b, D-074): the
+ * window for a finding that names no rows. The server chooses where it can be
+ * centred; `anchorRow` may only pick one of the `anchor_rows` it returned, and
+ * is omitted for the first request. */
+export function useColumnWideWindow(
+  analysisId: string | undefined,
+  findingId: string | undefined,
+  anchorRow: number | undefined,
+  windowSize: { before: number; after: number },
+) {
+  return useQuery<ScopedRowWindowResponse, ApiCallError>({
+    queryKey: [
+      'analysis-finding-column-context',
+      analysisId,
+      findingId,
+      anchorRow ?? null,
+      windowSize.before,
+      windowSize.after,
+    ],
+    queryFn: async () => {
+      const result =
+        await getAnalysisFindingColumnContextApiV1AnalysesAnalysisIdFindingsFindingIdColumnContextGet(
+          {
+            path: {
+              analysis_id: analysisId as string,
+              finding_id: findingId as string,
+            },
+            query: {
+              ...(anchorRow === undefined ? {} : { anchor_row: anchorRow }),
+              before: windowSize.before,
+              after: windowSize.after,
+            },
+          },
+        )
+      if (result.error) {
+        throw new ApiCallError(result.error)
+      }
+      return result.data
+    },
+    enabled: Boolean(analysisId) && Boolean(findingId),
   })
 }
 

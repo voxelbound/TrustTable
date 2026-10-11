@@ -495,6 +495,52 @@ class RowContextResponse(BaseModel):
     size_limited: bool = False
 
 
+ScopeKind = Literal["observation", "column_wide_finding"]
+AnchorSource = Literal["observation_example", "start_of_file"]
+
+
+class ScopedRowEntryResponse(BaseModel):
+    """One row in a `ScopedRowWindowResponse` (`UX-06` part b, D-074).
+
+    `is_marked` is true only for a row the server offers as an anchor (an
+    observation's example row, or an example row of an observation about at
+    least one of a column-wide finding's columns). It is never true in a
+    `start_of_file` window: the start of a file is not evidence of a finding.
+    """
+
+    row_number: int
+    is_anchor: bool
+    is_marked: bool
+    values: list[str | None]
+
+
+class ScopedRowWindowResponse(BaseModel):
+    """Body for `GET /analyses/{analysis_id}/observations/{observation_id}/row-context`
+    and `GET /analyses/{analysis_id}/findings/{finding_id}/column-context`
+    (`UX-06` part b, D-074; `docs/api-specification.md` section 10).
+
+    The window fields are those of `RowContextResponse`. `anchor_rows` is the
+    complete set of rows the server will centre a window on in this scope and
+    is the only thing a client may choose among; `anchor_source` says where
+    they came from, so `start_of_file` is never presented as an example of the
+    finding. Row values are returned with `Cache-Control: no-store`.
+    """
+
+    scope_kind: ScopeKind
+    anchor_source: AnchorSource
+    anchor_rows: list[int]
+    columns: list[ColumnReferenceResponse]
+    requested_before: int
+    requested_after: int
+    actual_before: int
+    actual_after: int
+    truncated_at_start: bool
+    truncated_at_end: bool
+    max_window: int
+    rows: list[ScopedRowEntryResponse]
+    size_limited: bool = False
+
+
 class BusinessImpactStatementResponse(BaseModel):
     """One *potential* business implication of a finding (`AI-08`),
     mirroring `domain.explanation.BusinessImpactStatement`.

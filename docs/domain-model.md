@@ -874,7 +874,12 @@ The Dataset lifecycle can outlive or contain multiple analyses only when explici
 - **Inspector windows** are read-only views over stored content, bound to a finding or
   an observation's example rows, and are not `Evidence`. Section 13's rules stand. A
   window is bounded in rows and in characters; one clipped by the character bound
-  reports `size_limited` (`UX-06`, D-073).
+  reports `size_limited` (`UX-06`, D-073). A window reached from an observation or from
+  a column-wide finding (`UX-06` part b, D-074) is a `ScopedRowWindow`: it carries the
+  complete set of rows the server will centre it on (`anchor_rows`) and where they came
+  from (`observation_example`, or `start_of_file` when the analysis records no example
+  row for the finding's columns). A start-of-file window is anchored on row 0 only and
+  marks no row: the start of a file is not evidence of a finding.
 
 New invariants:
 

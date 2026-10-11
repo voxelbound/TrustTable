@@ -2086,6 +2086,103 @@ export type SampleMetadataResponse = {
 };
 
 /**
+ * ScopedRowEntryResponse
+ *
+ * One row in a `ScopedRowWindowResponse` (`UX-06` part b, D-074).
+ *
+ * `is_marked` is true only for a row the server offers as an anchor (an
+ * observation's example row, or an example row of an observation about at
+ * least one of a column-wide finding's columns). It is never true in a
+ * `start_of_file` window: the start of a file is not evidence of a finding.
+ */
+export type ScopedRowEntryResponse = {
+    /**
+     * Is Anchor
+     */
+    is_anchor: boolean;
+    /**
+     * Is Marked
+     */
+    is_marked: boolean;
+    /**
+     * Row Number
+     */
+    row_number: number;
+    /**
+     * Values
+     */
+    values: Array<string | null>;
+};
+
+/**
+ * ScopedRowWindowResponse
+ *
+ * Body for `GET /analyses/{analysis_id}/observations/{observation_id}/row-context`
+ * and `GET /analyses/{analysis_id}/findings/{finding_id}/column-context`
+ * (`UX-06` part b, D-074; `docs/api-specification.md` section 10).
+ *
+ * The window fields are those of `RowContextResponse`. `anchor_rows` is the
+ * complete set of rows the server will centre a window on in this scope and
+ * is the only thing a client may choose among; `anchor_source` says where
+ * they came from, so `start_of_file` is never presented as an example of the
+ * finding. Row values are returned with `Cache-Control: no-store`.
+ */
+export type ScopedRowWindowResponse = {
+    /**
+     * Actual After
+     */
+    actual_after: number;
+    /**
+     * Actual Before
+     */
+    actual_before: number;
+    /**
+     * Anchor Rows
+     */
+    anchor_rows: Array<number>;
+    /**
+     * Anchor Source
+     */
+    anchor_source: 'observation_example' | 'start_of_file';
+    /**
+     * Columns
+     */
+    columns: Array<ColumnReferenceResponse>;
+    /**
+     * Max Window
+     */
+    max_window: number;
+    /**
+     * Requested After
+     */
+    requested_after: number;
+    /**
+     * Requested Before
+     */
+    requested_before: number;
+    /**
+     * Rows
+     */
+    rows: Array<ScopedRowEntryResponse>;
+    /**
+     * Scope Kind
+     */
+    scope_kind: 'observation' | 'column_wide_finding';
+    /**
+     * Size Limited
+     */
+    size_limited?: boolean;
+    /**
+     * Truncated At End
+     */
+    truncated_at_end: boolean;
+    /**
+     * Truncated At Start
+     */
+    truncated_at_start: boolean;
+};
+
+/**
  * SecurityExposureResponse
  *
  * Mirrors `detectors.contract.SecurityExposureState` exactly —
@@ -3023,6 +3120,53 @@ export type PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnr
 
 export type PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostResponse = PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostResponses[keyof PostFindingAiEnrichmentApiV1AnalysesAnalysisIdFindingsFindingIdAiEnrichmentPostResponses];
 
+export type GetAnalysisFindingColumnContextApiV1AnalysesAnalysisIdFindingsFindingIdColumnContextGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Finding Id
+         */
+        finding_id: string;
+    };
+    query?: {
+        /**
+         * Anchor Row
+         */
+        anchor_row?: number | null;
+        /**
+         * Before
+         */
+        before?: number;
+        /**
+         * After
+         */
+        after?: number;
+    };
+    url: '/api/v1/analyses/{analysis_id}/findings/{finding_id}/column-context';
+};
+
+export type GetAnalysisFindingColumnContextApiV1AnalysesAnalysisIdFindingsFindingIdColumnContextGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisFindingColumnContextApiV1AnalysesAnalysisIdFindingsFindingIdColumnContextGetError = GetAnalysisFindingColumnContextApiV1AnalysesAnalysisIdFindingsFindingIdColumnContextGetErrors[keyof GetAnalysisFindingColumnContextApiV1AnalysesAnalysisIdFindingsFindingIdColumnContextGetErrors];
+
+export type GetAnalysisFindingColumnContextApiV1AnalysesAnalysisIdFindingsFindingIdColumnContextGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScopedRowWindowResponse;
+};
+
+export type GetAnalysisFindingColumnContextApiV1AnalysesAnalysisIdFindingsFindingIdColumnContextGetResponse = GetAnalysisFindingColumnContextApiV1AnalysesAnalysisIdFindingsFindingIdColumnContextGetResponses[keyof GetAnalysisFindingColumnContextApiV1AnalysesAnalysisIdFindingsFindingIdColumnContextGetResponses];
+
 export type GetAnalysisFindingEvidenceApiV1AnalysesAnalysisIdFindingsFindingIdEvidenceGetData = {
     body?: never;
     path: {
@@ -3235,6 +3379,53 @@ export type GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetRespons
 };
 
 export type GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetResponse = GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetResponses[keyof GetAnalysisObservationsApiV1AnalysesAnalysisIdObservationsGetResponses];
+
+export type GetAnalysisObservationRowContextApiV1AnalysesAnalysisIdObservationsObservationIdRowContextGetData = {
+    body?: never;
+    path: {
+        /**
+         * Analysis Id
+         */
+        analysis_id: string;
+        /**
+         * Observation Id
+         */
+        observation_id: string;
+    };
+    query: {
+        /**
+         * Anchor Row
+         */
+        anchor_row: number;
+        /**
+         * Before
+         */
+        before?: number;
+        /**
+         * After
+         */
+        after?: number;
+    };
+    url: '/api/v1/analyses/{analysis_id}/observations/{observation_id}/row-context';
+};
+
+export type GetAnalysisObservationRowContextApiV1AnalysesAnalysisIdObservationsObservationIdRowContextGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAnalysisObservationRowContextApiV1AnalysesAnalysisIdObservationsObservationIdRowContextGetError = GetAnalysisObservationRowContextApiV1AnalysesAnalysisIdObservationsObservationIdRowContextGetErrors[keyof GetAnalysisObservationRowContextApiV1AnalysesAnalysisIdObservationsObservationIdRowContextGetErrors];
+
+export type GetAnalysisObservationRowContextApiV1AnalysesAnalysisIdObservationsObservationIdRowContextGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScopedRowWindowResponse;
+};
+
+export type GetAnalysisObservationRowContextApiV1AnalysesAnalysisIdObservationsObservationIdRowContextGetResponse = GetAnalysisObservationRowContextApiV1AnalysesAnalysisIdObservationsObservationIdRowContextGetResponses[keyof GetAnalysisObservationRowContextApiV1AnalysesAnalysisIdObservationsObservationIdRowContextGetResponses];
 
 export type GetAnalysisProfileApiV1AnalysesAnalysisIdProfileGetData = {
     body?: never;

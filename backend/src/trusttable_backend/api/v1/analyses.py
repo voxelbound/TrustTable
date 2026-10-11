@@ -37,7 +37,7 @@ from __future__ import annotations
 import threading
 from datetime import UTC, date, datetime
 from functools import partial
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Form, Query, Request, Response, UploadFile
 from starlette.concurrency import run_in_threadpool
@@ -57,11 +57,16 @@ from trusttable_backend.analysis import (
     AnalysisStoreProtocol,
     ContextFieldNotEditableError,
     ContextVersionConflictError,
+    FindingHasAffectedRowsError,
     FindingNotFoundError,
     InvalidReviewParametersError,
     InvalidRuleParametersError,
+    NoRowsToShowError,
+    ObservationNotFoundError,
     QuestionNotFoundError,
     RowNotInFindingError,
+    RowNotInObservationError,
+    RowNotInScopeError,
     RuleNotFoundError,
     UnknownRuleColumnError,
     answer_guided_question,
@@ -77,10 +82,12 @@ from trusttable_backend.analysis import (
     finalize_ai_assisted_rule,
     finalize_context,
     generate_rule_proposal,
+    get_column_wide_finding_window,
     get_finding,
     get_finding_evidence,
     get_finding_row_context,
     get_guided_questions,
+    get_observation_row_context,
     get_or_infer_context,
     get_status,
     record_ai_enrichment_call,
@@ -111,7 +118,7 @@ from trusttable_backend.domain.finding_enrichment import EnrichmentReason, Enric
 from trusttable_backend.domain.observation import Observation
 from trusttable_backend.domain.parsing import Dataset, DatasetFormat, DatasetSourceType
 from trusttable_backend.domain.review import FindingReview, FindingReviewState
-from trusttable_backend.domain.row_context import RowContextWindow
+from trusttable_backend.domain.row_context import RowContextWindow, ScopedRowWindow
 from trusttable_backend.domain.rules import (
     ComparisonOperator,
     NullHandling,
@@ -152,6 +159,7 @@ from trusttable_backend.schemas.analysis import (
     AnalysisResource,
     AnalysisStatusResponse,
     AnalysisSummaryResponse,
+    AnchorSource,
     AnswerGuidedQuestionRequest,
     AnswerGuidedQuestionResponse,
     BusinessImpactStatementResponse,
@@ -189,6 +197,9 @@ from trusttable_backend.schemas.analysis import (
     RuleFailureExampleResponse,
     RuleProposalResponse,
     SampleMetadataResponse,
+    ScopedRowEntryResponse,
+    ScopedRowWindowResponse,
+    ScopeKind,
     SecurityExposureResponse,
     TrustAssessmentResponse,
     UploadAnalysisResponse,
@@ -313,6 +324,64 @@ def _get_finding_or_404(
         raise _not_found(analysis_id) from exc
     except FindingNotFoundError as exc:
         raise _finding_not_found(analysis_id, finding_id) from exc
+
+
+def _inspector_busy(details: dict[str, object]) -> AppError:
+    return AppError(
+        "INSPECTOR_BUSY",
+        "The data inspector is busy right now. Try again shortly.",
+        status_code=429,
+        details=details,
+    )
+
+
+def _observation_not_found(analysis_id: str, observation_id: str) -> AppError:
+    return AppError(
+        "OBSERVATION_NOT_FOUND",
+        "The requested observation was not found.",
+        status_code=404,
+        details={"analysis_id": analysis_id, "observation_id": observation_id},
+    )
+
+
+def _row_not_in_observation(analysis_id: str, observation_id: str, anchor_row: int) -> AppError:
+    return AppError(
+        "ROW_NOT_IN_OBSERVATION",
+        "The requested row is not one of this observation's own example rows.",
+        status_code=404,
+        details={
+            "analysis_id": analysis_id,
+            "observation_id": observation_id,
+            "anchor_row": anchor_row,
+        },
+    )
+
+
+def _row_not_in_scope(analysis_id: str, finding_id: str, anchor_row: int) -> AppError:
+    return AppError(
+        "ROW_NOT_IN_SCOPE",
+        "The requested row is not one this finding's window can be centred on.",
+        status_code=404,
+        details={"analysis_id": analysis_id, "finding_id": finding_id, "anchor_row": anchor_row},
+    )
+
+
+def _finding_has_affected_rows(analysis_id: str, finding_id: str) -> AppError:
+    return AppError(
+        "FINDING_HAS_AFFECTED_ROWS",
+        "This finding names affected rows; read its row context instead.",
+        status_code=409,
+        details={"analysis_id": analysis_id, "finding_id": finding_id},
+    )
+
+
+def _no_rows_to_show(analysis_id: str) -> AppError:
+    return AppError(
+        "NO_ROWS_TO_SHOW",
+        "The stored file has no data row to show.",
+        status_code=404,
+        details={"analysis_id": analysis_id},
+    )
 
 
 def _row_not_in_finding(analysis_id: str, finding_id: str, anchor_row: int) -> AppError:
@@ -676,6 +745,34 @@ def _row_context_response(window: RowContextWindow) -> RowContextResponse:
                 row_number=entry.row_reference.row_number,
                 is_anchor=entry.is_anchor,
                 is_affected_by_finding=entry.is_affected_by_finding,
+                values=list(entry.values),
+            )
+            for entry in window.rows
+        ],
+    )
+
+
+def _scoped_window_response(scoped: ScopedRowWindow) -> ScopedRowWindowResponse:
+    window = scoped.window
+    return ScopedRowWindowResponse(
+        # The domain object validates both against its closed sets.
+        scope_kind=cast("ScopeKind", scoped.scope_kind),
+        anchor_source=cast("AnchorSource", scoped.anchor_source),
+        anchor_rows=list(scoped.anchor_rows),
+        columns=[_column_reference(column) for column in window.columns],
+        requested_before=window.requested_before,
+        requested_after=window.requested_after,
+        actual_before=window.actual_before,
+        actual_after=window.actual_after,
+        truncated_at_start=window.truncated_at_start,
+        truncated_at_end=window.truncated_at_end,
+        max_window=window.max_window,
+        size_limited=window.size_limited,
+        rows=[
+            ScopedRowEntryResponse(
+                row_number=entry.row_reference.row_number,
+                is_anchor=entry.is_anchor,
+                is_marked=entry.is_affected_by_finding,
                 values=list(entry.values),
             )
             for entry in window.rows
@@ -1754,12 +1851,7 @@ def get_analysis_finding_row_context(
     store = get_analysis_store(request)
     _get_finding_or_404(store, analysis_id, finding_id)
     if not _INSPECTOR_READ_GATE.acquire(blocking=False):
-        raise AppError(
-            "INSPECTOR_BUSY",
-            "The data inspector is busy right now. Try again shortly.",
-            status_code=429,
-            details={"analysis_id": analysis_id, "finding_id": finding_id},
-        )
+        raise _inspector_busy({"analysis_id": analysis_id, "finding_id": finding_id})
     try:
         window = get_finding_row_context(
             store, analysis_id, finding_id, anchor_row=anchor_row, before=before, after=after
@@ -1770,9 +1862,109 @@ def get_analysis_finding_row_context(
         raise _finding_not_found(analysis_id, finding_id) from exc
     except RowNotInFindingError as exc:
         raise _row_not_in_finding(analysis_id, finding_id, anchor_row) from exc
+    except NoRowsToShowError as exc:
+        raise _no_rows_to_show(analysis_id) from exc
     finally:
         _INSPECTOR_READ_GATE.release()
     return _row_context_response(window)
+
+
+@router.get(
+    "/analyses/{analysis_id}/observations/{observation_id}/row-context",
+    response_model=ScopedRowWindowResponse,
+)
+def get_analysis_observation_row_context(
+    analysis_id: str,
+    observation_id: str,
+    request: Request,
+    response: Response,
+    anchor_row: int = Query(...),
+    before: int = Query(3, ge=0),
+    after: int = Query(3, ge=0),
+) -> ScopedRowWindowResponse:
+    """Return a bounded window around one of an observation's own example rows
+    (`UX-06` part b, D-074; `docs/api-specification.md` section 10).
+
+    `anchor_row` must be one of the observation's example rows
+    (`ROW_NOT_IN_OBSERVATION`, 404, otherwise); an unknown observation is
+    `OBSERVATION_NOT_FOUND`. This reads context around an observation's
+    examples, not arbitrary rows of the file. It has the same bounds as the
+    finding window (`before`/`after` clamped, a size bound, at most
+    `_MAX_CONCURRENT_INSPECTOR_READS` at once with `INSPECTOR_BUSY`, and
+    `Cache-Control: no-store`). The window is not evidence, AI input, or part of
+    a report or export.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    store = get_analysis_store(request)
+    _get_or_404(store, analysis_id)
+    if not _INSPECTOR_READ_GATE.acquire(blocking=False):
+        raise _inspector_busy({"analysis_id": analysis_id, "observation_id": observation_id})
+    try:
+        window = get_observation_row_context(
+            store, analysis_id, observation_id, anchor_row=anchor_row, before=before, after=after
+        )
+    except AnalysisNotFoundError as exc:
+        raise _not_found(analysis_id) from exc
+    except ObservationNotFoundError as exc:
+        raise _observation_not_found(analysis_id, observation_id) from exc
+    except RowNotInObservationError as exc:
+        raise _row_not_in_observation(analysis_id, observation_id, anchor_row) from exc
+    except NoRowsToShowError as exc:
+        raise _no_rows_to_show(analysis_id) from exc
+    finally:
+        _INSPECTOR_READ_GATE.release()
+    return _scoped_window_response(window)
+
+
+@router.get(
+    "/analyses/{analysis_id}/findings/{finding_id}/column-context",
+    response_model=ScopedRowWindowResponse,
+)
+def get_analysis_finding_column_context(
+    analysis_id: str,
+    finding_id: str,
+    request: Request,
+    response: Response,
+    anchor_row: int | None = Query(None),
+    before: int = Query(3, ge=0),
+    after: int = Query(3, ge=0),
+) -> ScopedRowWindowResponse:
+    """Return a bounded window for a finding that names no rows (`UX-06` part
+    b, D-074; D-066 item 6; `docs/api-specification.md` section 10).
+
+    The server chooses where the window can be centred, never the request:
+    the example rows of observations about at least one of the finding's
+    columns, at most 20 (`anchor_source` `observation_example`), otherwise only
+    row 0
+    (`start_of_file`), which is a deterministic place to look and not evidence
+    of the finding. `anchor_row`, when given, must be one of the returned
+    `anchor_rows` (`ROW_NOT_IN_SCOPE`, 404, otherwise). A finding that names
+    affected rows is `FINDING_HAS_AFFECTED_ROWS` (409): it is read through its
+    `row-context`. Same bounds, concurrency gate and `no-store` as the other
+    inspector reads.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    store = get_analysis_store(request)
+    _get_finding_or_404(store, analysis_id, finding_id)
+    if not _INSPECTOR_READ_GATE.acquire(blocking=False):
+        raise _inspector_busy({"analysis_id": analysis_id, "finding_id": finding_id})
+    try:
+        window = get_column_wide_finding_window(
+            store, analysis_id, finding_id, anchor_row=anchor_row, before=before, after=after
+        )
+    except AnalysisNotFoundError as exc:
+        raise _not_found(analysis_id) from exc
+    except FindingNotFoundError as exc:
+        raise _finding_not_found(analysis_id, finding_id) from exc
+    except FindingHasAffectedRowsError as exc:
+        raise _finding_has_affected_rows(analysis_id, finding_id) from exc
+    except RowNotInScopeError as exc:
+        raise _row_not_in_scope(analysis_id, finding_id, exc.anchor_row) from exc
+    except NoRowsToShowError as exc:
+        raise _no_rows_to_show(analysis_id) from exc
+    finally:
+        _INSPECTOR_READ_GATE.release()
+    return _scoped_window_response(window)
 
 
 @router.get(

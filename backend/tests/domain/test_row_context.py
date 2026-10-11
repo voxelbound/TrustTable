@@ -10,7 +10,15 @@ from __future__ import annotations
 
 import pytest
 
-from trusttable_backend.domain.row_context import RowContextEntry, RowContextWindow
+from trusttable_backend.domain.row_context import (
+    ANCHOR_OBSERVATION_EXAMPLE,
+    ANCHOR_START_OF_FILE,
+    SCOPE_COLUMN_WIDE_FINDING,
+    SCOPE_OBSERVATION,
+    RowContextEntry,
+    RowContextWindow,
+    ScopedRowWindow,
+)
 from trusttable_backend.domain.value_objects import ColumnReference, RowReference
 
 _COLUMNS = (
@@ -175,6 +183,86 @@ def test_entry_values_length_must_match_columns() -> None:
             actual_before=0,
             actual_after=0,
             rows=(bad_entry,),
+        )
+
+
+# --- ScopedRowWindow (`UX-06` part b, D-074) -----------------------------------------
+
+
+def _scoped(**overrides: object) -> ScopedRowWindow:
+    fields: dict[str, object] = {
+        "window": _window(),
+        "scope_kind": SCOPE_OBSERVATION,
+        "anchor_source": ANCHOR_OBSERVATION_EXAMPLE,
+        "anchor_rows": (4, 5),
+    }
+    fields.update(overrides)
+    return ScopedRowWindow(**fields)  # type: ignore[arg-type]
+
+
+def test_a_valid_scoped_window_constructs() -> None:
+    scoped = _scoped()
+    assert scoped.anchor_rows == (4, 5)
+
+
+def test_a_scoped_window_rejects_an_unknown_scope_or_anchor_source() -> None:
+    with pytest.raises(ValueError, match="scope_kind"):
+        _scoped(scope_kind="dataset")
+    with pytest.raises(ValueError, match="anchor_source"):
+        _scoped(anchor_source="sample")
+
+
+def test_a_scoped_window_needs_ascending_unique_anchor_rows_that_include_its_anchor() -> None:
+    with pytest.raises(ValueError, match="must not be empty"):
+        _scoped(anchor_rows=())
+    with pytest.raises(ValueError, match="ascending and unique"):
+        _scoped(anchor_rows=(5, 4))
+    with pytest.raises(ValueError, match="ascending and unique"):
+        _scoped(anchor_rows=(5, 5))
+    with pytest.raises(ValueError, match="anchor must be one of"):
+        _scoped(anchor_rows=(4, 6))
+
+
+def test_a_start_of_file_window_is_row_zero_only_and_marks_nothing() -> None:
+    start_rows = (
+        _entry(0, is_anchor=True),
+        _entry(1),
+    )
+    start = _window(
+        requested_before=0,
+        requested_after=1,
+        actual_before=0,
+        actual_after=1,
+        rows=start_rows,
+    )
+    scoped = _scoped(
+        window=start,
+        scope_kind=SCOPE_COLUMN_WIDE_FINDING,
+        anchor_source=ANCHOR_START_OF_FILE,
+        anchor_rows=(0,),
+    )
+    assert scoped.anchor_source == ANCHOR_START_OF_FILE
+
+    with pytest.raises(ValueError, match="only be anchored on row 0"):
+        _scoped(
+            window=start,
+            scope_kind=SCOPE_COLUMN_WIDE_FINDING,
+            anchor_source=ANCHOR_START_OF_FILE,
+            anchor_rows=(0, 1),
+        )
+    marked = _window(
+        requested_before=0,
+        requested_after=1,
+        actual_before=0,
+        actual_after=1,
+        rows=(_entry(0, is_anchor=True, is_affected=True), _entry(1)),
+    )
+    with pytest.raises(ValueError, match="must not mark any row"):
+        _scoped(
+            window=marked,
+            scope_kind=SCOPE_COLUMN_WIDE_FINDING,
+            anchor_source=ANCHOR_START_OF_FILE,
+            anchor_rows=(0,),
         )
 
 

@@ -108,3 +108,56 @@ class RowContextWindow:
                 raise ValueError(
                     "RowContextEntry.values length must match RowContextWindow.columns length"
                 )
+
+
+#: Closed set of scopes a `ScopedRowWindow` can have (`UX-06` part b, D-074).
+SCOPE_OBSERVATION = "observation"
+SCOPE_COLUMN_WIDE_FINDING = "column_wide_finding"
+
+#: Closed set of anchor sources. The anchor is always chosen by the server from
+#: data the analysis already records; a client can only pick among
+#: `anchor_rows`.
+ANCHOR_OBSERVATION_EXAMPLE = "observation_example"
+ANCHOR_START_OF_FILE = "start_of_file"
+
+_SCOPE_KINDS = frozenset({SCOPE_OBSERVATION, SCOPE_COLUMN_WIDE_FINDING})
+_ANCHOR_SOURCES = frozenset({ANCHOR_OBSERVATION_EXAMPLE, ANCHOR_START_OF_FILE})
+
+
+@dataclass(frozen=True, slots=True)
+class ScopedRowWindow:
+    """A `RowContextWindow` reached from an observation or from a column-wide
+    finding rather than from a finding's own affected rows (`UX-06` part b,
+    D-074).
+
+    `anchor_rows` is the complete set of rows a reader may centre the window
+    on, chosen by the server: an observation's own example rows, the example
+    rows of observations about at least one of a column-wide finding's columns,
+    or only row 0 when none exist (`start_of_file`). Inside `window`,
+    `is_affected_by_finding` means "is one of `anchor_rows`" and is never true
+    for a start-of-file window's rows: the start of a file is not evidence of
+    a column-wide finding and is never marked as if it were.
+    """
+
+    window: RowContextWindow
+    scope_kind: str
+    anchor_source: str
+    anchor_rows: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if self.scope_kind not in _SCOPE_KINDS:
+            raise ValueError("ScopedRowWindow.scope_kind is not a known scope")
+        if self.anchor_source not in _ANCHOR_SOURCES:
+            raise ValueError("ScopedRowWindow.anchor_source is not a known source")
+        if not self.anchor_rows:
+            raise ValueError("ScopedRowWindow.anchor_rows must not be empty")
+        if list(self.anchor_rows) != sorted(set(self.anchor_rows)):
+            raise ValueError("ScopedRowWindow.anchor_rows must be ascending and unique")
+        anchor = next(entry for entry in self.window.rows if entry.is_anchor)
+        if anchor.row_reference.row_number not in self.anchor_rows:
+            raise ValueError("ScopedRowWindow's anchor must be one of anchor_rows")
+        if self.anchor_source == ANCHOR_START_OF_FILE:
+            if self.anchor_rows != (0,):
+                raise ValueError("A start-of-file window can only be anchored on row 0")
+            if any(entry.is_affected_by_finding for entry in self.window.rows):
+                raise ValueError("A start-of-file window must not mark any row")

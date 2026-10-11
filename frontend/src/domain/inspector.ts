@@ -41,6 +41,96 @@ export function shownCell(
   }
 }
 
+/** One row of a window, whichever read produced it. `isMarked` is the
+ * server's own mark: an affected row of a finding, or an example row of an
+ * observation. It is never set for the start of a file. */
+export interface WindowRow {
+  rowNumber: number
+  isAnchor: boolean
+  isMarked: boolean
+  values: ReadonlyArray<string | null>
+}
+
+/** A window as the grid shows it, the same for a finding's own rows, an
+ * observation's example rows and a column-wide finding's window (`UX-06`
+ * part b, D-074). */
+export interface WindowView {
+  columns: ReadonlyArray<{ internalKey: string; originalName: string }>
+  rows: ReadonlyArray<WindowRow>
+  maxWindow: number
+  truncatedAtStart: boolean
+  truncatedAtEnd: boolean
+  sizeLimited: boolean
+}
+
+interface WindowColumns {
+  columns: ReadonlyArray<{ internal_key: string; original_name: string }>
+  max_window: number
+  truncated_at_start: boolean
+  truncated_at_end: boolean
+  /** Optional in the generated client (it has a server default of false). */
+  size_limited?: boolean
+}
+
+function windowColumns(data: WindowColumns) {
+  return {
+    columns: data.columns.map((column) => ({
+      internalKey: column.internal_key,
+      originalName: column.original_name,
+    })),
+    maxWindow: data.max_window,
+    truncatedAtStart: data.truncated_at_start,
+    truncatedAtEnd: data.truncated_at_end,
+    sizeLimited: data.size_limited ?? false,
+  }
+}
+
+/** A finding's own window (`row-context`): the marked rows are the finding's
+ * affected rows. */
+export function windowFromFinding(
+  data: WindowColumns & {
+    rows: ReadonlyArray<{
+      row_number: number
+      is_anchor: boolean
+      is_affected_by_finding: boolean
+      values: ReadonlyArray<string | null>
+    }>
+  },
+): WindowView {
+  return {
+    ...windowColumns(data),
+    rows: data.rows.map((row) => ({
+      rowNumber: row.row_number,
+      isAnchor: row.is_anchor,
+      isMarked: row.is_affected_by_finding,
+      values: row.values,
+    })),
+  }
+}
+
+/** An observation's or a column-wide finding's window: the marked rows are the
+ * rows the server offers as anchors. */
+export function windowFromScoped(
+  data: WindowColumns & {
+    rows: ReadonlyArray<{
+      row_number: number
+      is_anchor: boolean
+      is_marked: boolean
+      values: ReadonlyArray<string | null>
+    }>
+  },
+): WindowView {
+  return {
+    ...windowColumns(data),
+    rows: data.rows.map((row) => ({
+      rowNumber: row.row_number,
+      isAnchor: row.is_anchor,
+      isMarked: row.is_marked,
+      values: row.values,
+    })),
+  }
+}
+
 export interface AffectedRowPosition {
   /** One-based position of the current row among the finding's affected rows. */
   position: number

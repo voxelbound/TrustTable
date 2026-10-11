@@ -4,6 +4,7 @@ import { ContextRoute } from './features/analysis/ContextRoute'
 import { FindingDetailRoute } from './features/analysis/FindingDetailRoute'
 import { FindingInspectorRoute } from './features/analysis/FindingInspectorRoute'
 import { FindingsRoute } from './features/analysis/FindingsRoute'
+import { ObservationInspectorRoute } from './features/analysis/ObservationInspectorRoute'
 import { OverviewRoute } from './features/analysis/OverviewRoute'
 import { ReportRoute } from './features/analysis/ReportRoute'
 import { RulesRoute } from './features/analysis/RulesRoute'
@@ -16,7 +17,8 @@ import { WorkspaceRoute } from './features/workspace/WorkspaceRoute'
  * added by `WP-028`; `context` added by `WP-064`, `UI-02` slice 2;
  * `report` added by `UI-03` slice 2; `rules` by `UI-03` slice 3;
  * `technical` by `UI-03` slice 5; `findings/:findingId/inspector` by `UX-06`
- * part a, D-073) —
+ * part a, D-073; `observations/:observationId/inspector` by `UX-06` part b,
+ * D-074) —
  * replaces `FND-01`'s placeholder route with the real investigation
  * shell.
  *
@@ -49,6 +51,10 @@ export const router = createBrowserRouter([
       {
         path: 'findings/:findingId/inspector',
         element: <FindingInspectorRoute />,
+      },
+      {
+        path: 'observations/:observationId/inspector',
+        element: <ObservationInspectorRoute />,
       },
       { path: 'context', element: <ContextRoute /> },
       { path: 'report', element: <ReportRoute /> },
