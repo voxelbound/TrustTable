@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { useLocation } from 'react-router'
 import { AppShell } from '../../components/layout/AppShell'
 
 const HEADING = 'text-xl font-semibold text-slate-900 dark:text-slate-100'
@@ -69,6 +71,21 @@ const TOPICS: Topic[] = [
 /** The Help screen. Static and read-only: it needs no analysis and makes no
  * request. */
 export function HelpRoute() {
+  const { hash } = useLocation()
+
+  // The client-side router does not scroll to a fragment on navigation, so a
+  // link such as `/help#provenance` from another screen would land at the top.
+  useEffect(() => {
+    if (!hash) return
+    let id = hash.slice(1)
+    try {
+      id = decodeURIComponent(id)
+    } catch {
+      // A malformed fragment names no topic; use it as written.
+    }
+    document.getElementById(id)?.scrollIntoView()
+  }, [hash])
+
   return (
     <AppShell>
       <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
