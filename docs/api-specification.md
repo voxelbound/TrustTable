@@ -146,12 +146,16 @@ always the same five steps in order, each `{ key, title, state, detail }`:
 | `assistance_on` | the effective AI assistance setting is on |
 | `runtime_configured` | the installation names a runtime (a model is configured, or the test provider) |
 | `runtime_on_this_machine` | the configured address is this machine; `attention` when it cannot be confirmed; `todo` when a stored "on" names an address that is not this machine |
-| `runtime_answers` | one liveness probe (at most 3 seconds, shared with `GET /ai/status`) succeeded |
+| `runtime_answers` | the one liveness probe this request makes (at most 3 seconds; the same probe helper as `GET /ai/status`, but a separate probe per request) succeeded |
 | `model_named` | a readable model label exists; this is a label, not a check that the model is loaded or suitable |
 
 `state` is `done`, `todo`, `attention` or `not_checked` (an earlier step is not
 complete, so nothing further is probed). `ready` is true only when all five are `done`.
 It means a runtime on this machine answered a short check, not that the model works.
+Each request makes its own probe: `GET /ai/status`, `GET /ai/readiness` and
+`POST /ai/connection-test` share the probe helper but not a result, so two of them
+asked a moment apart can differ if the runtime changes in between. Only the connection
+test is limited in frequency; the two reads are not, as `GET /ai/status` never was.
 
 `POST /ai/connection-test` takes no body and returns
 `{ outcome, tested, message, retry_after_seconds }`. `outcome` is one of `reachable`,

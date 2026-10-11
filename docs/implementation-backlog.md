@@ -1244,7 +1244,7 @@ against forged requests and leak no path or address.
 
 Status: **completed** (`D-078`). Built: `GET /ai/readiness`, five ordered steps (assistance
 on, a runtime named, on this machine, answering a short check, a model named) computed
-from the effective setting and the one capped liveness probe `GET /ai/status` already makes;
+from the effective setting and one capped liveness probe made by that request (the same probe helper as `GET /ai/status`, not a shared result);
 `POST /ai/connection-test`, with no body and no client-supplied target, that checks only a
 configured runtime on this machine, makes no completion call, allows one test in flight and
 a minimum gap between tests, and returns a closed set of outcomes with fixed wording and no

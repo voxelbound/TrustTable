@@ -92,8 +92,10 @@ def _check(key: CheckKey, state: CheckState, detail: str) -> ReadinessCheck:
 def compute_readiness(resolution: AiAssistanceResolution, status: AiStatus) -> Readiness:
     """Readiness checklist from the effective resolution and one already-made status.
 
-    `status` comes from `compute_ai_status`, which makes the single bounded probe, so
-    the checklist and the status line can never disagree and no second probe is made.
+    `status` comes from `compute_ai_status`, which makes the one bounded probe of this
+    request, so the checklist never probes twice within a request. It does not share an
+    observation with `GET /ai/status`: that route is a separate request and makes its own
+    probe, so the two can differ if the runtime changes between them.
     """
     checks: list[ReadinessCheck] = []
 

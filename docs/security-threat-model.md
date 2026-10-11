@@ -263,7 +263,8 @@ Logs may contain:
   block staging until the files expire (acceptable under the single-user local trust
   model; the bounds and `STAGING_FULL` keep it from growing without limit). The API has
   no per-client throttling by design: a client that can reach it can also repeat
-  `GET /ai/status`, each call costing at most the 3-second probe, and the unthrottled
+  `GET /ai/status` or `GET /ai/readiness`, each call costing at most the 3-second probe
+  (`POST /ai/connection-test` is the one probing route with a limit), and the unthrottled
   local API is an assumption that must be revisited if the service is ever exposed beyond
   the machine it runs on. SQLite `secure_delete` zeroes freed content in the database
   file but not journal files, backups or operating-system caches, so expiry does not

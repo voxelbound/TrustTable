@@ -94,8 +94,9 @@ def probe_runtime(
 ) -> bool:
     """One bounded liveness probe of the configured runtime; never raises.
 
-    Shared by the status, readiness and connection-test routes so every one of them
-    makes the same single, capped, completion-free call and reports only a boolean.
+    The status, readiness and connection-test routes share this helper, so each probe is
+    the same capped, completion-free call that reports only a boolean. They share the
+    helper, not a result: every request makes its own probe.
     """
     try:
         provider = provider_factory(

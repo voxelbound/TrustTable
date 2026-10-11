@@ -8,6 +8,7 @@ never return an address, path or exception text.
 from __future__ import annotations
 
 import json
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +16,7 @@ from fastapi.testclient import TestClient
 from trusttable_backend import ai_readiness
 from trusttable_backend.ai_readiness import (
     ConnectionTestGate,
+    ConnectionTestResult,
     compute_readiness,
     run_connection_test,
 )
@@ -271,6 +273,101 @@ def test_a_second_test_inside_the_interval_is_refused_without_a_probe(
     assert (second.outcome, second.tested) == ("too_soon", False)
     assert second.retry_after_seconds is not None and second.retry_after_seconds >= 1
     assert probe.calls == 1
+
+
+class _Blocking:
+    """A probe double that holds the first caller until released."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    def __call__(self, settings: Settings, *, provider_factory: object = None) -> bool:
+        self.calls += 1
+        self.started.set()
+        assert self.release.wait(timeout=10), "the test never released the probe"
+        return True
+
+
+def test_a_second_test_while_one_is_in_flight_is_refused_busy_without_a_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe = _Blocking()
+    monkeypatch.setattr(ai_readiness, "probe_runtime", probe)
+    gate = ConnectionTestGate()
+    first: list[ConnectionTestResult] = []
+    worker = threading.Thread(
+        target=lambda: first.append(run_connection_test(_local_on(), gate=gate))  # type: ignore[arg-type]
+    )
+    worker.start()
+    assert probe.started.wait(timeout=10)
+
+    second = run_connection_test(_local_on(), gate=gate)  # type: ignore[arg-type]
+
+    probe.release.set()
+    worker.join(timeout=10)
+    assert (second.outcome, second.tested, second.retry_after_seconds) == ("busy", False, None)
+    assert "already running" in second.message
+    assert first[0].outcome == "reachable"
+    assert probe.calls == 1
+
+
+def test_a_second_post_while_one_is_in_flight_gets_the_busy_outcome_and_no_second_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe = _Blocking()
+    monkeypatch.setattr(ai_readiness, "probe_runtime", probe)
+    monkeypatch.setenv("LLM_PROVIDER", "llama_cpp")
+    monkeypatch.setenv("LLM_MODEL", _MODEL_PATH)
+    monkeypatch.setenv("LLM_BASE_URL", "http://localhost:8081")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        first: list[dict[str, object]] = []
+        worker = threading.Thread(
+            target=lambda: first.append(client.post("/api/v1/ai/connection-test").json())
+        )
+        worker.start()
+        assert probe.started.wait(timeout=10)
+
+        second = client.post("/api/v1/ai/connection-test")
+
+        probe.release.set()
+        worker.join(timeout=10)
+
+    assert second.status_code == 200
+    assert second.json() == {
+        "outcome": "busy",
+        "tested": False,
+        "message": "A connection test is already running, so nothing new was started.",
+        "retry_after_seconds": None,
+    }
+    assert first[0]["outcome"] == "reachable" and first[0]["tested"] is True
+    assert probe.calls == 1
+    for leak in _LEAKS:
+        assert leak not in second.text
+
+
+def test_each_read_makes_its_own_single_probe_and_none_is_shared(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from trusttable_backend import ai_status
+
+    probe = _Counting(True)
+    monkeypatch.setattr(ai_status, "probe_runtime", probe)
+    monkeypatch.setenv("LLM_PROVIDER", "llama_cpp")
+    monkeypatch.setenv("LLM_MODEL", "m.gguf")
+    monkeypatch.setenv("LLM_BASE_URL", "http://localhost:8081")
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as client:
+        client.get("/api/v1/ai/readiness")
+        assert probe.calls == 1  # one probe within a readiness request
+        client.get("/api/v1/ai/status")
+        assert probe.calls == 2  # the status read probes again; no result is shared
+        client.get("/api/v1/ai/readiness")
+        assert probe.calls == 3
 
 
 # --- the routes ----------------------------------------------------------------
