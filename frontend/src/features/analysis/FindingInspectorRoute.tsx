@@ -31,8 +31,8 @@ const ROW_NUMBERS_NOTE =
  * previous and next affected row. It is not a dataset browser: only rows the
  * server itself offers can be the centre of a window. For a finding that names
  * no rows (a column-wide finding) the server offers the example rows of
- * observations about the same columns and otherwise only the start of the
- * file, and the screen says which it is. Every value is rendered as text,
+ * observations about a column the finding is about and otherwise only the
+ * start of the file, and the screen says which it is. Every value is rendered as text,
  * never as markup, and a long value stays shortened until the reader asks to
  * see all of it. Seeing row values here adds them to nothing else: not to what
  * is sent to a model, not to evidence, and not to a report or export. */
@@ -200,7 +200,8 @@ function InspectorGrid({
 
 /** A finding that names no rows (`UX-06` part b, D-074). The server decides
  * where the window can be centred and says why: the example rows of
- * observations about the same columns, or only the start of the file. The
+ * observations about a column the finding is about, or only the start of the
+ * file. The
  * screen never presents the start of the file as an example of the finding. */
 function ColumnWideWindow({
   analysisId,
@@ -241,7 +242,7 @@ function ColumnWideWindow({
           ? ''
           : startOfFile
             ? ' Below is the start of the file, so you can see what the columns hold. It is not evidence of the finding, and no row is marked as affected; only a column heading marked "affected" shows what the finding is about.'
-            : ' Below are example rows from observations about the same columns. They show what was counted; they are not rows this finding names, and other rows may be involved.'}
+            : ' Below are example rows from observations about a column this finding is about. They show what that observation counted, which need not be the problem this finding describes; they are not rows this finding names, and other rows may be involved.'}
       </p>
 
       {scoped && !startOfFile && current !== undefined && (

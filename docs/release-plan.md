@@ -179,8 +179,8 @@ Current status: **in progress.** `v1.0` is the current milestone.
   D-072), so `UX-05` is complete. Slice S5 (`UX-06`) is built in two parts: part a
   (D-073) measured the parse path and built the finding-scoped data inspector for a finding
   with affected rows; part b (D-074) reaches it from an observation's example rows and gives
-  a column-wide finding a bounded window (example rows of observations about the same
-  columns, otherwise the start of the file, labelled as such), so `UX-06` is complete. Slices S6 to S8a
+  a column-wide finding a bounded window (example rows of observations about a column the
+  finding is about, otherwise the start of the file, labelled as such), so `UX-06` is complete. Slices S6 to S8a
   (`UX-07` to `UX-09`) are not built and not authorized. It does not place `DET-04`, `CCX-01`,
   `CCX-02`, `DET-05`, `DET-06`, `OBS-02`, `ING-04`, `STD-01`, `HARM-01` or `RULE-03` in any
   milestone, and nothing is removed from `v1.0`. The sequencing of accessibility,

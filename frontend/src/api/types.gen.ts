@@ -2091,8 +2091,8 @@ export type SampleMetadataResponse = {
  * One row in a `ScopedRowWindowResponse` (`UX-06` part b, D-074).
  *
  * `is_marked` is true only for a row the server offers as an anchor (an
- * observation's example row, or an example row of an observation about the
- * same columns as a column-wide finding). It is never true in a
+ * observation's example row, or an example row of an observation about at
+ * least one of a column-wide finding's columns). It is never true in a
  * `start_of_file` window: the start of a file is not evidence of a finding.
  */
 export type ScopedRowEntryResponse = {

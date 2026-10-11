@@ -695,7 +695,7 @@ colour as *example* rows; *Previous* and *Next example row* state the position (
 row 2 of 5*), never wrap, and say that the observation may count more rows than it lists.
 A return goes back to the Overview. A finding that names no rows says so on its screen and
 offers *Look at the data*, which opens the same inspector (*Inspect the rows*) with a
-bounded window the server chooses, and the screen says which it is: either example rows from observations about the same columns (stepped through as
+bounded window the server chooses, and the screen says which it is: either example rows from observations about a column the finding is about (stepped through as
 example rows, with the same wording), or the start of the file. The start of the file is
 labelled as such, says it is not evidence of the finding, marks no row as affected and
 offers no previous or next. Only rows the server offers can be asked for; a refusal is

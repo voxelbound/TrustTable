@@ -191,6 +191,43 @@ def test_a_column_wide_finding_uses_the_example_rows_of_observations_about_its_c
     }
 
 
+def test_a_finding_about_several_columns_is_offered_the_rows_of_an_observation_about_any_one() -> (
+    None
+):
+    store, analysis = _store_with(
+        findings=(_column_wide_finding((COL_A, COL_B)),),
+        observations=(_observation("o.about.col_b", columns=(COL_B,), rows=(2, 4)),),
+    )
+
+    scoped = get_column_wide_finding_window(store, analysis.analysis_id, "0")
+
+    assert scoped.anchor_source == ANCHOR_OBSERVATION_EXAMPLE
+    assert scoped.anchor_rows == (2, 4)
+
+
+def test_the_offered_example_rows_are_capped_and_ascending_so_the_list_stays_meaningful() -> None:
+    content = ("col_a,col_b\n" + "".join(f"a{i},b{i}\n" for i in range(70))).encode()
+    store, analysis = _store_with(
+        findings=(_column_wide_finding((COL_A,)),),
+        observations=(
+            _observation("o.third", rows=tuple(range(40, 60))),
+            _observation("o.second", rows=tuple(range(20, 40))),
+            _observation("o.first", rows=tuple(range(0, 20))),
+        ),
+        content=content,
+    )
+
+    scoped = get_column_wide_finding_window(store, analysis.analysis_id, "0")
+
+    assert scoped.anchor_rows == tuple(range(20))
+    assert {
+        e.row_reference.row_number for e in scoped.window.rows if e.is_affected_by_finding
+    } <= set(range(20))
+    # A row beyond the cap is not offered, even though an observation lists it.
+    with pytest.raises(RowNotInScopeError):
+        get_column_wide_finding_window(store, analysis.analysis_id, "0", anchor_row=20)
+
+
 def test_a_column_wide_finding_may_choose_only_among_the_rows_the_server_offers() -> None:
     store, analysis = _store_with(
         findings=(_column_wide_finding(),), observations=(_observation(rows=(1, 3)),)

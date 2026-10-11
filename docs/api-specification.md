@@ -783,9 +783,10 @@ Added by `UX-06` part b (D-074; D-066 item 6). A bounded window for a finding th
 names no rows (a column-wide finding). The server, never the request, decides where
 the window can be centred:
 
-- when observations about the same columns as the finding carry example rows, those
-  rows (their union, ascending, unique) are the offered anchors and `anchor_source`
-  is `observation_example`;
+- when observations about at least one of the finding's columns carry example rows,
+  those rows (their union, ascending, unique, at most the first 20) are the offered
+  anchors and `anchor_source` is `observation_example`; an observation about a column
+  the finding is about need not be about the problem the finding describes;
 - otherwise only row 0 is offered and `anchor_source` is `start_of_file`. The start of
   a file is a deterministic place to look, not evidence of the finding, and no row is
   marked (`is_marked` is false for every row). A finding that names no column is

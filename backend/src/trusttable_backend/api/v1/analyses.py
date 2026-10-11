@@ -1933,8 +1933,9 @@ def get_analysis_finding_column_context(
     b, D-074; D-066 item 6; `docs/api-specification.md` section 10).
 
     The server chooses where the window can be centred, never the request:
-    the example rows of observations about the same columns as the finding
-    (`anchor_source` `observation_example`), otherwise only row 0
+    the example rows of observations about at least one of the finding's
+    columns, at most 20 (`anchor_source` `observation_example`), otherwise only
+    row 0
     (`start_of_file`), which is a deterministic place to look and not evidence
     of the finding. `anchor_row`, when given, must be one of the returned
     `anchor_rows` (`ROW_NOT_IN_SCOPE`, 404, otherwise). A finding that names

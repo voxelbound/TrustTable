@@ -158,6 +158,11 @@ _MAX_ROW_CONTEXT_WINDOW_PER_SIDE = 25
 #: while they fit, and a window clipped by this bound reports `size_limited`.
 _MAX_ROW_CONTEXT_WINDOW_CHARS = 1_000_000
 
+#: Most rows a column-wide finding's window offers as anchors (`UX-06` part b,
+#: D-074): the same bound an observation puts on its own example rows
+#: (`domain.observation.MAX_OBSERVATION_ROW_REFERENCES`).
+_MAX_COLUMN_WIDE_ANCHORS = 20
+
 _NO_EXPOSURE = SecurityExposureState(
     model_provider_enabled=False, sample_transmission_enabled=False
 )
@@ -1412,12 +1417,14 @@ def get_column_wide_finding_window(
 
     The server decides where the window may be centred, from data the analysis
     already records and never from the request: the example rows of the
-    observations that are about the same columns as the finding (an existing,
-    safe anchor), and otherwise only row 0, the start of the file. The start of
-    the file is a deterministic place to look, not evidence of the finding, and
-    is reported as `start_of_file` so no client presents it as an example.
-    `anchor_row` may only choose among the rows the server offers; it defaults
-    to the first.
+    observations that are about at least one of the finding's columns (an
+    existing, safe anchor; an observation about such a column need not be about
+    the problem the finding describes), at most `_MAX_COLUMN_WIDE_ANCHORS` of
+    them in ascending order, and otherwise only row 0, the start of the file.
+    The start of the file is a deterministic place to look, not evidence of the
+    finding, and is reported as `start_of_file` so no client presents it as an
+    example. `anchor_row` may only choose among the rows the server offers; it
+    defaults to the first.
 
     Raises `AnalysisNotFoundError`, `FindingNotFoundError`,
     `FindingHasAffectedRowsError` (a finding that names rows is read through
@@ -1438,7 +1445,9 @@ def get_column_wide_finding_window(
                     reference.row_number for reference in observation.affected_row_references
                 )
     if example_rows:
-        offered = tuple(sorted(example_rows))
+        # Bounded, so the list the screen steps through stays meaningful even for
+        # a finding about many columns.
+        offered = tuple(sorted(example_rows))[:_MAX_COLUMN_WIDE_ANCHORS]
         source = ANCHOR_OBSERVATION_EXAMPLE
     else:
         offered = (0,)

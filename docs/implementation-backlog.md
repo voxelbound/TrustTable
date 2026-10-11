@@ -1172,9 +1172,9 @@ export.
 Status: **completed** (`D-073`, `D-074`). Part b (`UX-06b`) is built: the inspector is
 reached from an observation's example rows (`observations/{id}/row-context`) and a
 finding that names no rows opens a bounded window the server chooses
-(`findings/{id}/column-context`): the example rows of observations about the same
-columns, otherwise the start of the file, labelled as such and never marked as evidence
-of the finding. Every read shares the part a bounds and no-store header. Part a, built
+(`findings/{id}/column-context`): the example rows of observations about a column the
+finding is about (at most 20), otherwise the start of the file, labelled as such and
+never marked as evidence of the finding. Every read shares the part a bounds and no-store header. Part a, built
 earlier, is: the measurement
 (`backend/scripts/measure_inspector_parse.py`, figures recorded in D-073) and a
 finding-scoped grid inspector for a finding that has affected rows, reached from the

@@ -132,8 +132,8 @@ class ScopedRowWindow:
 
     `anchor_rows` is the complete set of rows a reader may centre the window
     on, chosen by the server: an observation's own example rows, the example
-    rows of observations about the same columns as a column-wide finding, or
-    only row 0 when none exist (`start_of_file`). Inside `window`,
+    rows of observations about at least one of a column-wide finding's columns,
+    or only row 0 when none exist (`start_of_file`). Inside `window`,
     `is_affected_by_finding` means "is one of `anchor_rows`" and is never true
     for a start-of-file window's rows: the start of a file is not evidence of
     a column-wide finding and is never marked as if it were.

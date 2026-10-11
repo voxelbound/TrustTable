@@ -1374,7 +1374,7 @@ Core rules:
   (`findings/{id}/column-context`). Every read decides in the service, from data the
   analysis already records, which rows a window may be centred on, and a request can
   only choose among those; nothing new is stored. A column-wide finding is anchored on
-  the example rows of observations about the same columns when there are any, and
+  the example rows of observations about a column the finding is about (at most 20), and
   otherwise on the start of the file, which is reported as such and never marked.
 - **Local AI status (`UX-09`).** Defined against an abstract provider and readiness
   contract that does not assume where a runtime runs, so the unapproved S8b choice

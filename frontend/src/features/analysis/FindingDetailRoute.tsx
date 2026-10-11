@@ -346,10 +346,10 @@ export function FindingDetailRoute() {
           <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
             This finding concerns whole columns and does not name particular
             rows. You can look at the data: example rows from observations about
-            the same columns when there are any, otherwise the start of the
-            file, and the screen says which it is. This is only a view: it
-            changes nothing, is not evidence of this finding, and is not sent to
-            an AI model or added to a report.
+            a column this finding is about when there are any, otherwise the
+            start of the file, and the screen says which it is. This is only a
+            view: it changes nothing, is not evidence of this finding, and is
+            not sent to an AI model or added to a report.
           </p>
           <Link
             to={`/analyses/${analysisId}/findings/${finding.finding_id}/inspector${carried}`}
