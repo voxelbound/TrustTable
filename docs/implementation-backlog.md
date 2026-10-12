@@ -44,8 +44,8 @@ stated in place on the item, and the reasoning behind each change is in
 | Complete manager workflow | v0.3 |
 | Production completion | v1.0 |
 | Post-v1 optional deployment | Post-v1 |
-| Successor items carried out of `DET-03` | No milestone placement (open owner decision) |
-| UI/UX redesign (`UX-01`) | The next `v1.0` work; planned, not built |
+| Successor items carried out of `DET-03` (listed after `DET-03` in Production completion) | No milestone placement (open owner decision) |
+| UI/UX redesign (`UX-01`) | `v1.0`; slices implemented and merged, outcome rejected by the human owner, no replacement design approved |
 
 ## Documentation responsibilities
 
