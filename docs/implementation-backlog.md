@@ -73,6 +73,24 @@ Conventions:
 - Private delivery records are kept outside this repository and are not referenced by path in
   public documents.
 
+<!-- EDS:CURRENT-POSITION:BEGIN -->
+
+## Current implementation position
+
+- **Milestone:** v1.0 — Production-quality local release
+- **Latest completed package:** WP-124 / CLEANED
+- **Active track:** UX-01
+- **Track implementation progress:** 8/8 ordered item(s) complete
+- **Completed track items:** UX-02, UX-03, UX-04, UX-05, UX-06, UX-07, UX-08, UX-09
+- **Next roadmap item:** PRIV-01 — Sensitive sample redaction
+- **Remaining ordered milestone work:** UX-01, PRIV-01, EVAL-01, EVAL-02, SEC-01, PERF-01, A11Y-01, BROWSER-01, MIG-01, DOC-01, REL-04
+- **Unplaced / not executable by milestone order:** DET-04, CCX-01, CCX-02, DET-05, DET-06, OBS-02, ING-04
+- **Unfinished milestone items:** 10
+- **Outcome gates:** UX-01: implementation complete; outcome rejected
+- **Completed planned items:** 54
+
+<!-- EDS:CURRENT-POSITION:END -->
+
 # Foundation
 
 ## FND-01 — Repository foundation
@@ -533,7 +551,7 @@ rather than inventing the path, and must not close until:
   a finding falls back to built-in guidance) and the per-finding latency and
   suitable `LLM_TIMEOUT_SECONDS` on baseline hardware — measured, not asserted.
 
-Status: `REL-02` is complete (`docs/decision-log.md` D-041 to D-045). It was delivered in
+Status: complete. `REL-02` is complete (`docs/decision-log.md` D-041 to D-045). It was delivered in
 three ordered steps:
 
 1. *Repository-side path* (D-041): `docker-compose.release.yml` (pull-only, requires
@@ -600,7 +618,7 @@ Report includes AI-processing security:
 - rejected-output status
 - model location
 
-Status: the backend scope is complete; the report screen (`UI-03`) and report deletion with
+Status: complete. The backend scope is complete; the report screen (`UI-03`) and report deletion with
 the analysis (`DEL-01`) are separate items. Delivered in four slices:
 
 1. The JSON and YAML rules exports (`GET /analyses/{id}/exports/rules.json` and
@@ -618,7 +636,7 @@ the analysis (`DEL-01`) are separate items. Delivered in four slices:
 
 Delete file, derived artifacts, exports, and records.
 
-Status: `DELETE /analyses/{id}` is implemented (`docs/api-specification.md` §6, `D-048`): the
+Status: complete. `DELETE /analyses/{id}` is implemented (`docs/api-specification.md` §6, `D-048`): the
 analysis and all of its reports are removed in one transaction, a running analysis is
 cancelled and cannot be brought back by its worker, and the stored bytes are overwritten in
 the database file. The deletion control and its completion message are part of `UI-03`. No
@@ -650,7 +668,7 @@ analysis-level prompt/model metadata.
 
 Persistence and complete CSV workflow.
 
-Status: `REL-03` is complete; the `v0.3` milestone decision is the owner's.
+Status: complete. `REL-03` is complete; the `v0.3` milestone decision is the owner's.
 
 - Repository side: the backend version is `0.3.0`, and one acceptance test
   (`backend/tests/api/test_v03_complete_workflow.py`) drives a CSV through the whole
@@ -669,7 +687,7 @@ Status: `REL-03` is complete; the `v0.3` milestone decision is the owner's.
 
 Worksheet selection, stored values, macro rejection, expansion limits.
 
-Status: the item is complete (`ING-03`). It was delivered in four slices:
+Status: complete; the item is complete (`ING-03`). It was delivered in four slices:
 
 1. The secure XLSX parser (`parsers/xlsx_parser.py`, `parse_xlsx`): worksheet selection by
    name or the first visible sheet, stored values read as literal text with formulas never
@@ -889,72 +907,14 @@ dependency_graph_closure:
   date-pattern and type-inference verifications; the migration exit condition; the
   relationship of ingest facts to parsing-warning codes; and durable dataset identity.
 
-## PRIV-01 — Sensitive sample redaction
-
-Redact before prompt construction.
-
-## EVAL-01 — Deterministic evaluation
-
-Compare against hidden manifest.
-
-## EVAL-02 — AI grounding evaluation
-
-Fixture mode required; live local-AI-runtime mode optional before release (runtime selected via the decision gate — D-033).
-
-## SEC-01 — Security hardening
-
-- path traversal
-- MIME mismatch
-- expansion bomb
-- cell limits
-- safe regex
-- safe rendering
-- Markdown sanitization
-- dependency scan
-- container scan
-- SBOM
-- license check
-
-## PERF-01 — Performance benchmarks
-
-Measure 10k, 100k, and 250k rows plus wide data.
-
-## A11Y-01 — Accessibility
-
-Keyboard path, axe, live announcements, text severity.
-
-## BROWSER-01 — Browser release matrix
-
-Chromium, Firefox, WebKit and defined viewports.
-
-## MIG-01 — Migration and recovery tests
-
-Empty install, previous release upgrade, interrupted job, backup/restore docs.
-
-## DOC-01 — Portfolio documentation
-
-Screenshots, architecture, threat model, evaluation, performance, limitations.
-
-## REL-04 — v1.0 release
-
-Blocked unless all requirements in `testing-strategy.md` pass.
-
-# Post-v1 optional deployment
-
-## HOST-DEC-01 — Public-demo decision
-
-Evaluate value, cost, operations, abuse, privacy, retention, and inference.
-
-No implementation occurs until this decision is approved.
-
-# Successor items carried out of DET-03 (milestone placement open)
-
-These items were created by `docs/decision-log.md` D-061 so that no catalogue idea
-is dropped when `DET-03` closes as the Core detector catalogue. Each is **planned,
-not authorized and not built**, and none is placed in a milestone: placement is a
-separate owner decision. `docs/detector-framework.md` §16 ("Closure boundary") maps
-each catalogue entry to its carrier. Dependencies are in the `dependency_graph_closure`
-block of the `DET-03` section.
+*Successor items carried out of `DET-03` (milestone placement open).* The items from
+`DET-04` to `STD-01, HARM-01 and RULE-03` below were created by
+`docs/decision-log.md` D-061 so that no catalogue idea is dropped when `DET-03`
+closes as the Core detector catalogue. Each is **planned, not authorized and not
+built**, and none is placed in a milestone: placement is a separate owner decision.
+`docs/detector-framework.md` §16 ("Closure boundary") maps each catalogue entry to
+its carrier. Dependencies are in the `dependency_graph_closure` block of the `DET-03`
+section.
 
 ## DET-04 — Value-distribution observations
 
@@ -1023,12 +983,76 @@ the moved entry "invalid country/region values"; the *business-rule follow-up*
 D-057). They remain proposed capabilities with no implementation commitment and no
 milestone placement; this decision gives them identifiers only.
 
-# UI/UX redesign (`UX-01`) — planned, not built; the next `v1.0` work, ahead of `DET-04`
+## PRIV-01 — Sensitive sample redaction
+
+Redact before prompt construction.
+
+## EVAL-01 — Deterministic evaluation
+
+Compare against hidden manifest.
+
+## EVAL-02 — AI grounding evaluation
+
+Fixture mode required; live local-AI-runtime mode optional before release (runtime selected via the decision gate — D-033).
+
+## SEC-01 — Security hardening
+
+- path traversal
+- MIME mismatch
+- expansion bomb
+- cell limits
+- safe regex
+- safe rendering
+- Markdown sanitization
+- dependency scan
+- container scan
+- SBOM
+- license check
+
+## PERF-01 — Performance benchmarks
+
+Measure 10k, 100k, and 250k rows plus wide data.
+
+## A11Y-01 — Accessibility
+
+Keyboard path, axe, live announcements, text severity.
+
+## BROWSER-01 — Browser release matrix
+
+Chromium, Firefox, WebKit and defined viewports.
+
+## MIG-01 — Migration and recovery tests
+
+Empty install, previous release upgrade, interrupted job, backup/restore docs.
+
+## DOC-01 — Portfolio documentation
+
+Screenshots, architecture, threat model, evaluation, performance, limitations.
+
+## REL-04 — v1.0 release
+
+Blocked unless all requirements in `testing-strategy.md` pass.
+
+# Post-v1 optional deployment
+
+## HOST-DEC-01 — Public-demo decision
+
+Evaluate value, cost, operations, abuse, privacy, retention, and inference.
+
+No implementation occurs until this decision is approved.
+
+# UI/UX redesign (`UX-01`) — slices implemented and merged; outcome rejected by the human owner
 
 Recorded by `docs/decision-log.md` D-066 (PLAN CHANGE, owner-confirmed) and D-067.
-**Every item below is planned and not built, and none is authorized by that
-record.** Slice identifiers are working identifiers. Placement of `DET-04` and the
-other `DET-03` successor items is unchanged and open. Each slice needs its own
+The slices `UX-02` to `UX-09` (S1 to S8a) are implemented and merged; the per-slice
+`Status` lines below say what each delivered. **After manual end-to-end testing the
+human owner rejected the resulting UI/UX outcome as not meeting the intended
+business-application quality: the implementation is complete, the `UX-01` outcome is
+not accepted, and substantial redesign is required before it can be accepted. No
+replacement design or redesign direction is approved yet.** `LAI-01`, `RULE-04` and
+`ING-05` below remain design tracks or follow-ups that are not approved. Slice
+identifiers are working identifiers. Placement of `DET-04` and the other `DET-03`
+successor items is recorded with those items above. Each new slice needs its own
 specification and a fresh, substantive independent review against its actual
 proposed contracts before implementation; the architecture and the security and
 privacy reviews of the design were conditional, direction-level reviews only.
