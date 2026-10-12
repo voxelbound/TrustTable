@@ -1078,7 +1078,10 @@ active** (Compare, confirmed-relationship screen, further observation kinds,
 observation workflow, context-bound detectors, a Rules and Expectations capability).
 
 Implementation defects and drift tracked under this item, to verify and resolve
-inside the relevant slice and not to be presented as decisions:
+inside the relevant slice and not to be presented as decisions. This list was written
+when the redesign was specified: an entry marked **Resolved** was resolved by the slice
+it names, and an entry without that mark was not re-verified when the slices were
+completed, so it may be out of date and is not a statement of current behavior:
 
 - `PROMPT_INJECTION_DETECTION_ENABLED` is documented as the gate of the prompt-injection
   detector and is consumed by nothing; a setting must not be presented that does not

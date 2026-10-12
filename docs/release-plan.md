@@ -163,7 +163,7 @@ Current status: **in progress.** `v1.0` is the current milestone.
     `invalid_email_shape`) until they migrate; their exit condition is open and is carried by
     `DET-05`.
 - **UI/UX redesign — slices S1 to S8a built (`UX-02` to `UX-09`); the Local AI architecture (S8b, `LAI-01`) is an unapproved design track.** An
-  owner-confirmed PLAN CHANGE makes the UI/UX redesign (`UX-01`, slices S1 to S8a) the next
+  owner-confirmed PLAN CHANGE made the UI/UX redesign (`UX-01`, slices S1 to S8a) the next
   `v1.0` work, ahead of `DET-04` (D-066). Slice S1, the workspace and a deliberate start
   (`UX-02`, D-068), is built: choosing a file stages it for review and nothing is analyzed
   until Run. Slice S2, history, reopen and rerun (`UX-03`, D-069), is built: the Workspace
@@ -193,7 +193,11 @@ Current status: **in progress.** `v1.0` is the current milestone.
   managed-provisioning architecture (S8b, `LAI-01`), a Rules and Expectations design track
   (`RULE-04`) and file-reading options (`ING-05`) are open, unapproved design tracks with no
   milestone placement. D-067 records the visible supersession of the machine-specific hardware
-  wording in D-029 and the `AI-06` screening record.
+  wording in D-029 and the `AI-06` screening record. After manual end-to-end testing the
+  human owner rejected the resulting UI/UX outcome as not meeting the intended
+  business-application quality: the implementation is complete, the `UX-01` outcome is not
+  accepted, substantial redesign is required before it can be, and no replacement design or
+  redesign direction is approved yet.
 - **Not yet done.** The rest of the list above is planned or has a `v0.1`-scoped baseline only.
 
 Production definition:
