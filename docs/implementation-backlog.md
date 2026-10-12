@@ -907,14 +907,18 @@ dependency_graph_closure:
   date-pattern and type-inference verifications; the migration exit condition; the
   relationship of ingest facts to parsing-warning codes; and durable dataset identity.
 
-*Successor items carried out of `DET-03` (milestone placement open).* The items from
-`DET-04` to `STD-01, HARM-01 and RULE-03` below were created by
-`docs/decision-log.md` D-061 so that no catalogue idea is dropped when `DET-03`
-closes as the Core detector catalogue. Each is **planned, not authorized and not
-built**, and none is placed in a milestone: placement is a separate owner decision.
-`docs/detector-framework.md` §16 ("Closure boundary") maps each catalogue entry to
-its carrier. Dependencies are in the `dependency_graph_closure` block of the `DET-03`
-section.
+*Successor items carried out of `DET-03` (milestone placement open).* The ten items
+below (`DET-04`, `CCX-01`, `CCX-02`, `DET-05`, `DET-06`, `OBS-02`, `ING-04`, `STD-01`,
+`HARM-01` and `RULE-03`) were created by `docs/decision-log.md` D-061 so that no
+catalogue idea is dropped when `DET-03` closes as the Core detector catalogue. Each is
+**planned, not authorized and not built**, and none is placed in a milestone: placement
+is a separate owner decision, and their position in this file, next to `DET-03`, is not
+a placement decision. The Current Position block at the top of this file lists only
+the seven items that the recorded planning intent names as unplaced (`DET-04` to
+`ING-04`); `STD-01`, `HARM-01` and `RULE-03` are previously named proposed capabilities
+that are not materialized planning items. `docs/detector-framework.md` §16 ("Closure
+boundary") maps each catalogue entry to its carrier. Dependencies are in the
+`dependency_graph_closure` block of the `DET-03` section.
 
 ## DET-04 — Value-distribution observations
 
