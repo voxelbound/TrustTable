@@ -99,7 +99,7 @@ def test_docs_say_the_configured_limits_are_consumed_and_ing_03_is_complete() ->
     backlog = _flat("docs/implementation-backlog.md")
     plan = _flat("docs/release-plan.md")
     log = _flat("docs/decision-log.md")
-    assert "**Done — secure Excel support (`ING-03`):**" in readme
+    assert "**Excel support (`ING-03`, complete).**" in readme
     assert "are read from the settings on every CSV and Excel parse" in readme
     assert "are not read by the parsers" not in readme
     assert "so changing those settings has no effect" not in readme
@@ -131,7 +131,7 @@ def test_no_readme_line_contradicts_the_completed_ing_03_or_the_closed_det_03() 
     assert "**ING-03 (complete)**" in readme
     assert "**DET-03 (closed as the Core detector catalogue)**" in readme
     assert "**DET-03 (in progress)**" not in readme
-    assert "**Done — Core detector catalogue (`DET-03`" in readme
+    assert "**Detector catalogue (`DET-03`, closed as the Core detector catalogue" in readme
     assert (
         "26 detectors covering 28 of 41 catalogue entries; 13 carried by named successors" in readme
     )
