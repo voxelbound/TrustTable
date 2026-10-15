@@ -141,18 +141,23 @@ def test_no_readme_line_contradicts_the_completed_ing_03_or_the_closed_det_03() 
         "26 detectors covering 28 of 41 catalogue entries; 13 carried by named successors" in readme
     )
     assert "the full catalogue is not built" in readme
-    assert "What the 26 detectors are" in readme
+    # The detector enumeration and behavior detail moved out of the README; the
+    # README keeps the closure facts and points to the owning specification.
+    assert "What the 26 detectors are" in history
+    assert "`docs/detector-framework.md` (section 16" in readme
     assert "bringing it to 17" in history
     assert "bringing it to 19" in history
     assert "bringing it to 20" in history
     assert "bringing it to 23" in history
     assert "bringing it to 26" in history
-    assert "data observations" in readme
+    assert "data observations" in history
     assert "closure target is amended from 27 to 26" in history
     assert "stays 26" in history
-    assert "never changes the trust assessment" in readme
-    assert "Zero-padded codes and phone numbers are never reported" in readme
-    assert "never an address" in readme
+    assert "never changes the trust assessment" in history
+    assert "Zero-padded codes and phone numbers are never reported" in history
+    assert "never an address" in history
+    # What stays in the README is the observation boundary, stated briefly.
+    assert "never change the trust assessment" in readme
     assert "never an email value" in history
 
 
@@ -172,7 +177,7 @@ def test_det_03_security_subtype_decision_is_recorded_consistently() -> None:
     assert "already flagged column can rise in severity" in _flat(
         "docs/implementation-backlog.md"
     ) or ("can rise in severity" in _flat("docs/implementation-backlog.md"))
-    assert "can now rise in severity" in _flat("README.md")
+    assert "can now rise in severity" in _flat("docs/delivery-history.md")
     for term in ("exfiltration_instruction", "secret_request", "prompt_injection"):
         assert term in framework, term
     assert "26 registered detectors covering 28 of the 41" in framework

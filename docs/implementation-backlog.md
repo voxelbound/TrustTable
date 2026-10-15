@@ -688,8 +688,9 @@ the Core detector catalogue by D-061. Earlier planning wording is preserved in G
 
 The slice and closure-package tables, the design record that shaped the closure
 (D-057, D-059, D-061), the per-package notes, the boundaries that held, the finite
-COMPLETE definition and the dependency graph as recorded at closure are preserved
-unchanged in `docs/delivery-history.md` ("DET-03 closure record"). In summary: the closure
+COMPLETE definition and the dependency graph as recorded at closure are moved to
+`docs/delivery-history.md` ("DET-03 closure record") with their text kept and only
+cross-reference wording adjusted. In summary: the closure
 work (D-062 to D-065) is built, and the security coverage was built as subtypes of the
 existing detector with no detector added, 26 registered (D-064).
 

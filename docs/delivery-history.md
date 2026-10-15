@@ -107,7 +107,7 @@ Statements below are dated by the point at which they were written. Where a bull
 
 ## Release plan chronology
 
-This section holds the per-milestone status narrative that `docs/release-plan.md` carried before it was reduced to a milestone-level plan. The text is moved unchanged; where it says "Current status" it describes the state when it was written.
+This section holds the per-milestone status narrative that `docs/release-plan.md` carried before it was reduced to a milestone-level plan. The text is moved with its wording kept; where it says "Current status" it describes the state when it was written.
 
 ### v0.2 — status narrative
 
@@ -229,7 +229,7 @@ Current status: **in progress.** `v1.0` is the current milestone.
 
 ## DET-03 closure record
 
-This section holds the design record, per-package notes, boundaries and completion definition that the implementation backlog's `DET-03` item carried before it was compacted to a current item record. The text is moved unchanged; the current item is in [`implementation-backlog.md`](implementation-backlog.md).
+This section holds the design record, per-package notes, boundaries and completion definition that the implementation backlog's `DET-03` item carried before it was compacted to a current item record. The text is moved with its wording kept; only cross-reference wording was adjusted where a sentence pointed at the backlog or at "this file". The current item is in [`implementation-backlog.md`](implementation-backlog.md).
 
 ### Detectors built before the closure plan
 
@@ -389,9 +389,15 @@ dependency_graph_closure:
     - "The two open CCX decisions gate CCX-01 only."
 ```
 
+## README detector catalogue bullet, as it read before it was condensed
+
+The README's "Project status" bullet for `DET-03` enumerated the detectors and their behavior. The README now keeps only the closure facts and points to `docs/detector-framework.md` §16, which owns the catalogue; the bullet is kept here with its wording unchanged.
+
+- **Detector catalogue (`DET-03`, closed as the Core detector catalogue, `docs/decision-log.md` D-065).** 26 detectors covering 28 of 41 catalogue entries; 13 carried by named successors. This closes the **Core** catalogue only: the 13 carried entries (value-distribution and time-based observations, checks that depend on your confirmed column meaning, geographic validation and the status/date conflict check) are **not built**, their successor items are planned with no milestone placement, and no detection is active for them, so the full catalogue is not built. An automated check compares the catalogue table in `docs/detector-framework.md` with the registered detectors and the successor items (it checks the table and the registry, not detector behavior). What the 26 detectors are: the twelve initial deterministic detectors and the prompt-injection risk detector, and then rows that are blank in every column; a column that writes yes/no values in more than one spelling (for example `Y`, `yes` and `TRUE`); dates before 1900, which are usually placeholders or typos; values in an email-named column that cannot be an email address (counts and row numbers only, never an address); a column of numbers written as text with a currency symbol, percent sign or thousands separator (such as `$1,234.50`), which stops it being summed or sorted as numbers; category values that differ only by punctuation or spacing (such as `New York` and `New-York`); column names that are the same once case, spacing and punctuation are ignored (such as `Order ID` and `order_id`); and three structural findings: a file that has a header but no data rows, columns whose header cell is blank, and a file in which an excessive share of rows had the wrong number of fields or of spreadsheet cells could not be read; and three observation-only detectors (a column that mixes value shapes such as numbers and words, a column whose dates are written in more than one format, and a column whose missing values sit mostly in one unbroken run of rows). Zero-padded codes and phone numbers are never reported as numbers stored as text. Only the old-dates finding offers a proposed validation rule among these newer detectors, none of the three structural findings offers one, and the column-name finding reads names only, never a value. The two structural findings about unreadable rows and cells read only counts and example positions that the file reader had already noticed, never a cell value or a reader message, and values cut short by TrustTable's own size limits are never counted as a defect in your data. The **possible prompt injection** finding labels what it matched as a prompt-injection instruction, an exfiltration instruction or a secret request, is one finding per column worded as a "possible risk, not confirmed malicious intent", and stores only a short excerpt; a column it flagged before can now rise in severity, and the trust score can fall, when it also contains one of the newly recognised phrases; it does not detect text hidden with look-alike letters from other scripts, leetspeak, encodings such as base64, or a request split across cells. Findings appear with built-in guidance; a separate, read-only list of **data observations** on the Overview states counts and example row numbers only (never a cell value), has no severity, confidence or priority, never changes the trust assessment, is not sent to an AI model and is not part of a report or export; it offers no built-in guidance or proposed rule and cannot yet be dismissed. You can record, change and withdraw a start-date and end-date relationship between two columns of a completed analysis, as immutable versions with a full history (`docs/decision-log.md` D-060), but **nothing reads it yet**: no check is based on it, and every response states `check_status: "not_active"`, which means no check exists, not that the data passed one.
+
 ## Backlog item status records
 
-This section holds the delivery detail that the implementation backlog's completed items carried in their `Status` text before the backlog was compacted to current item records. The text is moved unchanged. The current status of each item is in [`implementation-backlog.md`](implementation-backlog.md).
+This section holds the delivery detail that the implementation backlog's completed items carried in their `Status` text before the backlog was compacted to current item records. The text is moved with its wording kept. The current status of each item is in [`implementation-backlog.md`](implementation-backlog.md).
 
 ### AI-07 — annotation
 
