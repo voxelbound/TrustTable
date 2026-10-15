@@ -91,7 +91,6 @@ Conventions:
 ## Current implementation position
 
 - **Milestone:** v1.0 — Production-quality local release
-- **Latest completed package:** WP-124 / CLEANED
 - **Active track:** UX-01
 - **Track implementation progress:** 8/8 ordered item(s) complete
 - **Completed track items:** UX-02, UX-03, UX-04, UX-05, UX-06, UX-07, UX-08, UX-09
@@ -100,7 +99,6 @@ Conventions:
 - **Unplaced / not executable by milestone order:** DET-04, CCX-01, CCX-02, DET-05, DET-06, OBS-02, ING-04
 - **Unfinished milestone items:** 10
 - **Outcome gates:** UX-01: implementation complete; outcome rejected
-- **Completed planned items:** 54
 
 <!-- EDS:CURRENT-POSITION:END -->
 
