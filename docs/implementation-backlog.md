@@ -681,6 +681,10 @@ no milestone placement, which is an open owner decision. The 41-entry mapping is
 closure, 8 by the closure packages) and 13 are moved (11 by D-061 and 2 previously by
 D-057).
 
+Decisions that shaped the item: the detector slices D-054, D-055, D-056 and D-058; the
+confirmed-relationship foundation D-060; the design records D-057, D-059 and D-061; and the
+closure work D-062, D-063, D-064 and D-065.
+
 Provenance of the title: the item was titled "Complete detector catalogue" and was retitled
 the Core detector catalogue by D-061. Earlier planning wording is preserved in Git history.
 
