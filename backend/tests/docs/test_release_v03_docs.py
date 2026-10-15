@@ -65,12 +65,15 @@ def test_readme_says_v03_is_published_with_its_verification_limits() -> None:
     assert "no tag has been pushed" not in readme
     # The owner has recorded the v0.2 and v0.3 milestones complete (at the
     # agreed scoped qualification level), and v1.0 is the active milestone.
-    # The README states that and no longer calls the decision pending or
-    # v0.3 the current milestone.
-    assert "**v0.2 — Local AI beta: complete, released as `v0.2.0`.**" in readme
-    assert "**v0.3 — Complete manager workflow: complete, released as `v0.3.0`.**" in readme
+    # The README states the active milestone and no longer calls the decision
+    # pending or v0.3 the current milestone; the per-milestone completion
+    # record lives in the delivery history the README links to.
+    history = _flat("docs/delivery-history.md")
+    assert "**v0.2 — Local AI beta: complete, released as `v0.2.0`.**" in history
+    assert "**v0.3 — Complete manager workflow: complete, released as `v0.3.0`.**" in history
     assert "**Current milestone: v1.0 — Production-quality local release (active).**" in readme
-    assert "recorded the milestone complete at the agreed scoped qualification level" in readme
+    assert "recorded the milestone complete at the agreed scoped qualification level" in history
+    assert "(docs/delivery-history.md)" in _text("README.md")
     assert (
         "recording the `v0.3` milestone as complete is the repository owner's decision"
         not in readme
@@ -128,27 +131,29 @@ def test_no_readme_line_contradicts_the_completed_ing_03_or_the_closed_det_03() 
         if "DET-03" in line:
             assert "DET-03` is complete" not in line and "DET-03 (complete)" not in line, line
     readme = _flat("README.md")
-    assert "**ING-03 (complete)**" in readme
-    assert "**DET-03 (closed as the Core detector catalogue)**" in readme
+    history = _flat("docs/delivery-history.md")
+    assert "**ING-03 (complete)**" in history
+    assert "**DET-03 (closed as the Core detector catalogue)**" in history
     assert "**DET-03 (in progress)**" not in readme
+    assert "**DET-03 (in progress)**" not in history
     assert "**Detector catalogue (`DET-03`, closed as the Core detector catalogue" in readme
     assert (
         "26 detectors covering 28 of 41 catalogue entries; 13 carried by named successors" in readme
     )
     assert "the full catalogue is not built" in readme
     assert "What the 26 detectors are" in readme
-    assert "bringing it to 17" in readme
-    assert "bringing it to 19" in readme
-    assert "bringing it to 20" in readme
-    assert "bringing it to 23" in readme
-    assert "bringing it to 26" in readme
+    assert "bringing it to 17" in history
+    assert "bringing it to 19" in history
+    assert "bringing it to 20" in history
+    assert "bringing it to 23" in history
+    assert "bringing it to 26" in history
     assert "data observations" in readme
-    assert "closure target is amended from 27 to 26" in readme
-    assert "stays 26" in readme
+    assert "closure target is amended from 27 to 26" in history
+    assert "stays 26" in history
     assert "never changes the trust assessment" in readme
     assert "Zero-padded codes and phone numbers are never reported" in readme
     assert "never an address" in readme
-    assert "never an email value" in readme
+    assert "never an email value" in history
 
 
 def test_det_03_security_subtype_decision_is_recorded_consistently() -> None:

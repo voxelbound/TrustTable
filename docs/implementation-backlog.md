@@ -731,157 +731,39 @@ D-057).
 Provenance of the title: the item was titled "Complete detector catalogue" and was retitled
 the Core detector catalogue by D-061. Earlier planning wording is preserved in Git history.
 
-### Detectors built before the closure plan
+The slice and closure-package tables, the design record that shaped the closure
+(D-057, D-059, D-061), the per-package notes, the boundaries that held, the finite
+COMPLETE definition and the dependency graph as recorded at closure are preserved
+unchanged in `docs/delivery-history.md` ("DET-03 closure record"). In summary: closure
+packages 1 to 4 (D-062 to D-065) are built, and package 3 built the security coverage as
+subtypes of the existing detector with no detector added, 26 registered (D-064).
 
-Each is registered and covered by built-in guidance. The catalogue held 20 detectors after
-slice 4.
+Current constraints that bind the successor items: **no `DET-03` detector reads confirmed
+relationships**; the confirmed-relationship record (`WP-106`, `CCX-01` package 1) answers
+`check_status: "not_active"`; observations are neutral and never change trust scoring; the
+possible-prompt-injection finding stays one finding per column, and a column that version 1
+already flagged can rise in severity and priority when it also contains a newly recognised
+phrasing (owner decision SD-0cc2de8a9889, option A); and the executable catalogue-status
+check (`backend/tests/detectors/test_catalogue_status.py`) compares the 41-entry table in
+`docs/detector-framework.md` section 16 with the real registry and with the successor items
+in this file.
 
-| Slice | Decision | Detectors | Rule proposal |
-|---|---|---|---|
-| 1 | D-054 | `completeness.fully_empty_rows`, `consistency.inconsistent_booleans` | none, by design |
-| 2 | D-055 | `validity.implausibly_old_dates`, `validity.invalid_email_shape` | the date detector proposes a date-range rule from its own evidence; the email detector proposes none (counts only, never an email value) |
-| 3 | D-056 | `consistency.numeric_values_stored_as_text`, `consistency.near_duplicate_categories` | none, by design |
-| 4 | D-058 | `structural.duplicate_normalized_column_name` | none, by design |
-
-### Design record that shaped the closure
-
-- **D-057 (design materialization, documentation only).** Two catalogue entries were moved
-  out of `DET-03`, not dropped and never counted as completed: "invalid country/region
-  values" (carried by the proposed *standards policy* and *semantic category harmonization*
-  capabilities) and "status/date conflict" (carried by a named business-rule follow-up).
-  Context-free detectors can close independently; context-bound detectors depend on a
-  confirmed-context foundation and stay inactive, with contract-level tests, until a
-  confirmation path ships. The name-based shipped detectors `cross_field.line_total_mismatch`
-  and `validity.invalid_percentages` must migrate to confirmed roles, and
-  `validity.invalid_email_shape` is a compatibility exception to review, with a compatibility
-  window and a measurable owner-visible exit condition (open; carried by `DET-05`).
-- **D-059 (confirmed-context foundation design, documentation only).** The foundation was
-  split into two ordered packages and the observation type folded into the second. Package 1,
-  the confirmed-relationship foundation, delivers the persisted record (kind
-  `start_end_date`) with immutable versions and a stable relationship id, server-set
-  provenance, confirm / replace / withdraw with version-aware writes, `POST` and `GET
-  .../confirmed-relationships` (current projection plus history), the storage limits and the
-  `delete_analysis` cascade; `POST` returns `check_status: "not_active"`, and it does not
-  claim context-bound detection is active. It was delivered as `WP-106` (D-060). The second
-  package, context-bound execution, was gated on two open decisions (what counts as a
-  *conflicting* confirmation; how the gate and summary treat a *withdrawn* relationship) and
-  on an open owner question: whether a withdrawal is exempt from the 50-versions-per-relationship
-  cap (as decided, a relationship at 50 versions can no longer be replaced or withdrawn, and
-  only deleting the analysis recovers it).
-- **D-061 (closure boundary, PLAN CHANGE, documentation only).** The owner approved a finite
-  closure boundary. The confirmed-context execution engine (the former "package 2": the gate,
-  the durable second pass, the scheduler, stale-run recovery, the awaiting-confirmation
-  summary and `NOT_CHECKED`) left `DET-03` and became `CCX-01`. **`WP-106` is preserved**: it
-  is delivered history under `DET-03` and is recorded as `CCX-01` package 1. The minimal
-  Observation foundation ships first, with a value-evidence producer, and `CCX-01` later adds
-  `NOT_CHECKED` as a new kind; D-059 items 11 and 15 are superseded on ordering only.
-
-### Closure packages (all built)
-
-| # | Package | Delivered | Registered after |
-|---|---|---|---|
-| 0 | Re-scope materialization (documentation only) | The D-061 record | 20 |
-| 1 | Structural and ingest closure (D-062) | Zero-row and header-only investigation; `structural.empty_dataset`; an immutable in-memory parser-warning projection limited to four warning codes; `structural.unnamed_column`; `structural.excessive_parse_failures`. No persisted ingest-facts record | 23 |
-| 2 | Observation and value-evidence slice (D-063) | The minimal Observation foundation, a read-only API and a read-only results-UI list; `structural.mixed_types`, `consistency.inconsistent_date_formats`, `completeness.concentrated_missingness` | 26 |
-| 3 | Security detector slice (D-064) | The adversarial suite extended first; subtypes of the existing detector; bounded, redacted evidence; "possible risk" wording; the Security Reviewer review. Built as subtypes of the existing detector; no detector added, 26 registered (D-064) | 26 |
-| 4 | `DET-03` closure (D-065) | An executable catalogue-status check against the 41-entry table; document and count reconciliation; the closure report | 26 |
-
-Packages 1, 2 and 3 were technically independent of each other; package 4 followed all
-three. Each had its own acceptance criteria, reviews and evidence.
-
-- **Package 1 (D-062).** The zero-row investigation found that the parsers accept a
-  header-only CSV or worksheet, so the empty case is detector-owned and the
-  parser-owned alternative no longer applies. The four-code ingest-facts projection is in
-  memory, behind a default-off metadata flag. No persisted ingest-facts record,
-  Observation, confirmed-context execution, scheduler or `NOT_CHECKED` work was built, and
-  no detector reads confirmed relationships.
-- **Package 2 (D-063).** The Observation is a neutral record with no severity, confidence or
-  priority and one closed kind (`value_evidence`), stored in a new nullable
-  `observations_json` column (migration `0008`), read through the read-only
-  `GET /api/v1/analyses/{analysis_id}/observations` route and listed read-only on the
-  Overview screen. A negative allowlist test fails if an Observation field reaches score,
-  priority, an AI payload, an export or a report.
-- **Package 3 (D-064).** By owner decision SD-989e7edf3d5a (option R), catalogue entries 40
-  (possible data-exfiltration instruction) and 41 (suspicious secret-request text) are
-  covered as **evidence subtypes of the existing
-  `security.possible_llm_prompt_injection`** (version 2) instead of a second detector, which
-  amended the closure target from 27 to 26 registered detectors covering the same 28 of 41
-  entries. Built: a closed subtype vocabulary and per-subtype row counts in the evidence,
-  extended phrasings for the two heightened families, invisible-character and compatibility
-  normalization, bounded redacted evidence (never text after a secret or exfiltration
-  request), an extended adversarial suite and a recorded Security Reviewer approval. It is
-  still one finding per column; identity, severity and trust-score effect are unchanged for
-  every column in which nothing newly recognised appears, and newly recognised phrasings
-  count wherever they appear, so a column version 1 already flagged can rise in severity and
-  priority (owner decision SD-0cc2de8a9889, option A).
-- **Package 4 (D-065).** The check (`backend/tests/detectors/test_catalogue_status.py`)
-  compares the 41-entry table in `docs/detector-framework.md` section 16 with the real
-  registry and with the successor items in this file, so a dropped row, an unknown
-  detector, an unknown successor or a moved entry counted as built fails the test run. No
-  detector, finding, score, API or UI behavior changed in this package.
-
-### Boundaries that held for packages 1 to 3
-
-The parser-warning projection is in memory, limited to `parsing.empty_column_name`,
-`parsing.ragged_row`, `parsing.xlsx_formula_without_cached_value` and
-`parsing.xlsx_error_value`, carries counts and bounded references and never a message or a
-cell value, and reaches detectors through an additive optional input behind a flag that
-defaults to off. Observations are neutral, have no severity, confidence or priority, have
-one closed kind (`value_evidence`), are never counted by trust scoring or priority, never
-enter an AI payload, and are excluded from exports and reports for now. The extension seam
-is that a later kind is a new kind, never a change to `value_evidence`. The provisional
-Observation API is recorded in the API specification and the domain model. There is no
-dismissal, suppression, history, scheduling, `NOT_CHECKED`, scheduler, second-pass
-machinery or stale-run recovery in `DET-03`, and **no `DET-03` detector reads confirmed
-relationships**.
-
-### Finite COMPLETE definition (met by D-065)
-
-`DET-03` is complete when: (1) the title and scope are reconciled and no document assigns
-confirmed context, a scheduler, `NOT_CHECKED`, persisted ingest facts or Observation
-workflow to it; (2) the registry holds exactly 26 detectors (27 before D-064) and the
-original 20 remain registered and green; (3) empty dataset is terminal, as a registered
-detector; (4) unnamed column and excessive parse failures read only the four-code
-projection, with nothing persisted or exposed; (5) the three observation detectors are
-readable through the API and visible in the results UI, never change score or priority, and
-never enter an AI payload; (6) the security coverage exists with an extended adversarial
-suite, bounded and redacted evidence and a recorded Security Reviewer approval; (7) the
-executable catalogue-status check passes: every one of the 41 entries is built, built by
-closure, moved to a named existing successor, or moved previously, and moved entries are
-never counted as built; (8) documents are reconciled with the wording "26 detectors
-covering 28 of 41 catalogue entries; 13 carried by named successors", never "complete
-catalogue built"; (9) CI is green on the final fingerprint with no stale verification and no
-unresolved blocking finding; (10) the owner records the item complete.
-
-### Current dependency graph
+### Dependency edges of the planned successors
 
 ```yaml
-dependency_graph_closure:
-  schema: 1
-  status: design-recorded-not-implemented
-  supersedes: [dependency_graph, dependency_graph_amendment]   # earlier graphs are in Git history; this is the current plan
-  nodes:
-    det03_p0: {title: "DET-03 re-scope materialization", kind: documentation}
-    det03_p1: {title: "Structural and ingest closure"}
-    det03_p2: {title: "Observation and value-evidence slice"}
-    det03_p3: {title: "Security detector slice"}
-    det03_p4: {title: "DET-03 closure"}
-    wp106:    {title: "Confirmed-relationship foundation (delivered; CCX-01 package 1)", id: WP-106, state: delivered}
+successor_dependencies:
   edges:
-    - {id: C1, from: det03_p0, to: [det03_p1, det03_p2, det03_p3]}
-    - {id: C2, from: [det03_p1, det03_p2, det03_p3], to: det03_p4}
-    - {id: C3, from: det03_p2, to: [DET-04, OBS-02, CCX-01]}   # CCX-01 adds NOT_CHECKED to the existing observation record
-    - {id: C4, from: det03_p1, to: ING-04}
-    - {id: C5, from: [wp106, det03_p2], to: CCX-01}
-    - {id: C6, from: CCX-01, to: [CCX-02, DET-05, DET-06]}
-    - {id: C7, from: CCX-02, to: DET-05}
+    - {from: DET-03 observation foundation, to: [DET-04, OBS-02, CCX-01]}   # CCX-01 adds NOT_CHECKED to the existing observation record
+    - {from: DET-03 structural and ingest closure, to: ING-04}
+    - {from: [WP-106, DET-03 observation foundation], to: CCX-01}
+    - {from: CCX-01, to: [CCX-02, DET-05, DET-06]}
+    - {from: CCX-02, to: DET-05}
   no_edge:
     - "no DET-03 package depends on CCX-01, CCX-02, DET-05 or DET-06"
     - "no DET-03 detector reads confirmed relationships"
   notes:
-    - "E4 (migration of line_total_mismatch and invalid_percentages, review of invalid_email_shape) moves to DET-05."
-    - "E5 (standards policy and category harmonization) is unchanged and remains outside DET-03; STD-01, HARM-01 and RULE-03 are working titles."
-    - "E6 (zero-row verification) and E7 (date-pattern vocabulary) become investigation steps inside packages 1 and 2; E8 (security review) is inside package 3."
+    - "Migration of line_total_mismatch and invalid_percentages and review of invalid_email_shape move to DET-05."
+    - "Standards policy and category harmonization remain outside DET-03; STD-01, HARM-01 and RULE-03 are working titles."
     - "The two open CCX decisions gate CCX-01 only."
 ```
 
@@ -918,7 +800,8 @@ the seven items that the recorded planning intent names as unplaced (`DET-04` to
 `ING-04`); `STD-01`, `HARM-01` and `RULE-03` are previously named proposed capabilities
 that are not materialized planning items. `docs/detector-framework.md` §16 ("Closure
 boundary") maps each catalogue entry to its carrier. Dependencies are in the
-`dependency_graph_closure` block of the `DET-03` section.
+`successor_dependencies` block of the `DET-03` section; the graph as recorded at closure is in
+`docs/delivery-history.md`.
 
 ## DET-04 — Value-distribution observations
 
@@ -1036,14 +919,6 @@ Screenshots, architecture, threat model, evaluation, performance, limitations.
 ## REL-04 — v1.0 release
 
 Blocked unless all requirements in `testing-strategy.md` pass.
-
-# Post-v1 optional deployment
-
-## HOST-DEC-01 — Public-demo decision
-
-Evaluate value, cost, operations, abuse, privacy, retention, and inference.
-
-No implementation occurs until this decision is approved.
 
 # UI/UX redesign (`UX-01`) — slices implemented and merged; outcome rejected by the human owner
 
@@ -1314,3 +1189,11 @@ data-derived parameters after the source analysis is deleted, and terminology.
 
 Encoding selection and other parser controls, designed separately with the parser
 behavior and its security implications.
+
+# Post-v1 optional deployment
+
+## HOST-DEC-01 — Public-demo decision
+
+Evaluate value, cost, operations, abuse, privacy, retention, and inference.
+
+No implementation occurs until this decision is approved.
