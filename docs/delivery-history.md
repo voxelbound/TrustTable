@@ -105,6 +105,128 @@ Statements below are dated by the point at which they were written. Where a bull
 - **ING-03 (complete)** — secure Excel support in four slices: a standard-library `.xlsx` parser that never evaluates formulas, refuses macro-enabled, encrypted and malformed workbooks and bounds decompression by counting the bytes it reads; upload through `POST /api/v1/analyses` with an optional `worksheet` field, refusal before any analysis exists, and every pipeline stage reading the chosen worksheet; the Start screen's file picker with a worksheet chooser, with the Overview and Technical details screens naming the worksheet analyzed; and the documented size, row, column, worksheet and cell limit settings read on every parse (`docs/decision-log.md` D-050 to D-053).
 - **DET-03 (closed as the Core detector catalogue)** — detector catalogue, delivered in slices. Slice 1 added `completeness.fully_empty_rows` and `consistency.inconsistent_booleans`, each with evidence and built-in guidance, bringing the catalogue to 15 detectors (`docs/decision-log.md` D-054). Slice 2 added `validity.implausibly_old_dates` and `validity.invalid_email_shape` (counts and row numbers only, never an email value), bringing it to 17 (`docs/decision-log.md` D-055). Slice 3 added `consistency.numeric_values_stored_as_text` and `consistency.near_duplicate_categories`, bringing it to 19 (`docs/decision-log.md` D-056). Slice 4 added `structural.duplicate_normalized_column_name`, bringing it to 20 (`docs/decision-log.md` D-058). A confirmed-relationship foundation (not a detector; the count stays 20) stores user-stated start/end-date relationships with immutable versions behind `POST` and `GET .../confirmed-relationships`, with withdrawal exempt from the version caps (`docs/decision-log.md` D-060). Closure package 1 (D-062) added `structural.empty_dataset`, `structural.unnamed_column` and `structural.excessive_parse_failures`, bringing it to 23. Closure package 2 (D-063) added the minimal Observation foundation, a neutral read-only record behind `GET .../observations`, and three observation-only producers (`structural.mixed_types`, `consistency.inconsistent_date_formats`, `completeness.concentrated_missingness`), bringing it to 26. Closure package 3 (D-064) covers the exfiltration-instruction and secret-request catalogue entries as evidence subtypes of the existing `security.possible_llm_prompt_injection` (version 2), so the count stays 26 and the closure target is amended from 27 to 26 detectors covering 28 of 41 entries. Closure package 4 (D-065) added an executable catalogue-status check and closed `DET-03` as the Core detector catalogue: 26 detectors covering 28 of 41 catalogue entries; 13 carried by named successors, which are planned and not built.
 
+## Release plan chronology
+
+This section holds the per-milestone status narrative that `docs/release-plan.md` carried before it was reduced to a milestone-level plan. The text is moved unchanged; where it says "Current status" it describes the state when it was written.
+
+### v0.2 — status narrative
+
+Current status: **complete.** This is the first promoted portfolio release.
+
+- **Decision gate.** Complete for the baseline scope. `llama.cpp` is the selected runtime
+  (Ollama is a future alternative, not disqualified) and Qwen3.5-4B at Q4_K_M is the selected
+  baseline model; Q4_K_M is recorded because it is what the model was evaluated at, and no
+  comparative quantization study was performed. The accelerated hardware-tier default was
+  deliberately deferred as a later, non-blocking follow-on (D-034, D-035; see also D-007's
+  appended review note and D-030–D-032).
+- **Runtime hardening.** `llama-server` is inference infrastructure only: its built-in Web UI
+  is disabled in the supported profile and the local baseline uses host port `8081`, distinct
+  from the frontend port `8080` (`AI-07`, D-036), sequenced after `API-02` and before `AI-05`.
+- **Grounded AI analysis.** `AI-08` (grounded, advisory per-finding analysis, deployable
+  local-AI experience and first-class Linux documentation) was inserted before `REL-02` by
+  explicit product direction (D-040). It adds no `v0.3` scope: no rule engine, rule execution,
+  persistent review or export.
+- **Release.** `REL-02` was delivered in three ordered steps (D-041): the repository-side
+  pull-only Compose file and tag-gated publish workflow, the local-AI qualification, and the
+  protected publish with a clean-host check. The local-AI qualification was **waived** by the
+  owner (D-044): it is not a pass, no real-model benchmark of that path was completed, and
+  nothing about minimum, recommended or baseline-tier hardware may be inferred. `v0.2.0` is
+  published to GHCR and was started on a clean Linux host with no GHCR credentials and AI off
+  (D-045); `REL-02`, the last `v0.2` item, is complete. Live local-AI evaluation is optional in
+  `docs/testing-strategy.md` §8, so the release gates are unaffected.
+
+Provenance of the list wording: it reads "real local-inference provider" rather than the
+earlier "Ollama provider" wording, and includes the benchmark-harness and decision-gate
+entries sequenced ahead of it (D-032, D-033). The earlier wording is preserved in Git history.
+
+### v0.3 — status narrative
+
+Current status: **complete.** Every feature above is implemented. `v0.3.0` is published and
+was verified on a clean host with AI off (one pull, start and health check), and `REL-03` is
+complete (D-049). The images are unsigned, unattested and not container-scanned, and the
+local-AI setup was not exercised there. The project owner has recorded the `v0.2` and `v0.3`
+milestones complete, each at the agreed scoped qualification level; `v0.2.0` and `v0.3.0` are
+the published releases.
+
+### v1.0 — status narrative
+
+Current status: **in progress.** `v1.0` is the current milestone.
+
+- **XLSX support — complete.** `ING-03` is complete: Excel upload works from the API and the
+  Start screen, and the documented limit settings are read on every parse (D-052, D-053).
+- **"Complete detector catalogue" — met only in a narrowed sense.** By owner decision (D-061)
+  this bullet is the **Core detector catalogue closure**, and `DET-03` is the Core detector
+  catalogue. `DET-03` is closed as **26 detectors covering 28 of 41 catalogue entries; 13
+  carried by named successors** (D-065); the 41-entry mapping is in
+  `docs/detector-framework.md` §16. The 13 carried entries are not built, not claimed delivered and not `v1.0` scope; their successor items (`DET-04`,
+  `CCX-01`, `CCX-02`, `DET-05`, `DET-06`, `STD-01`, `HARM-01`, `RULE-03`, with `OBS-02` and
+  `ING-04` also carried out of `DET-03`) are planned with **no milestone placement**, which
+  remains an open owner decision. Still open and undecided: the two `CCX-01` decisions (what
+  counts as a conflicting confirmation, and how a withdrawn relationship is gated) and whether
+  `structural.empty_column` should skip a zero-row dataset (D-062 item 9).
+- **How `DET-03` was built** (details in the decision log and the backlog):
+  - The detector slices added `completeness.fully_empty_rows`,
+    `consistency.inconsistent_booleans`, `validity.implausibly_old_dates`,
+    `validity.invalid_email_shape`, `consistency.numeric_values_stored_as_text`,
+    `consistency.near_duplicate_categories` and
+    `structural.duplicate_normalized_column_name` (D-054, D-055, D-056, D-058).
+  - The confirmed design outcome moved two entries out of `DET-03` without dropping or counting
+    them as completed: geographic validation (to the proposed standards policy and semantic
+    category harmonization capabilities) and the status/date conflict check (to a named
+    business-rule follow-up) (D-057).
+  - The confirmed-relationship foundation (D-059, D-060) is delivered history under `DET-03`
+    and is recorded as package 1 of `CCX-01`; the confirmed-context execution work left
+    `DET-03` (D-061).
+  - The four closure packages added `structural.empty_dataset`, `structural.unnamed_column` and
+    `structural.excessive_parse_failures` (D-062), the minimal Observation foundation with
+    `structural.mixed_types`, `consistency.inconsistent_date_formats` and
+    `completeness.concentrated_missingness` (D-063), the exfiltration-instruction and
+    secret-request evidence subtypes of the existing
+    `security.possible_llm_prompt_injection` detector, which added no detector (D-064), and the
+    executable catalogue-status check with the closure report (D-065).
+  - Most context-bound detectors stay inactive until a confirmation path ships. The standing
+    principle that column names never define business meaning is partly unmet by the shipped
+    name-based detectors (`line_total_mismatch`, `invalid_percentages`, and the review of
+    `invalid_email_shape`) until they migrate; their exit condition is open and is carried by
+    `DET-05`.
+- **UI/UX redesign — slices S1 to S8a built (`UX-02` to `UX-09`); the Local AI architecture (S8b, `LAI-01`) is an unapproved design track.** An
+  owner-confirmed PLAN CHANGE made the UI/UX redesign (`UX-01`, slices S1 to S8a) the next
+  `v1.0` work, ahead of `DET-04` (D-066). Slice S1, the workspace and a deliberate start
+  (`UX-02`, D-068), is built: choosing a file stages it for review and nothing is analyzed
+  until Run. Slice S2, history, reopen and rerun (`UX-03`, D-069), is built: the Workspace
+  lists recent analyses with open, run again and delete, and the Configure step notes when
+  the exact file was analyzed before. Slice S3, the dashboard and progress (`UX-04`, D-070),
+  is built: the Overview answers how much of the file the findings touch, how complete the
+  data is, what has been reviewed, and where to look first, and progress is in business
+  wording with AI work shown as separate and optional. Slice S4 (`UX-05`) is built in two
+  parts: the findings review workspace (filtered previous, next and next-unreviewed
+  navigation, a review-state filter, keyboard support and business labels, D-071), and
+  persisted non-blocking AI enrichment (a saved, binding-checked AI explanation prepared
+  on a bounded background worker, with the explanation route no longer calling a model,
+  D-072), so `UX-05` is complete. Slice S5 (`UX-06`) is built in two parts: part a
+  (D-073) measured the parse path and built the finding-scoped data inspector for a finding
+  with affected rows; part b (D-074) reaches it from an observation's example rows and gives
+  a column-wide finding a bounded window (example rows of observations about a column the
+  finding is about, otherwise the start of the file, labelled as such), so `UX-06` is complete. Slice S6
+  (`UX-07`, D-075) is built: the analysis areas are grouped under Review and Act and Export, the
+  supporting areas say what they are for, and a Help area explains the terms. Slice S7 (`UX-08`,
+  D-076 and D-077) is built: one explained AI-assistance setting and a browser-local Advanced
+  mode. Slice S8a (`UX-09`, D-078) is built: a Local AI screen with a readiness checklist and a
+  bounded connection test of the configured local runtime; it downloads, installs and manages
+  nothing, and the product-managed mechanism stays `LAI-01`. It does not place `DET-04`, `CCX-01`,
+  `CCX-02`, `DET-05`, `DET-06`, `OBS-02`, `ING-04`, `STD-01`, `HARM-01` or `RULE-03` in any
+  milestone, and nothing is removed from `v1.0`. The sequencing of accessibility,
+  browser-matrix and performance work relative to the redesign is not decided. The Local AI
+  managed-provisioning architecture (S8b, `LAI-01`), a Rules and Expectations design track
+  (`RULE-04`) and file-reading options (`ING-05`) are open, unapproved design tracks with no
+  milestone placement. D-067 records the visible supersession of the machine-specific hardware
+  wording in D-029 and the `AI-06` screening record. After manual end-to-end testing the
+  human owner rejected the resulting UI/UX outcome as not meeting the intended
+  business-application quality: the implementation is complete, the `UX-01` outcome is not
+  accepted, substantial redesign is required before it can be, and no replacement design or
+  redesign direction is approved yet.
+- **Not yet done.** The rest of the list above is planned or has a `v0.1`-scoped baseline only.
+
 ## DET-03 closure record
 
 This section holds the design record, per-package notes, boundaries and completion definition that the implementation backlog's `DET-03` item carried before it was compacted to a current item record. The text is moved unchanged; the current item is in [`implementation-backlog.md`](implementation-backlog.md).
@@ -266,3 +388,254 @@ dependency_graph_closure:
     - "E6 (zero-row verification) and E7 (date-pattern vocabulary) become investigation steps inside packages 1 and 2; E8 (security review) is inside package 3."
     - "The two open CCX decisions gate CCX-01 only."
 ```
+
+## Backlog item status records
+
+This section holds the delivery detail that the implementation backlog's completed items carried in their `Status` text before the backlog was compacted to current item records. The text is moved unchanged. The current status of each item is in [`implementation-backlog.md`](implementation-backlog.md).
+
+### AI-07 — annotation
+
+> Annotation (2026-09-17, `D-036` sequencing): inserted here, between
+> `API-02` and `AI-05`, per `D-033`'s appended sequencing amendment.
+
+### REL-02 — status and delivery steps
+
+Status: complete. `REL-02` is complete (`docs/decision-log.md` D-041 to D-045). It was delivered in
+three ordered steps:
+
+1. *Repository-side path* (D-041): `docker-compose.release.yml` (pull-only, requires
+   `TRUSTTABLE_VERSION`) and a tag-gated publish workflow (`docs/release-images.md`), tested
+   structurally and against locally built images. Publishing, tagging and package
+   visibility stay with the repository owner.
+2. *Local-AI qualification* (the fourth bullet above). The instrument exists: a harness that
+   runs the product's own finding-analysis path over one finding per detector, with and
+   without finalized confirmed context, and records fill rate, fallback rate and
+   harness-measured latency (`docs/local-ai-qualification.md`, D-043); it was proven only
+   against the real explanation route with stubbed providers. The bullet is **waived** by
+   the human owner for `v0.2` (D-044): no real-model benchmark of this path was completed
+   and none is planned as a replacement. The waiver is **not a pass**, and no minimum,
+   recommended, baseline-tier or general hardware claim may be inferred from it. The
+   bullet's "on baseline hardware" wording is preserved as written and is unvalidated by
+   this project's own evidence.
+3. *Protected publish and clean-host verification* (the first three bullets; D-045): the
+   `v0.2.0` images were published to GHCR, and the pull-only path needs no build step and no
+   PyPI, npm or base-image access. The release was installed on a clean Linux host with only
+   GitHub and GHCR access and no GHCR credentials, **narrowed by the human owner to one
+   AI-off pull, start and health check**: the offline-provisioned model and the model
+   connectivity check were not exercised there. The guide states the verified commands and
+   marks what the run did not cover.
+
+Also recorded (D-042): before the qualification, the backend test suite was made hermetic
+against a developer's local provider configuration and the trust-boundary meaning of the
+`confirmed_context` envelope slot was recorded. Neither satisfies any of the four bullets.
+
+### EXP-01 — status and slices
+
+Status: complete. The backend scope is complete; the report screen (`UI-03`) and report deletion with
+the analysis (`DEL-01`) are separate items. Delivered in four slices:
+
+1. The JSON and YAML rules exports (`GET /analyses/{id}/exports/rules.json` and
+   `rules.yaml`, `docs/api-specification.md` §12). Only validated rules are exported.
+2. The deterministic Markdown report renderer and immutable report snapshot, as a library
+   (`trusttable_backend.exports.report_markdown`), including the AI-processing security
+   section, which reports only recorded state (`D-046`).
+3. Report snapshot persistence (a new additive `reports` table) and the four report routes
+   (`docs/api-specification.md` §12), with the OpenAPI contract and generated client
+   regenerated. Reports are rendered once and stored; downloads never re-render.
+4. The durable per-analysis record of AI enrichment calls (`D-047`), so new reports state
+   counts, what may have been sent, the model location and the protections.
+
+### DEL-01 — status
+
+Status: complete. `DELETE /analyses/{id}` is implemented (`docs/api-specification.md` §6, `D-048`): the
+analysis and all of its reports are removed in one transaction, a running analysis is
+cancelled and cannot be brought back by its worker, and the stored bytes are overwritten in
+the database file. The deletion control and its completion message are part of `UI-03`. No
+`analysis_deleted` event is emitted because no lifecycle event log exists yet.
+
+### UI-03 — status and slices
+
+Status: complete for its named screens, delivered in five slices; backend-dependent gaps
+remain outside this item.
+
+1. The analysis lifecycle controls in the analysis layout: cancel, retry (opens the new
+   attempt) and delete with an accessible permanent-removal confirmation
+   (`docs/ui-specification.md` §3).
+2. The report screen (`docs/ui-specification.md` §4.10): choose the report options, generate
+   an immutable snapshot, list stored reports and download a report's Markdown.
+3. The rules screen (§4.9): list rules with their latest results, expand read-only details,
+   re-run and delete a rule, and download the validated rules as JSON or YAML.
+4. The finding review controls on the finding detail screen (§4.7) over the existing review
+   route; the findings list shows each review state.
+5. The technical details screen (§4.11), from existing routes only.
+
+Gaps outside this item: editing rule parameters and the enabled toggle (no update route),
+filtering findings by review state (no filter), and exposing detector thresholds and
+analysis-level prompt/model metadata.
+
+### REL-03 — status
+
+Status: complete. `REL-03` is complete; the `v0.3` milestone decision is the owner's.
+
+- Repository side: the backend version is `0.3.0`, and one acceptance test
+  (`backend/tests/api/test_v03_complete_workflow.py`) drives a CSV through the whole
+  persisted workflow: analysis, findings, a finding review, a rule created and run, the
+  rules export, a stored Markdown report, a restart and permanent deletion.
+- Release: the owner pushed the tag `v0.3.0` (peels to
+  `5053249adacca3c46276daa91f8ea1ff0ccc945d`), the release workflow passed, and a clean
+  Linux host with no GHCR credentials pulled and started the release with AI off
+  (`docs/decision-log.md` D-049). As for `REL-02`, the clean-host check is one AI-off pull,
+  start and health check; the local-AI setup was not exercised. The images remain unsigned,
+  unattested and not container-scanned.
+
+### ING-03 — status and slices
+
+Status: complete; the item is complete (`ING-03`). It was delivered in four slices:
+
+1. The secure XLSX parser (`parsers/xlsx_parser.py`, `parse_xlsx`): worksheet selection by
+   name or the first visible sheet, stored values read as literal text with formulas never
+   evaluated, rejection of macro-enabled, encrypted, malformed and path-traversal
+   workbooks, and expansion, entity and resource limits (`docs/decision-log.md` D-050).
+2. The API accepts `.xlsx` (`POST /analyses` with the optional `worksheet` field):
+   worksheet selection or `WORKSHEET_REQUIRED`, upload-time refusal of macro-enabled,
+   malformed and over-limit workbooks, a format-aware pipeline that reads the chosen
+   worksheet at every stage, `selected_worksheet` in the dataset summary, and retry that
+   keeps the format (D-051).
+3. The Start screen accepts `.xlsx`, asks which worksheet to analyze when the API answers
+   `WORKSHEET_REQUIRED`, uploads the same file with the picked worksheet and shows the API's
+   refusal messages; the Overview and Technical details screens name the worksheet analyzed
+   (D-052).
+4. The configured limits (documented in `docs/configuration.md`): `MAX_FILE_SIZE_MB`, `MAX_ROWS`, `MAX_COLUMNS`, `MAX_WORKSHEETS`,
+   `MAX_UNCOMPRESSED_WORKBOOK_MB` and `MAX_CELL_COUNT` (with the column-name and text-value
+   length settings) are read from the settings on every CSV and Excel parse, in the upload
+   inspection and each pipeline stage, through one factory (`analysis/parse_limits.py`);
+   with no variables set behavior is unchanged (D-053).
+
+Checked and outside the item: `POST /datasets/inspect` (marked optional in the API
+specification and assigned to no backlog item), date interpretation (no authoritative
+document asks for it; formatting is ignored by design, so a date stored as a serial number
+is shown as that number), and the Playwright worksheet-selection scenario (a `REL-04`
+test-gate item under `docs/testing-strategy.md` §2.4).
+
+### UX-01 — implementation defects and drift list as written when the redesign was specified
+
+This list was written when the redesign was specified: an entry marked **Resolved** was resolved by the slice
+it names, and an entry without that mark was not re-verified when the slices were
+completed, so it may be out of date and is not a statement of current behavior:
+
+- `PROMPT_INJECTION_DETECTION_ENABLED` is documented as the gate of the prompt-injection
+  detector and is consumed by nothing; a setting must not be presented that does not
+  control the behavior it claims to control.
+- The frontend proxy sets no read timeout or request-body size, so upload limits and
+  long AI requests may be inconsistent with the backend limits and with
+  `LLM_TIMEOUT_SECONDS`; to be verified, with server-side enforcement as the authority.
+  **Resolved for uploads by `UX-02` (D-068):** the proxy now applies no size limit and
+  streams bodies with 300-second read and send timeouts, and the backend is the size
+  authority. Whether a long AI request fits the proxy timeouts is not re-verified here.
+- The Start screen states that AI is disabled regardless of configuration, and a
+  documented `GET /ai/status` route does not exist. **Resolved by `UX-02` (D-068):**
+  `GET /ai/status` exists and the Workspace and Configure step show its status.
+- Raw internal values (categories, severities) appear in the interface.
+- Placeholder text on the Overview ("coming soon") describes capabilities that exist.
+- `ANALYSIS_RETENTION_HOURS` is declared and consumed by nothing.
+- `docs/api-specification.md` says the source file is stored; the code stores the
+  content in the database with a nominal storage location.
+- The explanation route calls the model on every request and stores nothing, and the
+  finding screen waits for it.
+
+### UX-02 to UX-09 — status records
+
+**UX-02 (S1).** Status: built (`docs/decision-log.md` D-068; migration `0009`; settings
+`STAGING_MAX_COUNT`, `STAGING_MAX_TOTAL_MB` and `STAGING_TTL_MINUTES`). Delivered as
+specified below with the engineering choices recorded in D-068; no durable Dataset, no
+history, hash lookup or "analysed before" notice (`UX-03`), and no Analyses, Settings or
+Help navigation until those slices ship. `UX-03` onward remain planned and unauthorized.
+
+**UX-03 (S2).** Status: built (`D-069`). The Workspace lists the 20 newest analyses with open, run
+again and delete; `GET /analyses` and `POST /analyses/{id}/rerun` are built; the
+Configure step shows an "analysed before" notice from an indexed lookup over live,
+completed analyses, which forgets an analysis when it is deleted. The name hint is
+filename-only and describes no difference. Not built: paging, search, an *Analyses*
+navigation entry.
+
+**UX-04 (S3).** Status: built (`D-070`). The Overview shows the trust assessment, an *At a glance*
+group (distinct rows affected, cells filled in with their sampled-or-full scope, review
+progress), the distribution of findings by severity and by kind of problem, the
+columns with the most findings, the top findings, observations as *Worth knowing* and
+the dataset summary; progress uses business wording and states that AI work is
+separate and optional. `GET /analyses/{id}/summary` is built and carries counts only.
+Not built: trends, comparison with an earlier analysis, a data-quality percentage
+beside the trust assessment, a numeric progress or time estimate. `UX-05` onward remain
+planned and unauthorized.
+
+**UX-05 (S4).** Status: **built** (`D-071`, `D-072`). Part a (frontend only): previous, next and
+next-unreviewed navigation over the filtered, priority-ordered list with the filters
+carried in the address, a review-state filter, keyboard shortcuts that are inert while
+typing, and business labels for category and severity. Part b: persisted, non-blocking
+AI enrichment per finding. The explanation route no longer calls a model; a short
+`POST`/`GET .../ai-enrichment` pair starts and reports it; the call runs on a bounded
+in-process worker; a saved result is bound to the finding, confirmed-context version,
+model identity and prompt or contract version and is stale when any changes; a restart
+fails anything left preparing; saved output is deleted with its analysis; the screen
+shows the built-in guidance at once with a separate AI state. Not built, and not part
+of this item: AI for all findings at once (the batch seam is an interface only), and
+`rule-proposal`, which still calls the model within its request.
+
+**UX-06 (S5).** Status: **completed** (`D-073`, `D-074`). Part b (`UX-06b`) is built: the inspector is
+reached from an observation's example rows (`observations/{id}/row-context`) and a
+finding that names no rows opens a bounded window the server chooses
+(`findings/{id}/column-context`): the example rows of observations about a column the
+finding is about (at most 20), otherwise the start of the file, labelled as such and
+never marked as evidence of the finding. Every read shares the part a bounds and no-store header. Part a, built
+earlier, is: the measurement
+(`backend/scripts/measure_inspector_parse.py`, figures recorded in D-073) and a
+finding-scoped grid inspector for a finding that has affected rows, reached from the
+finding screen: scrolling both ways, sticky headings and row numbers, affected rows and
+columns marked, previous and next affected row with an honest position, a return to the
+finding, inert text with long values shortened until revealed. The row limit stays 25 a
+side; two reads at most run at once (`429 INSPECTOR_BUSY`), a window is bounded in
+characters (`size_limited`), the response is `no-store`, and no parsed-rows cache was
+added. Not built, and not part of this item: a general dataset browser, search, sampling,
+a durable Dataset, and any row data in AI input, canonical evidence, reports or exports.
+
+**UX-07 (S6).** Status: **completed** (`D-075`). The analysis screens are grouped as *Review* (Overview,
+Findings, Observations, About this data) and *Act and Export* (Reports, Rules, Technical
+details); Observations has its own screen; each supporting area states its purpose,
+availability, why it matters and the next step; Rules say they apply to this analysis
+only and offer no creation or editing; a **Help** screen explains findings and
+observations, the trust assessment, provenance, sampled and full, AI and Rules; loading
+and empty states share one pattern. Technical details stay visible to everyone because
+Advanced mode belongs to `UX-08` (`UX-08b`, D-077, now shows them only in Advanced mode).
+No backend, API or dependency change.
+
+**UX-08 (S7).** Status: **completed** (`D-076`, `D-077`). Part b (`UX-08b`) is built: a **Settings** screen
+(`/settings`, in the workspace navigation) that explains AI assistance and changes or resets it through
+the versioned API, shows only what the server confirmed, states a setting managed by the
+installation as read-only with its reason, and states a refused change in plain words; and
+a browser-local **Advanced mode** that shows the runtime and model configuration (requested
+only while Advanced mode is on) and the Technical details area (listed only in Advanced
+mode; the address stays reachable and says so). Advanced mode is a display choice, not a
+security control. No backend, API or dependency change. No AI profile and no retention
+setting. Part a (`UX-08a`) is built: an additive `app_settings`
+table (migration 0012), one allowlisted boolean setting (`ai_assistance`), the effective
+value computed on the server as explicit deployment override, then stored value, then
+off (an override is `LLM_PROVIDER` set in the environment or `.env`, never inferred), the
+`/settings` API with versioned writes and reset, AI status, enrichment, explanation and
+rule proposal following the effective value, an Advanced-only response for the runtime
+and model configuration, `LLM_PROVIDER` commented out in `.env.example` with tests that
+packaging sets no managed key, and the two settings that nothing consumes documented
+honestly. `UX-08` is completed by part b. Remaining after it: `UX-09`, still planned and
+unauthorized.
+
+**UX-09 (S8a).** Status: **completed** (`D-078`). Built: `GET /ai/readiness`, five ordered steps (assistance
+on, a runtime named, on this machine, answering a short check, a model named) computed
+from the effective setting and one capped liveness probe made by that request (the same probe helper as `GET /ai/status`, not a shared result);
+`POST /ai/connection-test`, with no body and no client-supplied target, that checks only a
+configured runtime on this machine, makes no completion call, allows one test in flight and
+a minimum gap between tests, and returns a closed set of outcomes with fixed wording and no
+address, path or exception text; and a **Local AI** screen (`/local-ai`, linked from
+Settings, the Local AI status panel and Help) with the checklist, *Test connection* and
+plain guidance that setup happens outside TrustTable. A reachable answer says only that the
+runtime answered, not that the model works. No compatibility claim about a model or
+hardware, no download, installation, start, stop or model management, no profile, no new
+setting, no schema or dependency change. `LAI-01` remains an unapproved design track.
