@@ -303,10 +303,12 @@ def test_the_release_docs_state_what_was_verified_and_what_was_not() -> None:
     assert "published and verified for `v0.2.0`" in doc
     assert "unsigned" in doc
     assert "no visibility change was needed or made" in doc
-    # The limits are not silently dropped from the README either.
-    readme = " ".join(read(README).split())
-    assert "Not covered by the release verification" in readme
-    assert "waived" in readme
+    # The limits are not silently dropped from the project's own record either:
+    # the README links to the delivery history, which states them.
+    history = " ".join(read(REPO_ROOT / "docs" / "delivery-history.md").split())
+    assert "Not covered by the release verification" in history
+    assert "waived" in history
+    assert "(docs/delivery-history.md)" in read(README)
 
 
 def test_the_release_doc_keeps_the_protected_steps_with_the_human_owner() -> None:

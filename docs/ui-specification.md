@@ -238,7 +238,8 @@ business-oriented dashboard. Order:
 
 1. trust assessment (unchanged)
 2. *At a glance*: rows affected (distinct rows that at least one finding points at, with
-   the number of findings that name no row), cells filled in (with whether it was measured
+   the number of findings that name no row; each row is counted once, and when some findings
+   concern a whole column and name no row, the other rows are not necessarily clean), cells filled in (with whether it was measured
    on every row or on a sample), and review progress
 3. *What was found*: findings by severity and by kind of problem, with a link to all
    findings
@@ -672,6 +673,23 @@ caching performance measurement on the real product path. Making row data visibl
 not by itself expand what is sent to AI, promote row context into canonical finding
 evidence, or add row data to reports or exports; existing, explicitly requested,
 bounded report and evidence examples keep their existing contracts.
+
+**Built for the findings review workspace (`UX-05` part a, D-071).** *Previous*, *Next* and
+*Next unreviewed* step through the Findings screen's own list: the same filters (severity,
+category, review state and search) in the same priority order. The filters live in the
+address and are carried to a finding and back, so movement never uses a different list from
+the one shown. A finding states its position (*Finding 2 of 7*). Navigation never wraps
+silently: at either end the control is disabled and the screen says there is no further
+finding. *Next unreviewed* means the first finding after the current one whose review state
+is *Unreviewed*; it does not offer the current finding or jump back to an earlier one, and
+*Review the first unreviewed finding* on the list starts from the top. A finding the filters
+exclude (for example one just reviewed while filtering to *Unreviewed*) shows no position and
+no previous or next, and still offers the next unreviewed finding in the list. If the list
+cannot be loaded the finding still opens without movement controls. The keys P (previous),
+N (next) and U (next unreviewed) are stated on the screen and exposed with
+`aria-keyshortcuts`; they are ignored while typing in a text field, selector or text area
+and when Ctrl, Alt or Meta is held, and do nothing where no such finding exists. Every control
+is also an ordinary link, so keyboard and screen-reader use does not depend on the shortcuts.
 
 **Built for findings with affected rows (`UX-06` part a, D-073).** A finding with
 affected rows offers *Inspect the affected rows* from a short *Rows in the data*
