@@ -1,8 +1,8 @@
 # Delivery history
 
-This document preserves the delivery chronology that the `README.md` previously carried: what each completed milestone and backlog item delivered, in the words recorded when it was delivered. It is **history, not current behavior**. For what the product does today read the [README](../README.md) and the specifications under `docs/`; for what is still planned read the [implementation backlog](implementation-backlog.md) and the [release plan](release-plan.md). Decisions are recorded in the [decision log](decision-log.md) and are not rewritten here.
+This document preserves the delivery chronology that the `README.md` previously carried: what each completed milestone and backlog item delivered, in the words recorded when it was delivered. It is **history, not current behavior and not planning authority**. For what the product does today read the [README](../README.md) and the specifications under `docs/`; for what is still planned read the [implementation backlog](implementation-backlog.md) and the [release plan](release-plan.md). Decisions are recorded in the [decision log](decision-log.md) and are not rewritten here.
 
-Statements below are dated by the point at which they were written. Where a bullet says "at the time this package merged", the later state is stated in the current-state documents, not here.
+Statements below are dated by the point at which they were written. Where a bullet says "at the time this package merged", the later state is stated in the current-state documents, not here. Phrases such as "above", "below" or "the list" in moved text refer to the lists as they stood when written; where such a reference no longer resolves in this document, a bracketed note says what it meant.
 
 ## Completed milestones
 
@@ -141,7 +141,7 @@ entries sequenced ahead of it (D-032, D-033). The earlier wording is preserved i
 
 ### v0.3 — status narrative
 
-Current status: **complete.** Every feature above is implemented. `v0.3.0` is published and
+Current status: **complete.** Every feature above is implemented [the v0.3 feature list in the release plan as it stood when this was written]. `v0.3.0` is published and
 was verified on a clean host with AI off (one pull, start and health check), and `REL-03` is
 complete (D-049). The images are unsigned, unattested and not container-scanned, and the
 local-AI setup was not exercised there. The project owner has recorded the `v0.2` and `v0.3`
@@ -225,7 +225,7 @@ Current status: **in progress.** `v1.0` is the current milestone.
   business-application quality: the implementation is complete, the `UX-01` outcome is not
   accepted, substantial redesign is required before it can be, and no replacement design or
   redesign direction is approved yet.
-- **Not yet done.** The rest of the list above is planned or has a `v0.1`-scoped baseline only.
+- **Not yet done.** The rest of the list above [the v1.0 production-completion list as it stood when this was written; the current items are in the release plan] is planned or has a `v0.1`-scoped baseline only.
 
 ## DET-03 closure record
 
@@ -413,7 +413,7 @@ three ordered steps:
    `TRUSTTABLE_VERSION`) and a tag-gated publish workflow (`docs/release-images.md`), tested
    structurally and against locally built images. Publishing, tagging and package
    visibility stay with the repository owner.
-2. *Local-AI qualification* (the fourth bullet above). The instrument exists: a harness that
+2. *Local-AI qualification* (the fourth bullet above [of the REL-02 checklist as it stood when written]). The instrument exists: a harness that
    runs the product's own finding-analysis path over one finding per detector, with and
    without finalized confirmed context, and records fill rate, fallback rate and
    harness-measured latency (`docs/local-ai-qualification.md`, D-043); it was proven only
@@ -423,7 +423,7 @@ three ordered steps:
    recommended, baseline-tier or general hardware claim may be inferred from it. The
    bullet's "on baseline hardware" wording is preserved as written and is unvalidated by
    this project's own evidence.
-3. *Protected publish and clean-host verification* (the first three bullets; D-045): the
+3. *Protected publish and clean-host verification* (the first three bullets [of that checklist]; D-045): the
    `v0.2.0` images were published to GHCR, and the pull-only path needs no build step and no
    PyPI, npm or base-image access. The release was installed on a clean Linux host with only
    GitHub and GHCR access and no GHCR credentials, **narrowed by the human owner to one
@@ -553,7 +553,7 @@ completed, so it may be out of date and is not a statement of current behavior:
 
 **UX-02 (S1).** Status: built (`docs/decision-log.md` D-068; migration `0009`; settings
 `STAGING_MAX_COUNT`, `STAGING_MAX_TOTAL_MB` and `STAGING_TTL_MINUTES`). Delivered as
-specified below with the engineering choices recorded in D-068; no durable Dataset, no
+specified [in the UX-02 backlog item as it stood when written] with the engineering choices recorded in D-068; no durable Dataset, no
 history, hash lookup or "analysed before" notice (`UX-03`), and no Analyses, Settings or
 Help navigation until those slices ship. `UX-03` onward remain planned and unauthorized.
 

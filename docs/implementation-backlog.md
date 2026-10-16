@@ -71,6 +71,7 @@ restating the fact elsewhere.
 | `docs/release-plan.md` | Milestone scope and current milestone status |
 | `docs/decision-log.md` | The reasoning and consequences of each consequential decision; amended by new entries, not rewritten |
 | Specifications (API, UI, domain model, detector framework, configuration and similar) | Current behavior, approved target behavior and future ideas, kept distinct |
+| `docs/delivery-history.md` | Archived delivery chronology, in the words recorded when delivered; not current behavior and not planning authority |
 | `README.md` | Orientation for users and contributors |
 
 Conventions:
@@ -917,8 +918,7 @@ Two settings that nothing consumes today (`PROMPT_INJECTION_DETECTION_ENABLED` a
 ## UX-02 — S1: workspace and a deliberate start
 
 Status: built (`docs/decision-log.md` D-068; migration `0009`; settings
-`STAGING_MAX_COUNT`, `STAGING_MAX_TOTAL_MB` and `STAGING_TTL_MINUTES`), as specified below. No
-durable Dataset.
+`STAGING_MAX_COUNT`, `STAGING_MAX_TOTAL_MB` and `STAGING_TTL_MINUTES`). No durable Dataset.
 
 Workspace landing page; file choice that never starts an analysis; a Configure step
 with file facts, worksheet choice, known readability problems reported before Run
@@ -928,18 +928,15 @@ exactly the staged and inspected bytes; a disabled Compare datasets area stating
 is planned. Backend: temporary staging in the existing SQLite store with a
 single-use opaque reference, server-computed integrity hash verified end to end,
 atomic consume at Run, bounded count, bytes and expiry, startup and lazy cleanup,
-and the direct-upload route preserved (D-066 item 4); an AI status route. Specification
-must settle: staging caps and expiry, the trust model of the reference, behavior on
-expiry and double use, one shared ingestion path with direct upload, and the proxy
-limits. No durable Dataset entity.
+and the direct-upload route preserved (D-066 item 4); an AI status route. No durable
+Dataset entity.
 
 ## UX-03 — S2: history, reopen and rerun
 
 Recent analyses, reopen, rerun (a new analysis made from stored content, as retry
 does), delete, and a notice that this exact file was analysed before. Backend: an
 analysis list, a rerun route, and a lookup by content hash that stays a lookup and
-never becomes a dataset identity. Specification must settle the index and the effect
-of deletion on the lookup. "Differs from a previous version" is limited to a
+never becomes a dataset identity. "Differs from a previous version" is limited to a
 filename-based hint without a diff.
 
 Status: built (`D-069`): the Workspace lists the 20 newest analyses with open, run again and
@@ -970,10 +967,8 @@ Previous, next and next-unreviewed navigation, review-state filtering, keyboard
 support, display labels instead of raw internal values, and non-blocking AI
 enrichment: deterministic content never waits for a model call, and AI results are
 persisted, bound to finding identity, confirmed-context version, model identity and
-prompt or contract version, and stale when the binding changes (D-066 item 7).
-Specification must settle the execution model and restart behavior of enrichment,
-retention and deletion of persisted output, bounded start and status, and a future
-batch seam as an interface only.
+prompt or contract version, and stale when the binding changes (D-066 item 7), with a
+future batch seam as an interface only.
 
 Status: **built** (`D-071`, `D-072`): previous, next and next-unreviewed navigation with a
 review-state filter, keyboard shortcuts and business labels; and persisted, non-blocking AI
@@ -989,10 +984,8 @@ affected row and a return-to-issue control, reached from findings and from
 observations with example rows; column-wide findings use existing safe anchors or a
 deterministic bounded window (D-066 item 6). **A parse and caching performance spike
 on the real product path at representative sizes precedes any window or paging
-limit.** Specification must settle whether the complete affected-row set is retained
-(navigation must not imply otherwise), inert rendering, cache behavior, and tests
-that opening the inspector changes no AI payload, canonical evidence, report or
-export.
+limit.** The complete affected-row set is not retained, and opening the inspector
+changes no AI payload, canonical evidence, report or export.
 
 Status: **completed** (`D-073`, `D-074`): a finding-scoped grid inspector reached from findings,
 from an observation's example rows (`observations/{id}/row-context`) and, for a finding that
@@ -1022,12 +1015,8 @@ change.
 
 Normal and Advanced settings with an explanation for every normal setting;
 precedence explicit deployment override, then stored setting, then built-in default
-(D-066 item 5). Specification must settle the allowlist (excluding secrets, paths,
-URLs and security or resource limits from normal settings), how an explicit override
-is detected without comparing with defaults, write-path protection and fail-closed
-behavior, the narrow Advanced exception, commenting out UI-managed settings in
-`.env.example` with the tests that pin it, a test that packaging creates no explicit
-override, and the plain explanation for installations that copied the old file.
+(D-066 item 5). The allowlist excludes secrets, paths, URLs and security or resource
+limits from normal settings.
 
 Status: **completed** (`D-076`, `D-077`): an additive `app_settings` table (migration 0012), one
 allowlisted boolean setting (`ai_assistance`) whose effective value is explicit deployment
