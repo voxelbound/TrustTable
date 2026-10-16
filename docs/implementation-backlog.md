@@ -880,7 +880,7 @@ Blocked unless all requirements in `testing-strategy.md` pass.
 
 ## UX-01 — UI/UX redesign (umbrella)
 
-Status: specified. The slices `UX-02` to `UX-09` (S1 to S8a) are implemented and merged
+Status: specified. Current state: implementation complete, outcome rejected by the human owner, not accepted. The slices `UX-02` to `UX-09` (S1 to S8a) are implemented and merged
 (`docs/decision-log.md` D-066 PLAN CHANGE, owner-confirmed, and D-067). **After manual end-to-end testing the human owner
 rejected the resulting UI/UX outcome as not meeting the intended business-application quality: the
 implementation is complete, the `UX-01` outcome is not accepted, and substantial redesign is
