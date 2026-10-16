@@ -899,7 +899,9 @@ Redesign the interface from an engineering-oriented prototype into a business
 application: "business language first, technical detail second", progressive
 disclosure and an Advanced mode, with working capabilities, local-first operation,
 deterministic authority and provenance preserved. Target behavior is described in
-`docs/ui-specification.md` section 12 and `docs/decision-log.md` D-066. Capability
+`docs/ui-specification.md` section 12 and `docs/decision-log.md` D-066. Historical context: the capability
+tiers below describe the product when the original redesign was specified, not its current
+capabilities (the slices named above have since been implemented). Capability
 tiers: **exists, needs better presentation** (findings list, review controls,
 evidence, reports, rules listing, observations, trust assessment, context, profile
 data); **exists partly** (worksheet choice only after a refusal, history reopen by
